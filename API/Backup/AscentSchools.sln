@@ -1,0 +1,31 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.33516.290
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AscentSchools.API", "AscentSchools.API\AscentSchools.API.csproj", "{AC317D5E-C751-4C9A-8C01-6F9DAB374D86}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AscentSchools.Core", "AscentSchools.Core\AscentSchools.Core.csproj", "{0774601C-E3AC-47B5-970E-185EFCD3BFB2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AscentSchools.Data", "AscentSchools.Data\AscentSchools.Data.csproj", "{B46C2C4C-6B24-4A53-9467-62D08BFE98C2}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{AC317D5E-C751-4C9A-8C01-6F9DAB374D86}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AC317D5E-C751-4C9A-8C01-6F9DAB374D86}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AC317D5E-C751-4C9A-8C01-6F9DAB374D86}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AC317D5E-C751-4C9A-8C01-6F9DAB374D86}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0774601C-E3AC-47B5-970E-185EFCD3BFB2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0774601C-E3AC-47B5-970E-185EFCD3BFB2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0774601C-E3AC-47B5-970E-185EFCD3BFB2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0774601C-E3AC-47B5-970E-185EFCD3BFB2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B46C2C4C-6B24-4A53-9467-62D08BFE98C2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B46C2C4C-6B24-4A53-9467-62D08BFE98C2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B46C2C4C-6B24-4A53-9467-62D08BFE98C2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B46C2C4C-6B24-4A53-9467-62D08BFE98C2}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

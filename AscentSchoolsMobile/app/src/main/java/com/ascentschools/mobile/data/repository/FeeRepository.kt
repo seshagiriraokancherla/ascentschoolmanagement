@@ -1,0 +1,46 @@
+package com.ascentschools.mobile.data.repository
+
+import com.ascentschools.mobile.data.api.*
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import retrofit2.Response
+
+class FeeRepository(private val api: ApiService) {
+
+    suspend fun getFees(academicYearId: Int = 0): Result<MobileFeeSummaryDto> {
+        return runCatching {
+            val resp = api.getFees(academicYearId)
+            val body = resp.bodyOrError()
+            if (!body.success || body.data == null) error(body.message ?: "Failed to load fees")
+            body.data
+        }
+    }
+
+    suspend fun createOrder(request: MobileCreateOrderRequest): Result<MobileOrderResponse> {
+        return runCatching {
+            val resp = api.createFeeOrder(request)
+            val body = resp.bodyOrError()
+            if (!body.success || body.data == null) error(body.message ?: "Failed to create payment order")
+            body.data
+        }
+    }
+
+    suspend fun verifyPayment(request: MobileVerifyRequest): Result<MobilePaymentResultDto> {
+        return runCatching {
+            val resp = api.verifyFeePayment(request)
+            val body = resp.bodyOrError()
+            if (!body.success || body.data == null) error(body.message ?: "Payment verification failed")
+            body.data
+        }
+    }
+
+    private fun <T> Response<T>.bodyOrError(): T {
+        if (isSuccessful) return body() ?: error("Empty response body")
+        val errJson = errorBody()?.string()
+        val errMsg  = try {
+            val type = object : TypeToken<ApiResponse<Any>>() {}.type
+            Gson().fromJson<ApiResponse<Any>>(errJson, type)?.message
+        } catch (_: Exception) { null }
+        error(errMsg ?: "Server error ${code()}")
+    }
+}

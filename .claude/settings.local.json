@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(dotnet --version)",
+      "Bash(where dotnet:*)",
+      "Bash(powershell -Command \"$guids = 1..3 | ForEach-Object { [System.Guid]::NewGuid\\(\\).ToString\\(\\).ToUpper\\(\\) }; $guids\")",
+      "Bash(powershell -Command \"[System.Guid]::NewGuid\\(\\).ToString\\(\\).ToUpper\\(\\); [System.Guid]::NewGuid\\(\\).ToString\\(\\).ToUpper\\(\\); [System.Guid]::NewGuid\\(\\).ToString\\(\\).ToUpper\\(\\)\")",
+      "Bash(npm create:*)",
+      "Bash(npm install:*)",
+      "Bash(ls:*)",
+      "Bash(xargs grep:*)",
+      "WebSearch",
+      "WebFetch(domain:support.google.com)",
+      "Bash(npm run *)",
+      "Bash(dir *)",
+      "Bash(ipconfig)",
+      "PowerShell(netsh http *)",
+      "Bash(grep -n '\"\\\\$' \"D:\\\\AscentSchoolsApplication\\\\API\\\\AscentSchools.API\\\\Controllers\\\\School\\\\StaffController.cs\")",
+      "Bash(grep *)"
+    ]
+  }
+}

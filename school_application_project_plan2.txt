@@ -1,0 +1,107 @@
+1. Who initiates the payment?
+  - School staff collects payment at the counter → staff clicks "Collect", a payment link/QR is shown on screen →    
+  parent scans/pays
+  - Parent/student pays themselves from a portal or payment link sent via SMS/WhatsApp
+  - Both flows?
+
+Ans: School staff collects
+
+  2. Gateway preference?
+  Razorpay is the most common choice for Indian schools (UPI, cards, netbanking, wallets in one SDK, good docs).     
+  Others: Cashfree, PayU, CCAvenue. Any preference, or should I go with Razorpay?
+
+Ans:Razorpay
+
+  3. What happens to the current cash/cheque flow?
+  Does online payment replace the existing flow or run alongside it? (e.g., payment mode dropdown gains "Online"     
+  option that triggers the gateway)
+
+Ans: Run alongside it
+
+  4. Where does payment confirmation land?
+  Gateway needs a webhook URL to notify your server when payment succeeds. Are you hosting the API on a public URL   
+  already, or is this still localhost dev? (Webhooks require a publicly accessible URL — affects how we set up test  
+  mode)
+
+Ans:We will host this website into hostinger. so after hosting it will be public right, currently testing in local.
+
+  5. Partial payments?
+  If a parent owes ₹5,000 but pays ₹2,000 online, should that be allowed?
+
+Ans: Yes
+
+  6. Refunds on receipt cancellation?
+  When a receipt is cancelled (currently just marks status=Cancelled in DB), should it automatically trigger a       
+  gateway refund, or is that handled manually?
+
+Ans: For now we will handle refunds manually.
+
+  7. Student/parent portal?
+  Currently only school staff use the app. For parents to pay themselves, they'd need a login. Is that in scope now, 
+  or do you only want the staff-initiated flow (staff shows QR/link, parent pays, receipt auto-generates)?
+Ans: Currently not in scope(parents to pay).
+
+1.Ans: School staff collects
+2.Ans:Razorpay, make it can be use other gateways too configurable for multiple schools in future.
+3.Ans: Run alongside it
+4.Ans:We will host this website into hostinger. so after hosting it will be public right, currently testing in local.
+5.Ans: Yes
+6.Ans: For now we will handle refunds manually.
+7.Ans: Currently not in scope(parents to pay).
+
+  Phase A  →  Database schema (all new tables)
+  Phase B  →  Backend APIs (mobile auth + all mobile read endpoints)
+  Phase C  →  Web UI additions (marks entry, homework, announcements)
+  Phase D  →  Android app (Kotlin + Jetpack Compose + Retrofit)
+
+Good questions — here's the straightforward path for Windows 10 + physical Android device:
+
+  ---
+  Development & Testing
+
+  Android Studio is the only tool you need (free, from Google).
+  - Includes Kotlin, Jetpack Compose, SDK, debugger, and build tools all in one
+  - Works well on Windows 10 — recommended 8GB RAM minimum, 8GB disk space
+
+  Testing on your physical device (best approach, much faster than emulator):
+  1. On your Android phone → Settings → About Phone → tap Build Number 7 times → Developer Options unlocked
+  2. Settings → Developer Options → enable USB Debugging
+  3. Connect phone to laptop via USB
+  4. Android Studio auto-detects it — press the green ▶ Run button → app installs directly to your phone in seconds   
+
+  Wireless debugging (Android 11+, no cable needed after first pair):
+  - Developer Options → Wireless Debugging → pair once → Android Studio sees it over WiFi
+
+  ---
+  Google Play Deployment (hassle-free path)
+
+  1. One-time: Create a https://play.google.com/console — $25 registration fee
+  2. In Android Studio: Build → Generate Signed Bundle/APK → choose Android App Bundle (.aab) — Google Play prefers   
+  this over APK (smaller download for users)
+  3. Android Studio walks you through creating a keystore (your signing key — keep this file safe, you need it for    
+  every future update)
+  4. Upload the .aab to Google Play Console → Create App
+  5. Start with the Internal Testing track — lets you test on your own device via Play Store before going public      
+  6. When ready: promote to Production
+
+  Internal Testing → Production promotion takes 1-2 days for first review, faster after that.
+
+  ---
+  Summary
+
+  ┌───────────────┬───────────────────────────────────────┐
+  │     Step      │                 Tool                  │
+  ├───────────────┼───────────────────────────────────────┤
+  │ Code + Build  │ Android Studio (free)                 │
+  ├───────────────┼───────────────────────────────────────┤
+  │ Test on phone │ USB/WiFi debugging via Android Studio │
+  ├───────────────┼───────────────────────────────────────┤
+  │ Release build │ Android Studio → Signed .aab          │
+  ├───────────────┼───────────────────────────────────────┤
+  │ Store upload  │ Google Play Console ($25 once)        │
+  └───────────────┴───────────────────────────────────────┘
+
+  ---
+  No emulators needed since you have a physical device. No third-party services needed. This is the standard path most   Android developers use.
+
+  Ready to scaffold the Android project (Phase 6D)?

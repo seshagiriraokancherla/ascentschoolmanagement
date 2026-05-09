@@ -1,0 +1,250 @@
+Clarification Answers
+
+  SAS_LicenceDet (School)
+  1. DayClsMbls — "Day Closing Mobiles"? Is this a list of mobile numbers for end-of-day notifications, or something else?
+	Yes, this is for Day-End Notification to Administration Persons
+
+  2. SchGrpID — Is this a school group/chain (e.g., a trust running multiple schools)? Is there a separate group table not included here?
+	Yes,seperate group table not included,This is for Chain Schools Maintenance under ONE Group ID
+
+
+  SAS_AcdYear (Academic Year)
+  3. There is no explicit PK column — is AcademicYear (the string like "2024-25") + SchID the composite PK, or should a surrogate ID be added?
+	Academic Year Like 2025-2026 (Schools ) or 25-29 B-Pharm (Colleges)
+
+  4. RegFeeType, TransFeeTyp, HostlFeeType — Are these references to values in SAS_FeeTypes, or are they just flags like "Yearly/Monthly/Termwise"?    
+     RegFeeType, TransFeeTyp, HostlFeeType these are flags like "Yearly/Monthly/Termwise"
+
+  5. StuBoardingTyp — What does this control? Is it a default boarding type setting for the year?
+	School Facility like Day School / Hostel
+
+  6. NewAdminsStat — Is this a flag to enable/disable new student admissions for the year (Open/Closed)?
+	Yes this is Flag only like Enable/Disable
+
+  SAS_SoftwareSettings
+  7. No PK column — is this a single-row-per-school table (i.e., SchID is effectively the PK)?
+	Yes, here we required School ID
+
+  8. NSEtype — What does NSE stand for in this context?
+	this is define for New Student Entry form, some time clerks required minimum fields for new student entry
+        i used for this Fast Entry / Normal Entry
+
+  9. PrPrmryAdmnNos, PrimryAdmnNos, HghSchlAdmnNos, GenralAdmnNos — Are these the starting/prefix values for admission number generation per school level?  
+	this columns for Prefix of admission-no generate
+	
+  10. BilNosStrts — Billing number starts — same concept (starting number for billing)?
+	is used this column like below
+		New Year Start (this is Every Year from 1-Jan, bill no's starts from 1)
+		Acadamic Year (this is Academic year   bill no's starts from 1)
+		Total Continues (this is Continue Bill no's)
+		Financial Year (this is Every Year from 1-Apr, bill no's starts from 1)
+		Cash/Bank Series (Cash Bills starts from 01 every Acadamic year / Bank Bills  starts from 01 every Acadamic year)
+		Acd Year Category-Wis (this is Academic year wise and Pre-Primar / Primary / High school wise bils no's generate)
+
+  11. StudntConcsnMod — Student Concession Mode — what kind of concession is this (fee discount)?
+	Yes, this is Discount Enable / Disable for Clerk
+
+
+
+
+
+  12. What is the relationship between SAS_ClassGrps and SAS_ClassNames? Is a class group like "Primary", "Secondary", "Higher Secondary" and a class     
+  belongs to one group? There is no ClsGrpID column in SAS_ClassNames — is that a missing FK or intentional?
+  SAS_ClassGrps vs SAS_ClassNames
+
+	Pre-KG	Pre-Primary
+	LKG	Pre-Primary
+	UKG	Pre-Primary
+	1 Class	Primary
+	3 Class	Primary
+	4 Class	Primary
+	5 Class	Primary
+	6 Class	High-School
+	7 Class	High-School
+	8 Class	High-School
+	9 Class	High-School
+	2 Class	Primary
+	10 ClassHigh-School
+	8 ICSE	Primary
+PCMB 1st Year	General
+PCMB 2nd Year	General
+PCMC 1st Year	General
+PCMC 2nd Year	General
+HEBA 1st Year	General
+HEBA 2nd Year	General
+CEBA 1st Year	General
+CEBA 2nd Year	General
+9 ICSE	Primary
+8 class	Primary
+XI th Grade	General
+XI th Grade Arts	General
+XI th Grade Science	General
+XII th Grade Arts	General
+XII th Grade Science	General
+
+CREATE TABLE  [SAS_ClassNames](
+	[ClassID] [nchar](10) NULL,
+	[ClassNam] [varchar](55) NULL,
+	[BranchNam] [varchar](55) NULL,
+	[ClassDesc] [varchar](50) NULL,
+	[ClassStat] [varchar](5) NULL,
+	[ClsGrpID] [varchar](10) NULL,
+	[PrefixStat] [varchar](5) NULL,
+	[PrefixCod] [varchar](5) NULL,
+	[SeqN] [int] NULL,
+	[CrtBy] [varchar](25) NULL,
+	[CrtDat] [datetime] NULL,
+	[SchID] [varchar](25) NULL,
+	[MachID] [varchar](20) NULL,
+	ModLogID Varchar(10)
+) 
+
+
+  13. ClassNames.BranchNam — Is "branch" the stream (Science/Arts/Commerce for higher classes)? Or is it a physical school branch/campus?
+	Science/Arts/Commerce for higher classes
+
+  14. ClassNames.CategoryTyp — Is this the same concept as SAS_FeeCategory, or a different classification (e.g., Government/Private)?
+	SAS_FeeCategory like General Students Fee , Staff Child Fee, VTPS Staff Fee
+
+  SAS_FeeTypes
+  15. TermNam — Is the term (Q1, Q2, Annual, etc.) stored directly here, meaning one fee type row exists per term? Or is the term just informational?     
+	1st Term / 2nd Term or January-2025,February-2025
+		and
+	we required one more table like 
+
+CREATE TABLE  [SAS_TermMonthData](
+	[TrmID] [varchar](10) NULL,
+	[TrmMnthData] [varchar](20) NULL,
+	[YearNam] [varchar](10) NULL,
+	[OrdrNo] [int] NULL,
+	[Descrpt] [varchar](30) NULL,
+	[AcademicYear] [varchar](25) NULL,
+	[TraStatus] [varchar](5) NULL,
+	[CrtBy] [varchar](25) NULL,
+	[CrtDate] [datetime] NULL,
+	[SchID] [varchar](25) NULL,
+	[MachID] [varchar](20) NULL,
+	[DeletBy] [varchar](60) NULL,
+)
+
+
+CREATE TABLE  [SAS_FeeMaster](
+	[FeeMasterID] [varchar](10) NULL,
+	[FeeCatgID] [varchar](10) NULL,
+	[ClassNam] [varchar](30) NULL,
+	[FeeTypID] [varchar](10) NULL,
+	[FeeTyp] [varchar](25) NULL,
+	[TrmID] [varchar](25) NULL,
+	[Amt] [money] NULL,
+	[Descrpt] [varchar](50) NULL,
+	[FeeMasterStat] [varchar](5) NULL,
+	[AcademicYear] [varchar](55) NULL,
+	[CrtBy]  [varchar](25) NULL,
+	[CrtDat] [datetime] NULL,
+	[SchID] [varchar](25) NULL,
+	[MachID] [varchar](20) NULL,
+	[PymntTyp] [varchar](10) NULL,
+	[AdmsnTyp] [varchar](5) NULL,
+	[DelbyData] [varchar](60) NULL
+) 
+
+
+  SAS_FeeMaster
+  16. ClassNam is stored as a string (not a ClassID FK) — is that intentional or was it a design gap in VB6 app?
+	
+CREATE TABLE  [SAS_FeeMaster](
+	[FeeMasterID] [varchar](10) NULL,
+	[FeeCatgID] [varchar](10) NULL,
+	[ClassID] [varchar](30) NULL,
+	[FeeTypID] [varchar](10) NULL,
+	[FeeTyp] [varchar](25) NULL,
+	[TrmID] [varchar](25) NULL,
+	[Amt] [money] NULL,
+	[Descrpt] [varchar](50) NULL,
+	[FeeMasterStat] [varchar](5) NULL,
+	[AcademicYear] [varchar](55) NULL,
+	[CrtBy]  [varchar](25) NULL,
+	[CrtDat] [datetime] NULL,
+	[SchID] [varchar](25) NULL,
+	[MachID] [varchar](20) NULL,
+	[PymntTyp] [varchar](10) NULL,
+	[AdmsnTyp] [varchar](5) NULL,
+	[DelbyData] [varchar](60) NULL
+) 
+
+
+  17. AdmsnTyp — Is this the type of admission (New/Transfer/Re-admission) that determines which fee structure applies?
+	Yes , this is New / Old Student
+
+  18. PymntTyp — Payment type — is this Cheque/Cash/Online, or something like Lump Sum/Installment?
+	Yes , this is Cheque/Cash/Online
+
+		we can maintain one table also
+
+CREATE TABLE  [SAS_PaymentMods](
+	[MOPID] [varchar](15) NULL,
+	[MOPTyp] [varchar](15) NULL,
+	[TraDesc] [varchar](25) NULL,
+	[TraStatus] [varchar](5) NULL,
+	[CrtBy] [varchar](25) NULL,
+	[CrtDate] [datetime] NULL,
+	[SchID] [varchar](25) NULL,
+	[MachID] [varchar](20) NULL,
+	[DeletBy] [varchar](60) NULL,
+
+) 
+
+
+
+  SAS_BussData (Bus)
+  19. TripData — Is this the number of trips per day, or trip type (Morning/Evening/Both)?
+  20. CleanerNam — Just a name string, no ID — is there no separate staff/employee table for cleaners/drivers?
+  21. OwnerData — Is this the school or a contractor who owns the bus?
+  22. RouteNam in SAS_BussData — A bus can serve multiple routes over time; is this the current/primary route? And similarly, BusNoData in SAS_BusRoutes —   can a route have multiple buses?
+
+	above fields present you send null/empty value like ''
+
+  SAS_BusMaster
+  23. This seems to define the bus fee structure (route + term + amount). Is that correct? Or does it track something else?
+	Yes, this is Bus Fee Structure 
+
+  24. CategoryNam in SAS_BusMaster — Is this the student fee category (same as SAS_FeeCategory)?
+	above (CategoryNam) fields present you send null/empty value like ''
+
+  SAS_StudentMaster
+  25. StuDepndntTyp — "Student Dependent Type" — what does this mean? Is the student a dependent of an employee?
+	Parents / Guardian
+
+  26. StuJoingClass — Is this the original class the student first joined (for tracking promotion history), different from current StuClassNam?
+	which class he joined 
+
+  27. StuFamilyChildres — Is this the total number of children in the family (for sibling discount purposes)?
+	no of kids in family
+
+  28. BusTrip — Is this which trip the student uses (Morning/Evening/Both)?
+	this column like 1st Trip / 2nd Trip / 3rd Trip . u can main in dropdown list as static 
+
+  29. StuUnqID — How is this different from StuID? Is StuUnqID a government-assigned or cross-year unique ID, while StuID is the internal DB ID?
+	stuid is auto generated
+	stuUniqID is Ours / School student uniq id
+
+  30. StuDOBStat — Is this a flag for whether DOB proof was submitted?
+	at the time D O B Submitted or not
+
+  31. StuCasteStat — Same — flag for caste certificate submitted?
+	at the time caste certificate Submitted or not
+
+  32. Descrpt and Descrpt1 in SAS_StudentMaster — Two generic description fields. What were these used for? Anything specific?
+	in future we can use this fields 
+
+  33. StuHosNam — Is this a reference to a hostel name/ID? Is there a separate hostel table not included here?
+      Hi, we discuss regarding StuHosNam later . present you send null value
+
+  34. BioMatrcID — Biometric device enrollment ID?
+	BioMatric device Enrol id
+
+  35. StuAmnNo (StuAmnNo) vs StuUnqID vs StuID — There seem to be three identifiers. Is StuAmnNo the school-issued admission number (human-readable),     
+  StuID the DB row ID, and StuUnqID something else?
+	Yes , StuAmnNo the school-issued admission number (human-readable)
+	Stuid is Auto Generated ...
+         StuUnqID is School student Uniq ID

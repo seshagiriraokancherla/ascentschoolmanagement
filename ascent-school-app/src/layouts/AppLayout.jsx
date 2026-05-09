@@ -1,0 +1,196 @@
+import { useState } from 'react'
+import { Layout, Menu, Avatar, Dropdown, Typography } from 'antd'
+import {
+  UserOutlined, LogoutOutlined, TeamOutlined,
+  SafetyOutlined, SettingOutlined, DatabaseOutlined, SolutionOutlined,
+  DollarOutlined, FormOutlined, BookOutlined, NotificationOutlined,
+  CalendarOutlined, CarOutlined, VideoCameraOutlined, BarChartOutlined,
+  IdcardOutlined, MessageOutlined,
+} from '@ant-design/icons'
+import { Outlet, useNavigate, useLocation } from 'react-router-dom'
+import api from '../api/axiosInstance'
+import { useAuthStore }     from '../store/authStore'
+import { useBrandingStore } from '../store/brandingStore'
+
+const { Header, Sider, Content, Footer } = Layout
+
+const NAV_ITEMS = [
+  {
+    key:      'students',
+    icon:     <SolutionOutlined />,
+    label:    'Students',
+    children: [
+      { key: '/students',         label: 'Student List' },
+      { key: '/students/import',       label: 'Bulk Import' },
+      { key: '/students/promote',      label: 'Promote Students' },
+      { key: '/students/blood-group',  label: 'Blood Group Search' },
+    ],
+  },
+  {
+    key:   'fees',
+    icon:  <DollarOutlined />,
+    label: 'Fees',
+    children: [
+      { key: '/fees/structure',        label: 'Fee Structure' },
+      { key: '/fees/structure/import', label: 'Bulk Import Structure' },
+      { key: '/fees/collect',          label: 'Fee Collection' },
+      { key: '/fees/receipts',         label: 'Receipts' },
+    ],
+  },
+  {
+    key:   '/attendance',
+    icon:  <CalendarOutlined />,
+    label: 'Attendance',
+  },
+  {
+    key:   'staff',
+    icon:  <IdcardOutlined />,
+    label: 'Staff',
+    children: [
+      { key: '/staff',                    label: 'Staff Directory'     },
+      { key: '/staff/attendance',         label: 'Mark Attendance'     },
+      { key: '/staff/attendance/summary', label: 'Attendance Summary'  },
+      { key: '/staff/advances',           label: 'Staff Advances'      },
+      { key: '/staff/salaries',           label: 'Salaries'            },
+    ],
+  },
+  {
+    key:   '/marks',
+    icon:  <FormOutlined />,
+    label: 'Marks Entry',
+  },
+  {
+    key:   '/transport',
+    icon:  <CarOutlined />,
+    label: 'Transport',
+  },
+  {
+    key:   '/homework',
+    icon:  <BookOutlined />,
+    label: 'Homework',
+  },
+  {
+    key:   '/announcements',
+    icon:  <NotificationOutlined />,
+    label: 'Announcements',
+  },
+  {
+    key:   '/events',
+    icon:  <VideoCameraOutlined />,
+    label: 'Events Gallery',
+  },
+  {
+    key:   '/reports',
+    icon:  <BarChartOutlined />,
+    label: 'Reports',
+  },
+  {
+    key:   '/master',
+    icon:  <DatabaseOutlined />,
+    label: 'Master Data',
+  },
+  {
+    key:   '/sms',
+    icon:  <MessageOutlined />,
+    label: 'SMS Center',
+  },
+  {
+    key: 'settings',
+    icon: <SettingOutlined />,
+    label: 'Settings',
+    children: [
+      { key: '/settings/roles',         icon: <SafetyOutlined />, label: 'Roles & Permissions' },
+      { key: '/settings/users',         icon: <TeamOutlined />,   label: 'User Management' },
+      { key: '/settings/payment-gateway',                          label: 'Payment Gateway' },
+    ],
+  },
+]
+
+export default function AppLayout() {
+  const navigate        = useNavigate()
+  const location        = useLocation()
+  const logout          = useAuthStore((s) => s.logout)
+  const user            = useAuthStore((s) => s.user)
+  const { branding }    = useBrandingStore()
+  const headerBg   = branding.headerBgColor  || '#001529'
+  const headerText = branding.navTextColor   || '#ffffff'
+  const [collapsed, setCollapsed] = useState(false)
+
+  const handleLogout = async () => {
+    try { await api.post('/school/auth/logout') } catch (_) {}
+    localStorage.removeItem('schoolId')
+    logout()
+    navigate('/login', { replace: true })
+  }
+
+  const userMenuItems = [
+    { key: 'logout', icon: <LogoutOutlined />, label: 'Logout', onClick: handleLogout },
+  ]
+
+  // Derive open keys from current path
+  const openKeys = NAV_ITEMS
+    .filter((item) => item.children?.some((c) => location.pathname.startsWith(c.key)))
+    .map((item) => item.key)
+
+  return (
+    <Layout style={{ minHeight: '100vh' }}>
+      {/* ── Header ─────────────────────────────────────────────────── */}
+      <Header
+        style={{
+          position:   'sticky',
+          top:        0,
+          zIndex:     100,
+          background: headerBg,
+          display:    'flex',
+          alignItems: 'center',
+          padding:    '0 24px',
+          gap:        16,
+        }}
+      >
+        {branding.logoPath && (
+          <img src={branding.logoPath} alt="logo" style={{ height: 36, objectFit: 'contain' }} />
+        )}
+        <Typography.Text strong style={{ color: headerText, fontSize: 16, flex: 1 }}>
+          {branding.displayName}
+        </Typography.Text>
+
+        <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
+          <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Avatar icon={<UserOutlined />} style={{ background: '#ffffff33' }} />
+            <Typography.Text style={{ color: headerText }}>{user?.fullName}</Typography.Text>
+          </div>
+        </Dropdown>
+      </Header>
+
+      <Layout>
+        {/* ── Sidebar ────────────────────────────────────────────────── */}
+        <Sider
+          collapsible
+          collapsed={collapsed}
+          onCollapse={setCollapsed}
+          theme="light"
+          style={{ borderRight: '1px solid #f0f0f0' }}
+        >
+          <Menu
+            mode="inline"
+            selectedKeys={[location.pathname]}
+            defaultOpenKeys={openKeys}
+            items={NAV_ITEMS}
+            onClick={({ key }) => navigate(key)}
+            style={{ borderRight: 0, paddingTop: 8 }}
+          />
+        </Sider>
+
+        {/* ── Content + Footer ────────────────────────────────────────── */}
+        <Layout style={{ flexDirection: 'column' }}>
+          <Content style={{ padding: 24, background: '#f0f2f5', flex: 1 }}>
+            <Outlet />
+          </Content>
+          <Footer style={{ textAlign: 'center', padding: '12px 24px', background: '#f0f2f5', color: '#8c8c8c', fontSize: 12 }}>
+            Powered by Ascent Info Solutions
+          </Footer>
+        </Layout>
+      </Layout>
+    </Layout>
+  )
+}

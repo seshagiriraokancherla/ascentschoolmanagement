@@ -1,0 +1,58 @@
+
+  ---
+  Fresh setup — SQL file sequence
+
+  Step 1 — Master DB (connect to master in SSMS)
+
+  master_tables.sql
+  Creates ascent_master with all 12 tables (school_groups, schools, subscriptions, control_users, etc.)
+
+  Step 2 — Seed control user (connect to ascent_master)
+
+  seed_control_user.sql
+  Creates the Control App login (Ascent internal staff).
+
+  Step 3 — Create a school group via Control App UI
+
+  - Log into the Control App → School Groups → Create
+  - Note the group_id returned (e.g. 1)
+  - Also add a School (branch) under it — note the school_id
+
+  Step 4 — Tenant DB (connect to master)
+
+  tenant_tables.sql
+  Creates ascent_group_{N} DB with all 25 tables including mobile tables. Already includes all migrations (fee        
+  receipts, gateway, mobile) — no separate migration scripts needed for fresh setups.
+
+  Step 5 — Seed tenant data (connect to ascent_group_{N})
+
+  seed_tenant_data.sql       ← edit @SchoolId at top first
+  Seeds role-permission mappings, payment modes (Cash/Cheque/Online), default school admin login.
+
+  Step 6 — Load demo data (connect to ascent_group_{N})
+
+  demo_data.sql              ← edit @SchoolId at top first
+  Seeds academic year, classes, students, marks, attendance, homework, announcements, student mobile accounts (PIN =  
+  1234).
+
+  Step 7 — Parent demo data (connect to ascent_master)
+
+  seed_mobile_parent_data.sql  ← edit @GroupId, @DbName, @SchoolId at top first
+  Seeds 3 demo parent accounts + child links for testing the parent login flow.
+
+  ---
+  Migrations — only needed when upgrading an existing DB
+
+  ┌──────────────────────────────┬───────────────────────────────────────────────────────────┐
+  │             File             │                        When to run                        │
+  ├──────────────────────────────┼───────────────────────────────────────────────────────────┤
+  │ master_db_migration.sql      │ Existing master DB missing db_name column                 │
+  ├──────────────────────────────┼───────────────────────────────────────────────────────────┤
+  │ fee_tables_migration.sql     │ Existing tenant DB missing fee receipt tables             │
+  ├──────────────────────────────┼───────────────────────────────────────────────────────────┤
+  │ gateway_tables_migration.sql │ Existing tenant DB missing gateway tables                 │
+  ├──────────────────────────────┼───────────────────────────────────────────────────────────┤
+  │ mobile_master_migration.sql  │ Existing master DB missing parent tables                  │
+  ├──────────────────────────────┼───────────────────────────────────────────────────────────┤
+  │ mobile_tenant_migration.sql  │ Existing tenant DB missing mobile/attendance/marks tables │
+  └──────────────────────────────┴───────────────────────────────────────────────────────────┘

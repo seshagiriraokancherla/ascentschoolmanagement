@@ -1,0 +1,113 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{0774601C-E3AC-47B5-970E-185EFCD3BFB2}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>AscentSchools.Core</RootNamespace>
+    <AssemblyName>AscentSchools.Core</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Constants\ModuleCodes.cs" />
+    <Compile Include="Constants\PermissionCodes.cs" />
+    <Compile Include="DTOs\Auth\LoginRequest.cs" />
+    <Compile Include="DTOs\Auth\LoginResponse.cs" />
+    <Compile Include="DTOs\Auth\TokenClaims.cs" />
+    <Compile Include="DTOs\Branding\BrandingResponse.cs" />
+    <Compile Include="DTOs\Control\Auth\ControlLoginRequest.cs" />
+    <Compile Include="DTOs\Control\Auth\ControlLoginResponse.cs" />
+    <Compile Include="DTOs\Control\Auth\ControlTokenClaims.cs" />
+    <Compile Include="DTOs\Control\Auth\ControlUserRecord.cs" />
+    <Compile Include="DTOs\Control\Branding\GroupBrandingDto.cs" />
+    <Compile Include="DTOs\Control\Branding\UpdateGroupBrandingRequest.cs" />
+    <Compile Include="DTOs\Control\Modules\GroupModuleDto.cs" />
+    <Compile Include="DTOs\Control\Modules\ModuleDto.cs" />
+    <Compile Include="DTOs\Control\Modules\UpdateGroupModuleRequest.cs" />
+    <Compile Include="DTOs\Control\SchoolGroups\CreateSchoolGroupRequest.cs" />
+    <Compile Include="DTOs\Control\SchoolGroups\SchoolGroupDto.cs" />
+    <Compile Include="DTOs\Control\SchoolGroups\UpdateSchoolGroupRequest.cs" />
+    <Compile Include="DTOs\Control\Schools\CreateSchoolRequest.cs" />
+    <Compile Include="DTOs\Control\Schools\SchoolDto.cs" />
+    <Compile Include="DTOs\Control\Schools\UpdateSchoolRequest.cs" />
+    <Compile Include="DTOs\Control\Subscriptions\SubscriptionDto.cs" />
+    <Compile Include="DTOs\Control\Subscriptions\UpdateSubscriptionRequest.cs" />
+    <Compile Include="DTOs\Control\Users\CreateTenantUserRequest.cs" />
+    <Compile Include="DTOs\Control\Users\ResetPasswordRequest.cs" />
+    <Compile Include="DTOs\Control\Users\SetUserStatusRequest.cs" />
+    <Compile Include="DTOs\Control\Users\TenantRoleDto.cs" />
+    <Compile Include="DTOs\Control\Users\TenantUserDto.cs" />
+    <Compile Include="DTOs\Mobile\Data\FeeDtos.cs" />
+    <Compile Include="DTOs\School\Auth\SchoolUserRecord.cs" />
+    <Compile Include="DTOs\School\Events\SchoolEventDto.cs" />
+    <Compile Include="DTOs\School\Master\SectionDtos.cs" />
+    <Compile Include="DTOs\School\Reports\ReportDtos.cs" />
+    <Compile Include="DTOs\School\Sms\SmsDtos.cs" />
+    <Compile Include="DTOs\School\Staff\StaffDtos.cs" />
+    <Compile Include="DTOs\School\Students\BulkImportDtos.cs" />
+    <Compile Include="DTOs\School\Students\StudentDtos.cs" />
+    <Compile Include="DTOs\School\Fee\FeeDtos.cs" />
+    <Compile Include="DTOs\School\Fee\GatewayDtos.cs" />
+    <Compile Include="DTOs\School\Master\AcademicYearDtos.cs" />
+    <Compile Include="DTOs\School\Master\ClassDtos.cs" />
+    <Compile Include="DTOs\School\Master\ClassGroupDtos.cs" />
+    <Compile Include="DTOs\School\Master\FeeCategoryDtos.cs" />
+    <Compile Include="DTOs\School\Master\FeeTypeDtos.cs" />
+    <Compile Include="DTOs\School\Master\PaymentModeDtos.cs" />
+    <Compile Include="DTOs\School\Master\SubjectDtos.cs" />
+    <Compile Include="DTOs\School\Master\TermDtos.cs" />
+    <Compile Include="DTOs\School\Rbac\CreateSchoolRoleRequest.cs" />
+    <Compile Include="DTOs\School\Rbac\RolePermissionsRequest.cs" />
+    <Compile Include="DTOs\School\Rbac\SchoolPermissionDto.cs" />
+    <Compile Include="DTOs\School\Rbac\SchoolRoleDto.cs" />
+    <Compile Include="DTOs\School\Rbac\UpdateSchoolRoleRequest.cs" />
+    <Compile Include="DTOs\Mobile\Auth\StudentRegisterRequest.cs" />
+    <Compile Include="DTOs\Mobile\Auth\StudentLoginRequest.cs" />
+    <Compile Include="DTOs\Mobile\Auth\ParentRegisterRequest.cs" />
+    <Compile Include="DTOs\Mobile\Auth\ParentLoginRequest.cs" />
+    <Compile Include="DTOs\Mobile\Auth\LinkChildRequest.cs" />
+    <Compile Include="DTOs\Mobile\Auth\SelectChildRequest.cs" />
+    <Compile Include="DTOs\Mobile\Auth\OtpRequest.cs" />
+    <Compile Include="DTOs\Mobile\Auth\ResetPinRequest.cs" />
+    <Compile Include="DTOs\Mobile\Auth\MobileTokenClaims.cs" />
+    <Compile Include="DTOs\Mobile\Auth\MobileAuthResponse.cs" />
+    <Compile Include="DTOs\Mobile\Data\AttendanceDto.cs" />
+    <Compile Include="DTOs\Mobile\Data\MarksDto.cs" />
+    <Compile Include="DTOs\Mobile\Data\HomeworkDto.cs" />
+    <Compile Include="DTOs\Mobile\Data\AnnouncementDto.cs" />
+    <Compile Include="DTOs\Mobile\Data\StudentProfileDto.cs" />
+    <Compile Include="DTOs\School\Attendance\AttendanceDtos.cs" />
+    <Compile Include="DTOs\School\Dashboard\DashboardDto.cs" />
+    <Compile Include="DTOs\School\Transport\TransportDtos.cs" />
+    <Compile Include="DTOs\School\Marks\MarksDto.cs" />
+    <Compile Include="DTOs\School\Homework\HomeworkDto.cs" />
+    <Compile Include="DTOs\School\Announcements\AnnouncementDto.cs" />
+    <Compile Include="Models\ApiResponse.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
+</Project>

@@ -1,0 +1,149 @@
+using AscentSchools.API.Helpers;
+using AscentSchools.API.Middleware;
+using AscentSchools.Core.DTOs.Mobile.Auth;
+using System;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Web.Http.Filters;
+
+namespace AscentSchools.API.Filters
+{
+    /// <summary>
+    /// Global filter — runs on every request.
+    /// Validates the Bearer JWT, populates TenantContext.Current.
+    /// Routes with [AllowAnonymous] skip the 401 response but still parse the token if present.
+    /// </summary>
+    public class JwtAuthenticationFilter : IAuthenticationFilter
+    {
+        public bool AllowMultiple => false;
+
+        public Task AuthenticateAsync(HttpAuthenticationContext context, CancellationToken cancellationToken)
+        {
+            var request = context.Request;
+            var auth    = request.Headers.Authorization;
+
+            if (auth == null || auth.Scheme != "Bearer" || string.IsNullOrWhiteSpace(auth.Parameter))
+                return Task.FromResult(0); // No token — let AllowAnonymous or RequirePermission handle it
+
+            var principal = JwtHelper.ValidateAccessToken(auth.Parameter);
+            if (principal == null)
+            {
+                context.ErrorResult = new UnauthorizedResult(request);
+                return Task.FromResult(0);
+            }
+
+            var tokenType = principal.Claims.FirstOrDefault(c => c.Type == "tokenType")?.Value;
+
+            // Control tokens — validated by ControlAuthAttribute; skip TenantContext
+            if (tokenType == "control")
+            {
+                context.Principal = principal;
+                return Task.FromResult(0);
+            }
+
+            // Mobile tokens — populate MobileContext; skip TenantContext
+            if (tokenType == "student")
+            {
+                var sc = JwtHelper.ExtractMobileStudentClaims(principal);
+                if (sc != null)
+                {
+                    MobileContext.Current = new MobileContext
+                    {
+                        TokenType   = "student",
+                        AccountId   = sc.AccountId,
+                        StudentId   = sc.StudentId,
+                        GroupId     = sc.GroupId,
+                        SchoolId    = sc.SchoolId,
+                        DbName      = sc.DbName,
+                        DisplayName = sc.StudentName,
+                        ClassName   = sc.ClassName,
+                        AdmissionNo = sc.AdmissionNo,
+                    };
+                }
+                context.Principal = principal;
+                return Task.FromResult(0);
+            }
+
+            if (tokenType == "teacher")
+            {
+                var c = principal.Claims.ToList();
+                int.TryParse(c.FirstOrDefault(x => x.Type == "userId")?.Value,   out var tUid);
+                int.TryParse(c.FirstOrDefault(x => x.Type == "schoolId")?.Value, out var tScid);
+                int.TryParse(c.FirstOrDefault(x => x.Type == "groupId")?.Value,  out var tGid);
+                TeacherContext.Current = new TeacherContext
+                {
+                    UserId   = tUid,
+                    SchoolId = tScid,
+                    GroupId  = tGid,
+                    DbName   = c.FirstOrDefault(x => x.Type == "dbName")?.Value,
+                    FullName = c.FirstOrDefault(x => x.Type == "fullName")?.Value,
+                };
+                context.Principal = principal;
+                return Task.FromResult(0);
+            }
+
+            if (tokenType == "parent")
+            {
+                var pc = JwtHelper.ExtractMobileParentClaims(principal);
+                if (pc != null)
+                {
+                    MobileContext.Current = new MobileContext
+                    {
+                        TokenType   = "parent",
+                        ParentId    = pc.ParentId,
+                        StudentId   = pc.StudentId,
+                        GroupId     = pc.GroupId,
+                        SchoolId    = pc.SchoolId,
+                        DbName      = pc.DbName,
+                        DisplayName = pc.FullName,
+                        ClassName   = pc.ClassName,
+                        AdmissionNo = pc.AdmissionNo,
+                    };
+                }
+                context.Principal = principal;
+                return Task.FromResult(0);
+            }
+
+            var claims = JwtHelper.ExtractClaims(principal);
+            if (claims == null)
+            {
+                context.ErrorResult = new UnauthorizedResult(request);
+                return Task.FromResult(0);
+            }
+
+            // Populate TenantContext for use in controllers and downstream filters
+            TenantContext.Current = new TenantContext
+            {
+                UserId       = claims.UserId,
+                FullName     = claims.FullName,
+                GroupId      = claims.GroupId,
+                SchoolId     = claims.SchoolId.GetValueOrDefault(),
+                TenantDbName = claims.TenantDbName,
+                Permissions  = claims.Permissions
+            };
+
+            context.Principal = principal;
+            return Task.FromResult(0);
+        }
+
+        public Task ChallengeAsync(HttpAuthenticationChallengeContext context, CancellationToken cancellationToken)
+            => Task.FromResult(0);
+    }
+
+    /// <summary>Helper to return a clean 401 response.</summary>
+    internal class UnauthorizedResult : System.Web.Http.IHttpActionResult
+    {
+        private readonly HttpRequestMessage _request;
+        public UnauthorizedResult(HttpRequestMessage request) { _request = request; }
+
+        public Task<HttpResponseMessage> ExecuteAsync(CancellationToken cancellationToken)
+        {
+            var response = _request.CreateResponse(HttpStatusCode.Unauthorized,
+                new { success = false, message = "Invalid or expired token." });
+            return Task.FromResult(response);
+        }
+    }
+}

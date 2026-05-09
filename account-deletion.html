@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Deletion Request — Ascent Schools</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 20px; color: #333; line-height: 1.7; }
+        h1 { color: #1677FF; border-bottom: 2px solid #1677FF; padding-bottom: 10px; }
+        h2 { color: #444; margin-top: 28px; }
+        .card { background: #f5f7ff; border: 1px solid #d0d9ff; border-radius: 8px; padding: 20px 24px; margin: 20px 0; }
+        label { display: block; font-weight: bold; margin-bottom: 4px; margin-top: 14px; }
+        input, select, textarea {
+            width: 100%; padding: 9px 12px; border: 1px solid #ccc;
+            border-radius: 6px; font-size: 15px; box-sizing: border-box;
+        }
+        textarea { height: 90px; resize: vertical; }
+        button {
+            margin-top: 18px; background: #1677FF; color: #fff;
+            border: none; padding: 11px 28px; border-radius: 6px;
+            font-size: 16px; cursor: pointer; width: 100%;
+        }
+        button:hover { background: #0958d9; }
+        .note { background: #fff8e1; border-left: 4px solid #ffc107; padding: 10px 14px; border-radius: 4px; margin: 16px 0; font-size: 14px; }
+        ul { margin: 10px 0 10px 20px; }
+        a { color: #1677FF; }
+        .success { display:none; background:#f0fff4; border:1px solid #52c41a; border-radius:8px; padding:20px; text-align:center; color:#237804; }
+    </style>
+</head>
+<body>
+
+<h1>Account Deletion Request</h1>
+<p>
+    Use this form to request deletion of your <strong>Ascent Schools</strong> mobile app account
+    and associated personal data. We will process your request within <strong>7 business days</strong>.
+</p>
+
+<div class="note">
+    ⚠️ <strong>Important:</strong> Deleting your mobile app account only removes your login access
+    to the Ascent Schools app. Your academic records (marks, attendance, fees) are maintained by
+    your school and are not deleted — please contact your school directly for academic record removal.
+</div>
+
+<h2>What gets deleted</h2>
+<ul>
+    <li>Your mobile app login credentials (PIN)</li>
+    <li>All active login sessions and tokens</li>
+    <li>Your account profile stored in our system</li>
+    <li>Parent–child links (for parent accounts)</li>
+</ul>
+
+<h2>What is retained</h2>
+<ul>
+    <li>Academic records (marks, attendance) — maintained by your school</li>
+    <li>Fee payment receipts — retained for financial compliance (7 years)</li>
+</ul>
+
+<div class="card">
+    <form id="deletionForm">
+        <label for="accountType">Account type</label>
+        <select id="accountType" required>
+            <option value="">— Select —</option>
+            <option value="student">Student account</option>
+            <option value="parent">Parent account</option>
+        </select>
+
+        <label for="identifier">Admission number (students) or Mobile number (parents)</label>
+        <input type="text" id="identifier" placeholder="e.g. 2021-IX-001 or 9876500000" required />
+
+        <label for="name">Full name</label>
+        <input type="text" id="name" placeholder="Your full name" required />
+
+        <label for="school">School name</label>
+        <input type="text" id="school" placeholder="e.g. Demo School" required />
+
+        <label for="email">Your email address (for confirmation)</label>
+        <input type="email" id="email" placeholder="your@email.com" required />
+
+        <label for="reason">Reason for deletion (optional)</label>
+        <textarea id="reason" placeholder="Let us know why you are deleting your account..."></textarea>
+
+        <button type="submit">Submit Deletion Request</button>
+    </form>
+
+    <div class="success" id="successMsg">
+        ✅ <strong>Request submitted successfully.</strong><br/>
+        We will process your account deletion within 7 business days and send a confirmation to your email.
+    </div>
+</div>
+
+<p>
+    If you prefer, you can also email your deletion request directly to:
+    <a href="mailto:support@edu-care.in">support@edu-care.in</a><br/>
+    Include your account type, admission/mobile number, and school name.
+</p>
+
+<p style="color:#888; font-size:13px; margin-top:40px;">
+    <a href="/privacy-policy.html">Privacy Policy</a> &nbsp;|&nbsp;
+    &copy; 2025 Ascent Info Solutions
+</p>
+
+<script>
+    document.getElementById('deletionForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        // In production: POST this to your API or send an email via a form service
+        // For now: show success message
+        document.getElementById('deletionForm').style.display = 'none';
+        document.getElementById('successMsg').style.display = 'block';
+
+        // Optional: send via mailto as fallback
+        var accountType = document.getElementById('accountType').value;
+        var identifier  = document.getElementById('identifier').value;
+        var name        = document.getElementById('name').value;
+        var school      = document.getElementById('school').value;
+        var email       = document.getElementById('email').value;
+        var reason      = document.getElementById('reason').value;
+
+        var subject = encodeURIComponent('Account Deletion Request — Ascent Schools');
+        var body    = encodeURIComponent(
+            'Account Type: ' + accountType + '\n' +
+            'Identifier: '   + identifier  + '\n' +
+            'Name: '         + name        + '\n' +
+            'School: '       + school      + '\n' +
+            'Email: '        + email       + '\n' +
+            'Reason: '       + reason
+        );
+        window.location.href = 'mailto:support@edu-care.in?subject=' + subject + '&body=' + body;
+    });
+</script>
+
+</body>
+</html>

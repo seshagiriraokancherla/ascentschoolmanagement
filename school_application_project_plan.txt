@@ -1,0 +1,209 @@
+Good time to step back and plan this properly. Let me think through this as both architect and PM.
+
+  ---
+  Key Principle: Foundation Before Features
+
+  Every screen in the school app needs tenant resolution, auth, and permission checks working first. Building a module screen before  
+  those are solid means rebuilding it later.
+
+  ---
+  Two Apps — Two Tracks
+
+  Track A: Control App (simpler, validates multi-tenant arch early)
+  Track B: School App (main product)
+
+  Run Track A first — it's smaller, and getting the multi-tenant DB routing working there de-risks Track B completely.
+
+  ---
+  Phases
+
+  Phase 0 — Project Setup (do once, get right)
+
+  API (.NET 4.8 Web API):
+  - Solution with 3 projects:
+  AscentSchools.sln
+  ├── AscentSchools.API        ← single Web API, serves both apps
+  ├── AscentSchools.Core       ← models, interfaces, constants
+  └── AscentSchools.Data       ← repositories, DB context, migrations
+  - Multi-tenant DB connection factory (resolve tenant DB from subdomain/JWT claim)
+  - Response envelope standard: { success, data, message, errors }
+  - Global exception handler
+  - JWT token setup
+
+  React (two separate apps):
+  ascent-control-app/    ← Ascent internal admin portal
+  ascent-school-app/     ← School-facing app (tenant)
+
+  - Folder structure, routing, axios base setup, env config
+  - Shared component library (buttons, tables, forms, modals) — used by both apps
+
+  ---
+  Phase 1 — Control App (Track A)
+
+  Goal: Onboard a school group end-to-end from the UI
+
+  ┌────────────────────────────────────┬─────────────────────────────────────┐
+  │               Screen               │            API Endpoints            │
+  ├────────────────────────────────────┼─────────────────────────────────────┤
+  │ Login (control_users)              │ POST /control/auth/login            │
+  ├────────────────────────────────────┼─────────────────────────────────────┤
+  │ School Groups list + create + edit │ GET/POST/PUT /control/school-groups │
+  ├────────────────────────────────────┼─────────────────────────────────────┤
+  │ Schools (branches) per group       │ GET/POST/PUT /control/schools       │
+  ├────────────────────────────────────┼─────────────────────────────────────┤
+  │ Subscription management            │ GET/POST/PUT /control/subscriptions │
+  ├────────────────────────────────────┼─────────────────────────────────────┤
+  │ Module enable/disable per group    │ GET/PUT /control/group-modules      │
+  ├────────────────────────────────────┼─────────────────────────────────────┤
+  │ Module enable/disable per branch   │ GET/PUT /control/school-modules     │
+  └────────────────────────────────────┴─────────────────────────────────────┘
+
+  Deliverable: You can onboard a new school group, create branches, set subscription, toggle modules — all from UI. Tenant DB gets    
+  created as part of onboarding.
+
+  ---
+  Phase 2 — School App: Auth + RBAC
+
+  Goal: Any school staff can log in and see only what their role allows
+
+  Step 2a — Authentication
+
+  ┌──────────────────────────────┬──────────────────────────────────────────────────┐
+  │            Screen            │                       API                        │
+  ├──────────────────────────────┼──────────────────────────────────────────────────┤
+  │ Login page (subdomain-aware) │ POST /auth/login → resolves tenant → returns JWT │
+  ├──────────────────────────────┼──────────────────────────────────────────────────┤
+  │ Forgot password              │ POST /auth/forgot-password                       │
+  └──────────────────────────────┴──────────────────────────────────────────────────┘
+
+  Step 2b — User & Role Management
+
+  ┌──────────────────────────────────┬─────────────────────────────────┐
+  │              Screen              │               API               │
+  ├──────────────────────────────────┼─────────────────────────────────┤
+  │ Roles list + create + edit       │ GET/POST/PUT /roles             │
+  ├──────────────────────────────────┼─────────────────────────────────┤
+  │ Assign permissions to role       │ GET/PUT /roles/{id}/permissions │
+  ├──────────────────────────────────┼─────────────────────────────────┤
+  │ Users list + create + edit       │ GET/POST/PUT /users             │
+  ├──────────────────────────────────┼─────────────────────────────────┤
+  │ Assign role to user (per branch) │ POST /users/{id}/roles          │
+  └──────────────────────────────────┴─────────────────────────────────┘
+
+  Step 2c — API Middleware (non-UI but critical)
+  - TenantMiddleware — reads subdomain → resolves group_id → sets tenant DB connection
+  - ModuleAccessMiddleware — checks group_modules + school_modules before controller runs
+  - Permission attribute on every controller action: [RequirePermission("STUDENT_FEE.COLLECT")]
+
+  Deliverable: Full login + RBAC working. A Fee Clerk can log in and gets 403 on anything outside their permissions.
+
+  ---
+  Phase 3 — School App: Master Data Setup
+
+  These are prerequisites for every module. No student can be enrolled without them.
+
+  ┌──────────────────────────────────────┬───────────────┐
+  │                Screen                │  Depends On   │
+  ├──────────────────────────────────────┼───────────────┤
+  │ Academic Year setup                  │ —             │
+  ├──────────────────────────────────────┼───────────────┤
+  │ Class Groups (Pre-Primary, Primary…) │ —             │
+  ├──────────────────────────────────────┼───────────────┤
+  │ Classes + branch/stream              │ Class Groups  │
+  ├──────────────────────────────────────┼───────────────┤
+  │ Fee Categories                       │ —             │
+  ├──────────────────────────────────────┼───────────────┤
+  │ Fee Types                            │ Academic Year │
+  ├──────────────────────────────────────┼───────────────┤
+  │ Terms/Months                         │ Academic Year │
+  ├──────────────────────────────────────┼───────────────┤
+  │ Subjects                             │ Academic Year │
+  ├──────────────────────────────────────┼───────────────┤
+  │ Payment Modes                        │ —             │
+  └──────────────────────────────────────┴───────────────┘
+
+  Deliverable: School can fully configure their academic year before enrolling a single student.
+
+  ---
+  Phase 4 — Modules (in dependency order)
+
+  Student Profile        ← core entity, others depend on this
+      │
+      ├── Student Fee    ← highest priority for schools (revenue)
+      │       └── Fee Structure setup (FeeMaster screen)
+      │
+      ├── Attendance     ← daily use, high value
+      │
+      ├── Marks          ← term-end use
+      │
+      ├── Library        ← relatively independent
+      │
+      └── Transport      ← relatively independent
+
+  Each module follows the same build pattern:
+  1. List screen — paginated, filterable, exportable
+  2. Create/Edit form
+  3. View/Detail screen
+  4. Reports (at end of module, not beginning)
+
+  ---
+  Phase 5 — Cross-cutting (after modules are stable)
+
+  - Dashboard / home screen (summaries from all modules)
+  - Notifications
+  - Mobile app
+  - Hostel module
+
+  ---
+  Recommended Build Order Summary
+
+  Phase 0  →  Project scaffolding + conventions
+  Phase 1  →  Control App (full)
+  Phase 2a →  School App login + JWT
+  Phase 2b →  RBAC screens (roles, permissions, users)
+  Phase 2c →  Middleware (tenant + module + permission)
+  Phase 3  →  Master data screens
+  Phase 4a →  Student Profile module
+  Phase 4b →  Student Fee module
+  Phase 4c →  Attendance module
+  Phase 4d →  Marks module
+  Phase 4e →  Library module
+  Phase 4f →  Transport module
+  Phase 5  →  Dashboard + reports + mobile
+
+  ---
+  Decisions to Make Before Writing Code
+
+  1. ORM or raw ADO.NET? — Dapper is a good middle ground for .NET 4.8 (lightweight, SQL-friendly, easy multi-tenant connection       
+  switching). Entity Framework works too but multi-tenant DB switching is more complex.
+  2. React state management? — Redux Toolkit or Zustand? For this scale Zustand is simpler.
+  3. UI component library? — Ant Design or MUI? Both have tables, forms, date pickers needed for school app.
+  4. Tenant DB provisioning — When a school group is onboarded from the control app, does the API auto-create the tenant DB and run   
+  tenant_tables.sql, or is it a manual DBA step?
+  5. JWT expiry + refresh token strategy?
+
+  ---
+  Shall I start with Phase 0 — project scaffolding (create the solution structure, folder layout, base API setup)?
+
+────────────────────┬────────────────────────────────────────────────────────────────┐
+  │        Section        │                            Content                             │
+  ├───────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ Tech Stack            │ React+Vite, AntD, Zustand, .NET 4.8, Dapper, SQL Server        │
+  ├───────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ Two Apps              │ Control app vs School app — URLs, auth, RBAC                   │
+  ├───────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ Two-DB Model          │ All 12 master tables + all 20 tenant tables listed             │
+  ├───────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ Auth & Tenant Routing │ Subdomain flow, JWT strategy, login steps                      │
+  ├───────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ RBAC Design           │ Tables, 24 seeded permissions, 5 seeded roles, middleware flow │
+  ├───────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ Module Access         │ 3-level hierarchy, 7 modules, plan tiers                       │
+  ├───────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ Branding              │ Fields, hierarchy, AntD ConfigProvider integration             │
+  ├───────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ Tenant Provisioning   │ How API creates + seeds tenant DB on onboarding                │
+  ├───────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ Build Order           │ Phase 0 → 5                                                    │
+  ├───────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ Project Structure     │ API solution layout + React folder layout         

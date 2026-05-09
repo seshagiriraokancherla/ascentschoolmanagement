@@ -1,0 +1,80 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{B46C2C4C-6B24-4A53-9467-62D08BFE98C2}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>AscentSchools.Data</RootNamespace>
+    <AssemblyName>AscentSchools.Data</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Configuration" />
+    <Reference Include="Dapper">
+      <HintPath>..\packages\Dapper.2.1.72\lib\net461\Dapper.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AscentSchools.Core\AscentSchools.Core.csproj">
+      <Project>{0774601C-E3AC-47B5-970E-185EFCD3BFB2}</Project>
+      <Name>AscentSchools.Core</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="ConnectionFactory\IConnectionFactory.cs" />
+    <Compile Include="ConnectionFactory\TenantConnectionFactory.cs" />
+    <Compile Include="Repositories\Control\BrandingRepository.cs" />
+    <Compile Include="Repositories\Control\ControlUserRepository.cs" />
+    <Compile Include="Repositories\Control\MasterRefreshTokenRepository.cs" />
+    <Compile Include="Repositories\Control\ModuleRepository.cs" />
+    <Compile Include="Repositories\Control\SchoolGroupRepository.cs" />
+    <Compile Include="Repositories\Control\SchoolRepository.cs" />
+    <Compile Include="Repositories\Control\SubscriptionRepository.cs" />
+    <Compile Include="Repositories\Control\TenantUserRepository.cs" />
+    <Compile Include="Repositories\School\MasterDataRepository.cs" />
+    <Compile Include="Repositories\School\ReportsRepository.cs" />
+    <Compile Include="Repositories\School\SchoolEventsRepository.cs" />
+    <Compile Include="Repositories\School\SmsRepository.cs" />
+    <Compile Include="Repositories\School\StaffRepository.cs" />
+    <Compile Include="Repositories\School\StudentRepository.cs" />
+    <Compile Include="Repositories\School\FeeRepository.cs" />
+    <Compile Include="Repositories\School\GatewayRepository.cs" />
+    <Compile Include="Repositories\School\SchoolAuthRepository.cs" />
+    <Compile Include="Repositories\School\SchoolRbacRepository.cs" />
+    <Compile Include="Repositories\School\SchoolBrandingRepository.cs" />
+    <Compile Include="Repositories\Mobile\MobileStudentAuthRepository.cs" />
+    <Compile Include="Repositories\Mobile\MobileParentAuthRepository.cs" />
+    <Compile Include="Repositories\Mobile\MobileDataRepository.cs" />
+    <Compile Include="Repositories\School\AttendanceRepository.cs" />
+    <Compile Include="Repositories\School\DashboardRepository.cs" />
+    <Compile Include="Repositories\School\TransportRepository.cs" />
+    <Compile Include="Repositories\School\MarksRepository.cs" />
+    <Compile Include="Repositories\School\HomeworkRepository.cs" />
+    <Compile Include="Repositories\School\AnnouncementsRepository.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
+</Project>
