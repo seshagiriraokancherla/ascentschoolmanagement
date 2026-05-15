@@ -50,6 +50,7 @@ export default function StudentFormPage() {
   const [feeCategories,  setFeeCategories]  = useState([])
   const [busRoutes,      setBusRoutes]      = useState([])
   const [buses,          setBuses]          = useState([])
+  const [hostels,        setHostels]        = useState([])
 
   // Load lookups
   useEffect(() => {
@@ -66,6 +67,7 @@ export default function StudentFormPage() {
     // Bus routes and buses are needed only for transport tab
     api.get('/school/master/bus-routes').then((r) => setBusRoutes(r.data?.data || [])).catch(() => {})
     api.get('/school/master/buses').then((r) => setBuses(r.data?.data || [])).catch(() => {})
+    api.get('/school/hostel').then((r) => setHostels(r.data?.data || [])).catch(() => {})
   }, [])
 
   // Load student if editing
@@ -83,7 +85,6 @@ export default function StudentFormPage() {
         form.setFieldsValue({
           // Basic
           admissionNo:    s.admissionNo,
-          schoolUniqueId: s.schoolUniqueId,
           studentName:    s.studentName,
           shortName:      s.shortName,
           joinType:       s.joinType,
@@ -142,7 +143,7 @@ export default function StudentFormPage() {
           busTrip:       s.busTrip,
           // Other
           studentType:           s.studentType,
-          hostelName:            s.hostelName,
+          hostelId:              s.hostelId,
           scholarshipStatus:     s.scholarshipStatus,
           scholarshipDescription:s.scholarshipDescription,
           motherTongue:          s.motherTongue,
@@ -166,7 +167,6 @@ export default function StudentFormPage() {
     try {
       const body = {
         AdmissionNo:            values.admissionNo,
-        SchoolUniqueId:         values.schoolUniqueId,
         StudentName:            values.studentName,
         ShortName:              values.shortName,
         JoinType:               values.joinType,
@@ -219,7 +219,7 @@ export default function StudentFormPage() {
         BusId:                  values.busId       || null,
         BusTrip:                values.busTrip,
         StudentType:            values.studentType,
-        HostelName:             values.hostelName,
+        HostelId:               values.hostelId || null,
         ScholarshipStatus:      values.scholarshipStatus,
         ScholarshipDescription: values.scholarshipDescription,
         MotherTongue:           values.motherTongue,
@@ -326,11 +326,6 @@ export default function StudentFormPage() {
           </Col>
           <Col xs={24} md={8}>
             <Form.Item name="admissionNo" label="Admission No">
-              <Input />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={8}>
-            <Form.Item name="schoolUniqueId" label="School Unique ID">
               <Input />
             </Form.Item>
           </Col>
@@ -632,8 +627,12 @@ export default function StudentFormPage() {
         </Form.Item>
       </Col>
       <Col xs={24} md={8}>
-        <Form.Item name="hostelName" label="Hostel Name">
-          <Input />
+        <Form.Item name="hostelId" label="Hostel">
+          <Select
+            allowClear
+            placeholder="Select hostel"
+            options={hostels.map((h) => ({ value: h.hostelId, label: h.hostelName }))}
+          />
         </Form.Item>
       </Col>
       <Col xs={24} md={8}>

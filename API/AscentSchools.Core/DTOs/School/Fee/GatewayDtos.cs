@@ -35,14 +35,24 @@ namespace AscentSchools.Core.DTOs.School.Fee
         public bool?  IsActive       { get; set; }
     }
 
+    /// <summary>Request body for POST /mobile/fees/payment-orders (parent portal). Student identity comes from JWT.</summary>
+    public class MobileParentOrderRequest
+    {
+        public int    AcademicYearId  { get; set; }
+        public string FeeTypeCategory { get; set; }
+        public List<CollectFeeItem> Items { get; set; }
+    }
+
     /// <summary>Request body for POST /school/fees/payment-orders.</summary>
     public class CreatePaymentOrderRequest
     {
-        public long      StudentId       { get; set; }
-        public int       AcademicYearId  { get; set; }
-        public int       PaymentModeId   { get; set; }
-        public DateTime? PaymentDate     { get; set; }
-        public string    Remarks         { get; set; }
+        public long      StudentId        { get; set; }
+        public int?      StudentUniqueId  { get; set; }
+        public string    FeeTypeCategory  { get; set; }
+        public int       AcademicYearId   { get; set; }
+        public int       PaymentModeId    { get; set; }
+        public DateTime? PaymentDate      { get; set; }
+        public string    Remarks          { get; set; }
         public List<CollectFeeItem> Items { get; set; }
     }
 

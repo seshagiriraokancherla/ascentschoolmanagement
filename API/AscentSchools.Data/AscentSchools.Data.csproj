@@ -61,6 +61,8 @@
     <Compile Include="Repositories\School\StaffRepository.cs" />
     <Compile Include="Repositories\School\StudentRepository.cs" />
     <Compile Include="Repositories\School\FeeRepository.cs" />
+    <Compile Include="Repositories\School\FeeConcessionRepository.cs" />
+    <Compile Include="Repositories\School\HostelRepository.cs" />
     <Compile Include="Repositories\School\GatewayRepository.cs" />
     <Compile Include="Repositories\School\SchoolAuthRepository.cs" />
     <Compile Include="Repositories\School\SchoolRbacRepository.cs" />

@@ -7,9 +7,9 @@ import retrofit2.Response
 
 class FeeRepository(private val api: ApiService) {
 
-    suspend fun getFees(academicYearId: Int = 0): Result<MobileFeeSummaryDto> {
+    suspend fun getOutstanding(feeTypeCategory: String): Result<List<MobileFeeSummaryDto>> {
         return runCatching {
-            val resp = api.getFees(academicYearId)
+            val resp = api.getOutstanding(feeTypeCategory)
             val body = resp.bodyOrError()
             if (!body.success || body.data == null) error(body.message ?: "Failed to load fees")
             body.data
@@ -18,16 +18,19 @@ class FeeRepository(private val api: ApiService) {
 
     suspend fun createOrder(request: MobileCreateOrderRequest): Result<MobileOrderResponse> {
         return runCatching {
-            val resp = api.createFeeOrder(request)
+            val resp = api.createPaymentOrder(request)
             val body = resp.bodyOrError()
             if (!body.success || body.data == null) error(body.message ?: "Failed to create payment order")
             body.data
         }
     }
 
-    suspend fun verifyPayment(request: MobileVerifyRequest): Result<MobilePaymentResultDto> {
+    suspend fun verifyPayment(
+        gatewayOrderId : Int,
+        request        : MobileVerifyRequest
+    ): Result<MobilePaymentResultDto> {
         return runCatching {
-            val resp = api.verifyFeePayment(request)
+            val resp = api.verifyPayment(gatewayOrderId, request)
             val body = resp.bodyOrError()
             if (!body.success || body.data == null) error(body.message ?: "Payment verification failed")
             body.data

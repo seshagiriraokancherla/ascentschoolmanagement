@@ -13,21 +13,26 @@ const { Title, Text } = Typography
 
 // ── Column reference ──────────────────────────────────────────────────────────
 const COLUMNS_META = [
-  { key: 'AcademicYear', required: true,  note: 'Must match master data, e.g. 2024-25' },
-  { key: 'ClassName',    required: true,  note: 'Must match master data, e.g. Class 6' },
-  { key: 'FeeCategory',  required: true,  note: 'Must match master data, e.g. General' },
-  { key: 'FeeType',      required: true,  note: 'Must match master data, e.g. Tuition Fee' },
-  { key: 'Term',         required: true,  note: 'Must match master data, e.g. April or Term 1' },
-  { key: 'Amount',       required: true,  note: 'Numeric, e.g. 1500 or 1500.50' },
+  { key: 'AcademicYear',  required: true,  note: 'Must match master data, e.g. 2024-25' },
+  { key: 'ClassName',     required: true,  note: 'Must match master data, e.g. Class 6' },
+  { key: 'FeeCategory',   required: true,  note: 'Must match master data, e.g. General' },
+  { key: 'FeeType',       required: true,  note: 'Must match master data, e.g. Tuition Fee' },
+  { key: 'PaymentType',   required: true,  note: 'Term or Monthly' },
+  { key: 'AdmissionType', required: false, note: 'New, Old, or blank (applies to all)' },
+  { key: 'Term',          required: false, note: 'For PaymentType=Term: must match master terms, e.g. Term 1. Leave blank for Monthly.' },
+  { key: 'FeePeriod',     required: false, note: 'For PaymentType=Monthly: must match Fee Periods master, e.g. April 2024. Leave blank for Term.' },
+  { key: 'Amount',        required: true,  note: 'Numeric, e.g. 1500 or 1500.50' },
 ]
 
-const CSV_HEADERS = COLUMNS_META.map((c) => c.key)
+// Required columns for CSV validation (Term/FeePeriod validated contextually by server)
+const REQUIRED_HEADERS = ['AcademicYear', 'ClassName', 'FeeCategory', 'FeeType', 'PaymentType', 'Amount']
+const CSV_HEADERS      = COLUMNS_META.map((c) => c.key)
 
 const EXAMPLE_ROWS = [
-  { AcademicYear: '2024-25', ClassName: 'Class 6', FeeCategory: 'General',    FeeType: 'Tuition Fee', Term: 'April', Amount: '1500' },
-  { AcademicYear: '2024-25', ClassName: 'Class 6', FeeCategory: 'General',    FeeType: 'Tuition Fee', Term: 'May',   Amount: '1500' },
-  { AcademicYear: '2024-25', ClassName: 'Class 6', FeeCategory: 'Staff Child', FeeType: 'Tuition Fee', Term: 'April', Amount: '750'  },
-  { AcademicYear: '2024-25', ClassName: 'Class 7', FeeCategory: 'General',    FeeType: 'Exam Fee',    Term: 'April', Amount: '500'  },
+  { AcademicYear: '2024-25', ClassName: 'Class 6', FeeCategory: 'General', FeeType: 'Tuition Fee', PaymentType: 'Monthly', AdmissionType: 'Old', Term: '',       FeePeriod: 'April 2024',   Amount: '1500' },
+  { AcademicYear: '2024-25', ClassName: 'Class 6', FeeCategory: 'General', FeeType: 'Tuition Fee', PaymentType: 'Monthly', AdmissionType: 'Old', Term: '',       FeePeriod: 'May 2024',     Amount: '1500' },
+  { AcademicYear: '2024-25', ClassName: 'Class 6', FeeCategory: 'General', FeeType: 'Exam Fee',    PaymentType: 'Term',    AdmissionType: '',    Term: 'Term 1', FeePeriod: '',             Amount: '500'  },
+  { AcademicYear: '2024-25', ClassName: 'Class 7', FeeCategory: 'General', FeeType: 'Tuition Fee', PaymentType: 'Monthly', AdmissionType: 'New', Term: '',       FeePeriod: 'April 2024',   Amount: '750'  },
 ]
 
 const exampleColumns = COLUMNS_META.map((c) => ({
@@ -87,7 +92,7 @@ export default function FeeStructureImportPage() {
       header:         true,
       skipEmptyLines: true,
       complete: ({ data, meta }) => {
-        const missing = CSV_HEADERS.filter((c) => !meta.fields.includes(c))
+        const missing = REQUIRED_HEADERS.filter((c) => !meta.fields.includes(c))
         if (missing.length) {
           message.error(`CSV is missing required columns: ${missing.join(', ')}`)
           return
@@ -129,7 +134,7 @@ export default function FeeStructureImportPage() {
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          message="Each row sets the fee amount for one Class + Category + Fee Type + Term combination. Uploading a row that already exists will overwrite the existing amount."
+          message="Each row sets the fee amount for one Class + Category + Fee Type + Term/Period + AdmissionType combination. Use PaymentType=Term with a Term value, or PaymentType=Monthly with a FeePeriod value. Uploading a row that already exists will overwrite the existing amount."
         />
 
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>

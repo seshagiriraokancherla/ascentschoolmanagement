@@ -91,16 +91,21 @@ interface ApiService {
     @GET("mobile/student/events")
     suspend fun getEvents(): Response<ApiResponse<List<SchoolEventDto>>>
 
-    // ── Fees ──────────────────────────────────────────────────────────────────
+    // ── Fees (parent portal endpoints) ───────────────────────────────────────
 
-    @GET("mobile/student/fees")
-    suspend fun getFees(
-        @Query("academicYearId") academicYearId: Int = 0
-    ): Response<ApiResponse<MobileFeeSummaryDto>>
+    @GET("mobile/fees/outstanding")
+    suspend fun getOutstanding(
+        @Query("feeTypeCategory") feeTypeCategory: String
+    ): Response<ApiResponse<List<MobileFeeSummaryDto>>>
 
-    @POST("mobile/student/fees/order")
-    suspend fun createFeeOrder(@Body request: MobileCreateOrderRequest): Response<ApiResponse<MobileOrderResponse>>
+    @POST("mobile/fees/payment-orders")
+    suspend fun createPaymentOrder(
+        @Body request: MobileCreateOrderRequest
+    ): Response<ApiResponse<MobileOrderResponse>>
 
-    @POST("mobile/student/fees/verify")
-    suspend fun verifyFeePayment(@Body request: MobileVerifyRequest): Response<ApiResponse<MobilePaymentResultDto>>
+    @POST("mobile/fees/payment-orders/{gatewayOrderId}/verify")
+    suspend fun verifyPayment(
+        @Path("gatewayOrderId") gatewayOrderId: Int,
+        @Body request: MobileVerifyRequest
+    ): Response<ApiResponse<MobilePaymentResultDto>>
 }

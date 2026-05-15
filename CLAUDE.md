@@ -86,34 +86,36 @@ Run `tenant_tables.sql` on onboarding (called automatically by `POST /control/sc
 | 14 | `terms` | Terms/months per academic year | SAS_TermMonthData |
 | 15 | `subjects` | Academic subjects | SAS_Subjects |
 | 16 | `payment_modes` | Cash / Cheque / Online | SAS_PaymentMods |
-| 17 | `fee_structures` | Fee amount per class+category+type+term | SAS_FeeMaster |
-| 18 | `buses` | Bus vehicle details | SAS_BussData |
-| 19 | `bus_routes` | Bus route definitions | SAS_BusRoutes |
-| 20 | `bus_fee_structures` | Bus fee per route+term | SAS_BusMaster |
-| 21 | `students` | Student master data; `section_id` FK → sections; `blocked_reason`, `is_detained`, `detained_reason` columns | SAS_StudentMaster |
-| 22 | `fee_receipts` | Payment receipt header (receipt_no, total_amount, status Active/Cancelled) | *(new)* |
-| 23 | `fee_receipt_items` | Receipt line items (fee_type_id, term_id, amount, concession_amount, net_amount) | *(new)* |
-| 24 | `gateway_configs` | Payment gateway API keys per school (key_secret never returned in API) | *(new)* |
-| 25 | `payment_gateway_orders` | Online payment lifecycle tracking (Pending/Paid/Failed) | *(new)* |
-| 26 | `student_mobile_accounts` | Mobile app student accounts (PIN hash) | *(new)* |
-| 27 | `student_refresh_tokens` | Mobile student sliding-expiry refresh tokens | *(new)* |
-| 28 | `student_attendance` | Daily attendance per student | *(new)* |
-| 29 | `exam_types` | Exam type definitions per academic year | *(new)* |
-| 30 | `student_marks` | Per-student per-subject marks per exam | *(new)* |
-| 31 | `homework` | Homework assignments per class+section (`section_id` nullable FK — NULL means class-wide) | *(new)* |
-| 32 | `homework_attachments` | File attachments for homework entries | *(new)* |
-| 33 | `announcements` | School/class announcements with optional PDF attachment_url | *(new)* |
-| 34 | `school_events` | Events gallery metadata + external media URLs (YouTube/Cloudinary) | *(new)* |
-| 35 | `staff` | Employee master per school branch | *(new)* |
-| 36 | `staff_attendance` | Daily staff attendance (Present/Absent/Late/HalfDay/OnLeave) | *(new)* |
-| 37 | `staff_advances` | Advance/loan records per staff member | *(new)* |
-| 38 | `staff_advance_repayments` | Repayments against staff advances | *(new)* |
-| 39 | `staff_salary_components` | Salary structure template per staff (Earning/Deduction) | *(new)* |
-| 40 | `staff_salaries` | Monthly salary header per staff (Draft/Paid/Cancelled) | *(new)* |
-| 41 | `staff_salary_items` | Snapshot of components at salary processing time | *(new)* |
-| 42 | `sms_logs` | Audit trail of every SMS sent from the school app | *(new)* |
+| 17 | `fee_periods` | Monthly fee periods per school/academic year (month_no, year_no, period_label, sequence_no); used when fee_structures.payment_type = 'Monthly' | *(new)* |
+| 18 | `fee_structures` | Fee amount per class+category+type+term/period; `payment_type` (Term/Monthly), `fee_period_id` FK → fee_periods, `admission_type` (New/Old/NULL) | SAS_FeeMaster |
+| 19 | `buses` | Bus vehicle details | SAS_BussData |
+| 20 | `bus_routes` | Bus route definitions | SAS_BusRoutes |
+| 21 | `bus_fee_structures` | Bus fee per route+term | SAS_BusMaster |
+| 22 | `students` | Student master data; `student_unique_id` (stable cross-year INT, same value across promotions); `section_id` FK → sections; `blocked_reason`, `is_detained`, `detained_reason`, `join_type` columns | SAS_StudentMaster |
+| 23 | `fee_receipts` | Payment receipt header (receipt_no, total_amount, status Active/Cancelled, student_unique_id for cross-year reporting) | *(new)* |
+| 24 | `fee_receipt_items` | Receipt line items (fee_type_id, term_id, fee_period_id, amount, concession_amount, net_amount) | *(new)* |
+| 25 | `gateway_configs` | Payment gateway API keys per school (key_secret never returned in API) | *(new)* |
+| 26 | `payment_gateway_orders` | Online payment lifecycle tracking (Pending/Paid/Failed) | *(new)* |
+| 27 | `student_mobile_accounts` | Mobile app student accounts (PIN hash) | *(new)* |
+| 28 | `student_refresh_tokens` | Mobile student sliding-expiry refresh tokens | *(new)* |
+| 29 | `student_attendance` | Daily attendance per student | *(new)* |
+| 30 | `exam_types` | Exam type definitions per academic year | *(new)* |
+| 31 | `student_marks` | Per-student per-subject marks per exam | *(new)* |
+| 32 | `homework` | Homework assignments per class+section (`section_id` nullable FK — NULL means class-wide) | *(new)* |
+| 33 | `homework_attachments` | File attachments for homework entries | *(new)* |
+| 34 | `announcements` | School/class announcements with optional PDF attachment_url | *(new)* |
+| 35 | `school_events` | Events gallery metadata + external media URLs (YouTube/Cloudinary) | *(new)* |
+| 36 | `staff` | Employee master per school branch | *(new)* |
+| 37 | `staff_attendance` | Daily staff attendance (Present/Absent/Late/HalfDay/OnLeave) | *(new)* |
+| 38 | `staff_advances` | Advance/loan records per staff member | *(new)* |
+| 39 | `staff_advance_repayments` | Repayments against staff advances | *(new)* |
+| 40 | `staff_salary_components` | Salary structure template per staff (Earning/Deduction) | *(new)* |
+| 41 | `staff_salaries` | Monthly salary header per staff (Draft/Paid/Cancelled) | *(new)* |
+| 42 | `staff_salary_items` | Snapshot of components at salary processing time | *(new)* |
+| 43 | `sms_logs` | Audit trail of every SMS sent from the school app | *(new)* |
+| 44 | `fee_concessions` | Concession amounts per student per fee type per term/period (school fees) OR per bus route per term (transport); `fee_type_id` nullable — NULL for transport rows; `bus_route_id` nullable FK → bus_routes; three filtered unique indexes: term+fee_type, period+fee_type, transport (bus_route+term); receipt_no format CFR{yr8}{D5} | *(new)* |
 
-> **Migration:** Run `Database/sections_migration.sql` on existing tenant DBs to add the `sections` table and `section_id` column on `students`. Run `Database/fee_tables_migration.sql` for fee receipt tables. New groups get all 42 tables automatically via the updated `tenant_tables.sql`.
+> **Migration:** Run `Database/sections_migration.sql` on existing tenant DBs to add the `sections` table and `section_id` column on `students`. Run `Database/fee_tables_migration.sql` for fee receipt tables. Run `Database/fee_periods_migration.sql` for fee_periods table + payment_type/fee_period_id columns. Run `Database/student_unique_id_migration.sql` to add and backfill student_unique_id on students. Run `Database/fee_concessions_migration.sql` for fee_concessions table. New groups get all 44 tables automatically via the updated `tenant_tables.sql`.
 
 ---
 
@@ -288,7 +290,7 @@ Tenant DB is provisioned **manually** — the control app UI only creates the ma
 
 **Manual DB setup (run in SSMS on SQL Server):**
 1. Connect to SQL Server
-2. Run `Database/tenant_tables.sql` while connected to `master` — creates `ascent_group_{N}` DB with all 42 tables + seeds permissions and roles
+2. Run `Database/tenant_tables.sql` while connected to `master` — creates `ascent_group_{N}` DB with all 44 tables + seeds permissions and roles
 3. Connect to `ascent_group_{N}`
 4. Run `Database/seed_tenant_data.sql` — seeds role-permission mappings, payment modes (Cash/Cheque/Online), and default admin login
 5. Set `@SchoolId` in `seed_tenant_data.sql` to the `school_id` from `ascent_master.schools` (add a school branch first via the control app)
@@ -335,6 +337,17 @@ Phase 20 ✅  Bulk student import extended — 7 new columns added: `MotherMobil
 Phase 21 ✅  Android login screen logo + app icon fix — school logo (`R.mipmap.ic_launcher_round`) displayed above school name in `SmsAuthScreen`; `AndroidManifest.xml` fixed from `@drawable/ic_launcher` → `@mipmap/ic_launcher` (was loading old vector XML, bypassing Image Asset mipmap files); flavor background XML changed to plain white; `versionCode` bumped to 2
 Phase 22 ✅  Android UI polish — custom navy/gold palette in `Theme.kt`; login screen: diagonal gradient bg + frosted glass card + `AsyncImage` logo (Coil); shimmer skeletons on all data screens; attendance: monthly calendar grid + summary card + stat pills; marks: animated bar charts per subject + score badge + staggered entrance; `HomeScreen`: `AnimatedContent` tab transitions + navy `TopAppBar` + navy-tinted `NavigationBar`; `NavigationBar` crash fixed (removed `tonalElevation = Dp.Unspecified`); version string shown on login screen (`BuildConfig.VERSION_NAME`)
 Phase 23 ✅  Android release build fix — R8/ProGuard stripping Google Tink (used internally by `EncryptedSharedPreferences`) caused silent crash on splash screen in Play Store release builds; fixed by adding full Tink keep rules to `proguard-rules.pro`; `TokenStore` wrapped in try-catch with plain `SharedPreferences` fallback so any future Tink failure degrades gracefully instead of crashing; `versionCode` bumped to 5, `versionName` = "1.0.5"
+Phase 24 ✅  Fee collection redesign — 5 separate collection screens (Admission/School/Transport/Hostel/Other); `student_unique_id` added to `fee_receipts`; new receipt_no format `{prefix}{yr6}{00001}` (T=Transport, H=Hostel, O=Other, classGroupPrefix for Admission/School); `GET /school/fees/student-unique/{uniqueId}?feeTypeCategory=` returns cross-year outstanding summary across all academic years; fee type category filter uses `description` LIKE patterns; Admission screen filters students by `join_type='New'`; checkboxes replace editable Pay Now; concession locked at 0 (configurable in future); `joinType` filter added to `GET /school/students`; `student_unique_id` added to StudentListDto; old `FeeCollectionPage` removed from nav/routes
+Phase 25 ✅  Monthly fee periods + fee structure enhancements — `fee_periods` table (month_no, year_no, period_label, sequence_no) added as tenant table 17; `payment_type` (Term/Monthly) and `fee_period_id` FK added to `fee_structures`; `fee_period_id` added to `fee_receipt_items`; `student_unique_id` stable INT identifier added to `students` (auto MAX+1 on insert, same value retained on promotion, backfilled via migration); `FeeStructurePage` supports Term/Monthly toggle (Monthly uses fee_periods as columns, Term uses terms) and Admission Type filter (New/Old/All); `FeePeriodsTab` added to Master Data (GET/POST/PUT `/school/master/fee-periods`); `MasterDataPage` refactored — each tab loads its own data independently; `FeePeriodDto`/`SaveFeePeriodRequest` in `FeePeriodDtos.cs`
+Phase 26 ✅  Fee Concession — `fee_concessions` table (school_id, academic_year_id, student_id, student_unique_id, fee_type_id, term_id nullable FK → terms, fee_period_id nullable FK → fee_periods, concession_type, amount, remarks, receipt_no); two filtered unique indexes (one per term_id IS NOT NULL, one per fee_period_id IS NOT NULL) for per-term/per-period concession isolation; receipt_no format `CFR{yr8}{D5}`; `FeeConcessionRepository` upserts by student+fee_type+term/period match; `DELETE /school/fees/concessions/{id}` soft-cancels (status=Cancelled) with Popconfirm in UI; outstanding subquery matches by `ISNULL(fc.term_id,0)=ISNULL(fs.term_id,0)` so each term/period line deducts only its own concession; `ConcessionAmount` bug fixed in `FeeCollectionBase.jsx` (was hardcoded 0.00, now reads `li.concessionAmount`); `FeeConcessionPage` has 3 tabs with Term/Period dropdowns in Individual + Bulk tabs; Concession List has delete column (Popconfirm) + Term/Period column; "Fee Concession" added to Fees nav sub-menu
+Phase 27 ✅  Transport enhancements — Student Assignment tab: Year/Class/Section/Route filter bar (sections load per class); no auto-load on mount; `GET /school/transport/students` extended with academicYearId, classId, sectionId params; uses `IN ('Active','Y')` for legacy data; `StudentTransportDto` now includes `StudentUniqueId` (INT) and `AcademicYearId`; transport update route changed from `{studentId:long}` to `{studentUniqueId:int}`; UPDATE WHERE uses `student_unique_id + academic_year_id` (stable cross-year) instead of `student_id` (year-specific IDENTITY)
+Phase 28 ✅  Transport fee collection — route-based outstanding (not class-based); `bus_route_id INT NULL` added to `fee_receipt_items` (migration: `transport_receipt_migration.sql`); `GetCrossYearFeeSummary` branches on `feeTypeCategory=Transport`: reads amounts from `bus_fee_structures` (route+term+year), skips years with no `bus_route_id` assigned, paid subquery matches `fri.bus_route_id + fri.term_id + student_id`; `fee_structures` transport rows ignored entirely; `FeeLineItemDto` + `CollectFeeItem` get `BusRouteId?`; `FeeReceiptItemDto` gets `RouteName`; `CollectFee` stores `bus_route_id` in receipt items; `GetReceiptById` JOINs `bus_routes` for receipt display; `FeeCollectionBase.jsx` `buildItems` passes `BusRouteId`; route name shown as FeeTypeName in collection UI
+Phase 29 ✅  Transport concession — `bus_route_id INT NULL` added to `fee_concessions` (migration: `transport_concession_migration.sql`); `fee_type_id` made nullable (NULL for transport rows, bus_route_id set instead); existing unique indexes recreated with `fee_type_id IS NOT NULL` filter; new `UQ_fee_concessions_transport` index on `(student_id, bus_route_id, school_id, term_id)`; `FeeConcessionDto` + save requests extended with `BusRouteId?`; controller validation changed from `FeeTypeId <= 0` to `FeeTypeId == null && BusRouteId == null`; `FeeConcessionRepository` all 4 methods handle `bus_route_id`; `GetTransportLineItems` gains concession subquery matching by `bus_route_id`; `StudentRepository.GetAll` + `StudentsController.GetStudents` gain `busRouteId` optional filter; `FeeConcessionPage` gains global Radio.Group "School Fee"|"Transport" toggle — transport mode shows route+term dropdowns, bulk mode loads students by `?busRouteId=`
+Phase 30 ✅  Hostel module — `hostels` table (hostel_id, hostel_name, description, capacity, contact_no, address, no_of_rooms, school_id, created_by); `hostel_fee_structures` table (hostel_id + academic_year_id + term_id/fee_period_id + payment_type Term/Monthly + amount); `hostel_id INT NULL FK` added to `students`, `fee_receipt_items`, `fee_concessions`; two filtered unique indexes on `fee_concessions` for hostel concessions (`hostel_id IS NOT NULL AND term_id IS NOT NULL`, `hostel_id IS NOT NULL AND fee_period_id IS NOT NULL`); `students.hostel_name VARCHAR` replaced by `hostel_id INT FK`; `HostelRepository` (CRUD + GetFeeStructure/SaveFeeStructure + BulkSaveFeeStructure + GetStudentHostels/UpdateStudentHostel); `HostelController` at `[RoutePrefix("school/hostel")]` (GET/POST hostels, GET/POST fee-structure, POST fee-structure/bulk, GET/PUT students); `GetCrossYearFeeSummary` branches on `feeTypeCategory=Hostel` → reads from `hostel_fee_structures` via `GetHostelLineItems`; `CollectFee` stores `hostel_id` in `fee_receipt_items`; `GetReceiptById` JOINs `hostels` for HostelName; `FeeConcessionRepository` all 4 methods handle `hostel_id`; `FeeConcessionPage` gains "Hostel" Radio.Button (3rd mode); `HostelPage.jsx` — 4 tabs: Hostels CRUD, Fee Structure (Term/Monthly toggle), Student Assignment (year/class/section/hostel filter bar), Bulk Import CSV; `StudentFormPage.jsx` Other Info tab: hostelName Input → hostelId Select (loaded from `/school/hostel`); `AppLayout.jsx` gains Hostel nav item (HomeOutlined icon) after Transport; migration: `Database/hostel_migration.sql`
+Phase 31 ✅  Parent web portal (`ascent-parent-app/`) — gateway-only fee payment for parents; reuses all existing `/mobile/auth/parent/*` endpoints; React/Vite app on port 5174; Ant Design 5 + Zustand; routes: /login (SMS OTP — mobile → OTP → 30s resend), /select-child (list children scoped to school group), /fees (FeeHomePage: 3 tabs School/Transport/Hostel → cross-year outstanding with checkboxes → Razorpay checkout → /fees/success), /fees/success (PaymentSuccessPage: receipt details + print); `MobileFeesController` at `[RoutePrefix("mobile/fees")]` — `GET /mobile/fees/outstanding?feeTypeCategory=` (wraps GetCrossYearFeeSummary), `GET /mobile/fees/gateway-config`, `POST /mobile/fees/payment-orders` (creates Razorpay order, looks up student_unique_id + year-specific student_id + online payment mode id server-side), `POST /mobile/fees/payment-orders/{id}/verify` (verifies HMAC, creates receipt with "Parent Portal" as createdBy); `GatewayRepository.GetOnlinePaymentModeId` — looks up `payment_modes WHERE is_online=1`; `StudentRepository.GetStudentUniqueId` and `GetStudentIdForYear` helper methods; parent app sends `X-School-Code` + `X-Subdomain` headers; `MobileCreateOrderRequest` DTO (AcademicYearId, FeeTypeCategory, Items); items sent with `Amount=li.outstanding, ConcessionAmount=0`; `MobileFeesController.cs` + `MobileCreateOrderRequest` registered in `AscentSchools.API.csproj`; `.env.demo` and `.env.srividya` gitignored
+Phase 32 ✅  Legacy receipt bulk import — `POST /school/fees/receipts/bulk` (max 1000 rows); `BulkReceiptRow` + `BulkReceiptImportRequest` DTOs in `BulkImportDtos.cs`; `BulkImportReceipts` in `FeeRepository`: name-based lookups (fee_types, terms, fee_periods, bus_routes, hostels, payment_modes, academic_years), groups rows by LegacyReceiptNo (if provided) else by AdmissionNo+AcademicYear+PaymentDate+PaymentMode, validates per group (student exists, payment mode exists, date parseable), inserts one receipt per group with multiple line items in a transaction (receipt_no atomicity), LegacyReceiptNo stored in remarks as "Legacy: {no}"; `FeeReceiptsImportPage.jsx` — CSV template download, column reference, example rows, papaparse client-side upload, preview + result with error table + download errors CSV; nav item "Legacy Receipt Import" under Fees sub-menu; `GET /school/fees/receipts` gains `createdAfter` DateTime? filter (on `fee_receipts.created_at`) for end-of-day sync; `ReceiptsPage.jsx` gains "Created after" DatePicker (with time) + "Export CSV" button (client-side papaparse CSV from loaded receipts)
+Phase 33 ✅  Android fee collection redesign — fee screen updated to match parent web portal (3 category tabs: School/Transport/Hostel; cross-year outstanding grouped by academic year; concession amounts shown per item; selection scoped to one year at a time — switching year clears prior selection); `ApiService.kt` old endpoints (`/mobile/student/fees`, `/mobile/student/fees/order`, `/mobile/student/fees/verify`) replaced with new parent portal endpoints (`GET /mobile/fees/outstanding?feeTypeCategory=`, `POST /mobile/fees/payment-orders`, `POST /mobile/fees/payment-orders/{gatewayOrderId}/verify`); `ApiModels.kt` DTOs updated: `MobileFeeLineItemDto` gains `feePeriodId`, `busRouteId`, `hostelId`, `concessionAmount`; `MobileCreateOrderRequest` removes `paymentModeId` (server resolves online mode), adds `feeTypeCategory`; `MobileFeeOrderItem` gains `feePeriodId`, `busRouteId`, `hostelId`; `MobileOrderResponse` gains `gatewayName`; `FeeRepository.kt` updated: `getOutstanding(feeTypeCategory)` returns `List<MobileFeeSummaryDto>`, `verifyPayment` takes `gatewayOrderId` as explicit param; `FeeViewModel.kt` rewrites state to `FeeUiState.Success(years: List<>)`, adds `selectedCategory` StateFlow, `selectCategory()` clears and reloads; `FeeScreen.kt` rewrites with `TabRow`, year-grouped `LazyColumn`, per-year Select All, sticky pay bar; `HomeScreen.kt` + `MainActivity.kt` callback signature updated: `paymentModeId: Int` → `feeTypeCategory: String`; `GatewayDtos.cs` `MobileCreateOrderRequest` renamed to `MobileParentOrderRequest` to resolve compile-time ambiguity with `Mobile.Data.MobileCreateOrderRequest`; `MobileFeesController` updated to `MobileParentOrderRequest`; `Global.asax.cs` `Access-Control-Allow-Headers` extended with `X-School-Code` (was blocked by CORS preflight for parent web app); parent app `LoginPage.jsx` fixed: `MobileNo` → `Mobile` to match `ParentOtpRequest` DTO field name
+Phase 34 ✅  Android persistent session — fix for "token expired, must re-login with OTP after closing app for a day"; root cause: OkHttp's default cookie jar is in-memory so the 7-day `parentRefreshToken` HttpOnly cookie was lost on app kill; `PersistentCookieJar` class added to `RetrofitClient.kt` — serializes all OkHttp cookies to a plain `SharedPreferences` file (`ascent_cookies`) so they survive process death; `RetrofitClient.init()` signature changed from `(TokenStore)` to `(TokenStore, Context)` to create the cookie prefs — `AscentApp.kt` updated accordingly; `AuthRepository.kt` gains `silentRefresh()` (calls `POST /mobile/auth/parent/refresh`, saves new access token) and `silentRefreshTeacher()` (calls `POST /mobile/auth/teacher/refresh`); `MainActivity.kt` adds `isCheckingSession` state (true when stored token exists on cold start) + `LaunchedEffect(Unit)` that calls the appropriate silent refresh, shows `CircularProgressIndicator` while waiting, then clears session and shows login screen if refresh fails
 ```
 
 ---
@@ -360,9 +373,11 @@ AscentSchools.sln
 │   │       ├── SchoolAuthController.cs    ← POST /school/auth/login|refresh|logout
 │   │       ├── RolesController.cs         ← CRUD roles + GET/PUT permissions per role
 │   │       ├── SchoolUsersController.cs   ← CRUD users + reset-password + status
-│   │       ├── MasterDataController.cs    ← [RoutePrefix("school/master")] — 9 entities (incl. sections), 3 endpoints each
-│   │       ├── StudentsController.cs      ← GET list (?bloodGroup filter added), GET by id, POST create, PUT update, POST /{id}/photo, POST /bulk, GET /promote/preview, POST /promote, PUT /{id}/block|unblock|detain|release
-│   │       ├── FeeController.cs           ← [RoutePrefix("school/fees")] — structure, collect, receipts, POST structure/bulk (8+ endpoints)
+│   │       ├── MasterDataController.cs    ← [RoutePrefix("school/master")] — 10 entities (incl. sections + fee periods), 3 endpoints each
+│   │       ├── StudentsController.cs      ← GET list (?bloodGroup, ?joinType, ?busRouteId, ?hostelId filters), GET by id, POST create, PUT update, POST /{id}/photo, POST /bulk, GET /promote/preview, POST /promote, PUT /{id}/block|unblock|detain|release
+│   │       ├── FeeController.cs           ← [RoutePrefix("school/fees")] — structure, collect, receipts (GET ?createdAfter for sync), POST structure/bulk, POST receipts/bulk (legacy import), gateway settings, payment orders + webhook
+│   │       ├── FeeConcessionController.cs ← [RoutePrefix("school/fees/concessions")] — GET list, POST individual (upsert), POST /bulk, DELETE /{id} (soft-cancel); validation: FeeTypeId==null && BusRouteId==null && HostelId==null → 400
+│   │       ├── HostelController.cs        ← [RoutePrefix("school/hostel")] — GET/POST hostels, GET/POST fee-structure, POST fee-structure/bulk, GET/PUT students
 │   │       ├── AttendanceController.cs    ← [RoutePrefix("school/attendance")] — mark by date + monthly summary; classId+sectionId both required
 │   │       ├── MarksController.cs         ← [RoutePrefix("school/marks")] — exam types + marks grid + save
 │   │       ├── HomeworkController.cs      ← [RoutePrefix("school/homework")] — list, create, update, delete
@@ -372,6 +387,7 @@ AscentSchools.sln
 │   │   └── Mobile/
 │   │       ├── MobileAuthController.cs        ← student auth (backend-only) + parent request-otp (gates on student in school DB by father_mobile)/verify-otp (auto-creates parent_account + upserts child links by admission_no — updates class_name/student_id on existing links)/refresh/logout/children (scoped to current school group)/select-child (validates link.GroupId == tenant.GroupId)/link-child
 │   │       ├── MobileStudentController.cs     ← profile, attendance, marks, homework, announcements (student + parent JWT)
+│   │       ├── MobileFeesController.cs        ← [MobileAuth(requireChildContext:true)] GET /mobile/fees/outstanding (cross-year by category), GET /mobile/fees/gateway-config, POST /mobile/fees/payment-orders (accepts MobileParentOrderRequest; looks up student_unique_id + year student_id + online payment mode id server-side), POST /mobile/fees/payment-orders/{id}/verify (HMAC verify + receipt creation)
 │   │       ├── MobileTeacherAuthController.cs ← POST /mobile/auth/teacher/login|refresh|logout (tokenType=teacher)
 │   │       └── MobileTeacherController.cs     ← [MobileTeacherAuth] GET classes, GET sections, GET/POST attendance, GET/POST homework
 │   ├── Filters/
@@ -410,7 +426,10 @@ AscentSchools.sln
 │   │   └── School/
 │   │       ├── Auth/          ← SchoolUserRecord (internal)
 │   │       ├── Rbac/          ← SchoolRoleDto, SchoolPermissionDto, CreateSchoolRoleRequest, UpdateSchoolRoleRequest, RolePermissionsRequest
-│   │       └── Students/      ← StudentDtos.cs + BulkImportDtos.cs (StudentBulkRow, FeeStructureBulkRow, BulkStudentImportRequest, BulkFeeStructureImportRequest, BulkImportResult, BulkRowError, PromoteStudentsRequest, PromoteStudentsResult, PromotePreviewDto)
+│   │       ├── Master/        ← FeePeriodDtos.cs (FeePeriodDto, SaveFeePeriodRequest)
+│   │       ├── Students/      ← StudentDtos.cs (StudentListDto now incl. StudentUniqueId + JoinType) + BulkImportDtos.cs (StudentBulkRow, FeeStructureBulkRow, BulkStudentImportRequest, BulkFeeStructureImportRequest, BulkImportResult, BulkRowError, PromoteStudentsRequest, PromoteStudentsResult, PromotePreviewDto)
+│   │       ├── Fee/           ← GatewayDtos.cs (GatewayConfigDto, SaveGatewayConfigRequest, MobileParentOrderRequest [renamed from MobileCreateOrderRequest to avoid ambiguity with Mobile.Data version], CreatePaymentOrderRequest, CreatePaymentOrderResponse, VerifyPaymentRequest); FeeDtos.cs (CollectFeeRequest, CollectFeeItem, FeeLineItemDto, CrossYearFeeSummaryDto etc.)
+│   │       └── Transport/     ← TransportDtos.cs (BusDto, SaveBusRequest, BusRouteDto, SaveBusRouteRequest, BusFeeStructureDto, BusFeeTermDto, SaveBusFeeStructureRequest, BusFeeTermEntry, StudentTransportDto (incl. StudentUniqueId + AcademicYearId), UpdateStudentTransportRequest (incl. AcademicYearId))
 │   └── Models/
 │       └── ApiResponse.cs     ← standard envelope: { success, data, message, errors }
 │
@@ -432,13 +451,17 @@ AscentSchools.sln
             ├── SchoolAuthRepository.cs            ← GetById, GetByUsername, GetUserSchoolIds, GetUserPermissions, UpdateLastLogin, Create/Get/RevokeRefreshToken
             ├── SchoolBrandingRepository.cs        ← GetBySubdomain (school_branding → group_branding fallback)
             ├── SchoolRbacRepository.cs            ← GetRoles, CreateRole, UpdateRole, GetAllPermissions, GetRolePermissionIds, SetRolePermissions
-            ├── MasterDataRepository.cs            ← Get/Create/Update for all 9 master tables (academic_years, class_groups, fee_categories, classes, sections, fee_types, terms, subjects, payment_modes)
-            ├── StudentRepository.cs               ← GetAll (filtered, incl. bloodGroup + BloodGroup in SELECT), GetById, Create, Update, UpdatePhotoPath, BulkCreate, GetForPromotion (status IN 'Active','Y', excludes detained), CountDetained, Promote, BlockStudent, UnblockStudent, DetainStudent, ReleaseStudent
-            ├── FeeRepository.cs                   ← GetFeeStructure, SaveFeeStructure, GetStudentFeeSummary, CollectFee, GetReceipts, GetReceiptById, CancelReceipt, BulkSaveFeeStructure
+            ├── MasterDataRepository.cs            ← Get/Create/Update for all 10 master tables (academic_years, class_groups, fee_categories, classes, sections, fee_types, terms, subjects, payment_modes, fee_periods)
+            ├── StudentRepository.cs               ← GetAll (filtered, incl. bloodGroup, joinType, busRouteId, hostelId; SELECT includes student_unique_id + join_type + hostel_id), GetById, Create (auto-assigns student_unique_id via MAX+1), Update, UpdatePhotoPath, BulkCreate, GetForPromotion (status IN 'Active','Y', excludes detained), CountDetained, Promote, BlockStudent, UnblockStudent, DetainStudent, ReleaseStudent
+            ├── FeeRepository.cs                   ← GetFeeStructure (incl. fee_period_id/payment_type), SaveFeeStructure (scoped by admission_type slice), GetStudentFeeSummary, GetCrossYearFeeSummary (by student_unique_id; transport branch reads bus_fee_structures; hostel branch reads hostel_fee_structures via GetHostelLineItems; outstanding = structure - paid - concession); CollectFee (stores bus_route_id + hostel_id in receipt items), GetReceipts (?createdAfter for end-of-day sync), GetReceiptById (JOINs bus_routes + hostels for display names), CancelReceipt, BulkSaveFeeStructure, BulkImportReceipts (groups by LegacyReceiptNo or AdmissionNo+date+mode; name-based lookups; per-receipt transaction)
+            ├── FeeConcessionRepository.cs          ← GetConcessions (JOINs fee_types+bus_routes+hostels+terms+fee_periods; returns BusRouteId/RouteName/HostelId/HostelName), SaveConcession (upsert by student+fee_type+bus_route+hostel+term/period match; INSERT includes bus_route_id + hostel_id), BulkSaveConcessions (same), DeleteConcession (soft-cancel status→Cancelled)
+            ├── HostelRepository.cs                 ← GetAll, Create, Update; GetFeeStructure/SaveFeeStructure (Term/Monthly, delete+insert per hostel+year); BulkSaveFeeStructure; GetStudentHostels (filters: academicYearId, classId, sectionId, hostelId), UpdateStudentHostel (WHERE student_unique_id + academic_year_id)
             ├── MarksRepository.cs                 ← GetExamTypes, CreateExamType, UpdateExamType, GetMarksGrid, SaveMarks
             ├── HomeworkRepository.cs              ← GetHomework, CreateHomework, UpdateHomework, DeleteHomework
             ├── AnnouncementsRepository.cs         ← GetAnnouncements, CreateAnnouncement, UpdateAnnouncement, DeleteAnnouncement
             ├── ReportsRepository.cs               ← GetClassStudents, GetTotalStrength, GetAbsents, GetAttendanceSheet, GetTransportStudents, GetStudyCertificate, GetDailyAttendanceSummary, GetMonthlyAttendanceSheet, GetAttendanceRegister, GetExamHallTicket, GetExamToppers, GetClassToppers, GetFailedStudents, GetAcademicYearToppers, GetHomeworkStatement, GetSubjectHomework, GetStaffSalaryStatement, GetDetainedStudents, GetRegularAbsentees
+            ├── TransportRepository.cs             ← GetBuses/CreateBus/UpdateBus, GetRoutes/CreateRoute/UpdateRoute, GetBusFeeStructure/SaveBusFeeStructure, GetStudentTransport (filters: routeId, academicYearId, classId, sectionId; SELECT includes student_unique_id, academic_year_id; IN ('Active','Y')), UpdateStudentTransport (WHERE student_unique_id + academic_year_id — stable cross-year, not student_id)
+            ├── HostelRepository.cs                ← GetAll/Create/Update hostels; GetFeeStructure/SaveFeeStructure (Term/Monthly, delete+insert per hostel+year); BulkSaveFeeStructure; GetStudentHostels (filters: academicYearId, classId, sectionId, hostelId; IN ('Active','Y')), UpdateStudentHostel (WHERE student_unique_id + academic_year_id)
             └── SmsRepository.cs                   ← GetAbsentRecipients, GetFeeDueRecipients (OUTER APPLY for outstanding), GetCustomRecipients, LogSms, GetLogs
         └── Mobile/
             ├── MobileStudentAuthRepository.cs     ← student_mobile_accounts + student_refresh_tokens CRUD; GetStudentByAdmissionNo uses ORDER BY academic_year_id DESC; GetAccountByAdmissionNo fallback for post-promotion login; UpdateAccountStudentId re-points account after promotion; GetStudentsByParentMobile (looks up active students by father_mobile, latest year per student)
@@ -476,7 +499,7 @@ ascent-school-app/src/
 │   ├── authStore.js           ← zustand: accessToken (memory only), user {userId,groupId,schoolId,fullName,permissions[]}
 │   └── brandingStore.js       ← zustand: branding defaults, isLoaded, setBranding
 ├── layouts/
-│   └── AppLayout.jsx          ← sticky header + collapsible sidebar nav + Outlet; Students sub-menu: List / Bulk Import / Promote Students / Blood Group Search; Fees sub-menu: Fee Structure / Bulk Import Structure / Fee Collection / Receipts; SMS Center nav item
+│   └── AppLayout.jsx          ← sticky header + collapsible sidebar nav + Outlet; Students sub-menu: List / Bulk Import / Promote Students / Blood Group Search; Fees sub-menu: Fee Structure / Bulk Import Structure / Admission Fee / School Fee / Transport Fee / Hostel Fee / Other Fee / Receipts / Fee Concession; Hostel nav item (HomeOutlined, after Transport); SMS Center nav item
 ├── pages/
 │   ├── auth/
 │   │   └── LoginPage.jsx      ← branding-aware login (logo, tagline, loginBgPath)
@@ -485,26 +508,34 @@ ascent-school-app/src/
 │   │   └── UsersPage.jsx      ← user list + create modal + reset-password + activate/deactivate
 │   ├── students/
 │   │   ├── StudentsPage.jsx       ← searchable/filterable list; status includes Blocked; Block/Unblock (with reason modal) + Detain/Release actions; detained badge shown in status column
-│   │   ├── StudentFormPage.jsx    ← full-page 7-tab form (Basic, Academic, Family, Address, Identity, Transport, Other) + photo upload; section is a dropdown loaded by classId; all tabs use `forceRender: true` to prevent AntD lazy-tab field wiping
+│   │   ├── StudentFormPage.jsx    ← full-page 7-tab form (Basic, Academic, Family, Address, Identity, Transport, Other) + photo upload; section is a dropdown loaded by classId; Other tab: hostelId Select loaded from /school/hostel (replaces free-text hostelName); all tabs use `forceRender: true` to prevent AntD lazy-tab field wiping
 │   │   ├── StudentsImportPage.jsx ← CSV bulk import; column reference table + example rows + template download + PapaParse preview + result with error download; POST /school/students/bulk; 20 columns including MotherMobile, AadharNo, Caste, CasteCode, Religion, JoiningClass, MotherTongue
 │   │   ├── PromoteStudentsPage.jsx ← Step 1: from year+class+section → preview eligible students (status IN Active/Y, not detained) + detained count warning; Step 2: to year+class+section → confirm modal → result stats
 │   │   └── BloodGroupSearchPage.jsx ← blood group dropdown (A+/A-/B+/B-/AB+/AB-/O+/O-) → table with colour-coded tags; PDF + CSV export
 │   ├── fee/
-│   │   ├── FeeStructurePage.jsx      ← matrix grid (fee types × terms) with InputNumber cells; load/save per class+category+year
+│   │   ├── FeeStructurePage.jsx       ← matrix grid (fee types × terms or fee_periods) with InputNumber cells; Term/Monthly toggle; Admission Type filter (New/Old/All); load/save per class+category+year+admissionType
 │   │   ├── FeeStructureImportPage.jsx ← CSV bulk import for fee structure; upserts per Class/Category/FeeType/Term row; POST /school/fees/structure/bulk
-│   │   ├── FeeCollectionPage.jsx     ← student search → dues table with concession/pay-now inputs → payment details → collect & issue receipt
-│   │   └── ReceiptsPage.jsx          ← filterable receipts list + detail Drawer + cancel Modal
+│   │   ├── FeeReceiptsImportPage.jsx  ← CSV bulk import for legacy receipts; 14-column format; groups rows by LegacyReceiptNo or AdmissionNo+Date+Mode; POST /school/fees/receipts/bulk
+│   │   ├── FeeCollectionBase.jsx      ← shared fee collection component; student search by unique_id; loads cross-year summary (CrossYearFeeSummaryDto); year tabs; checkbox selection; online/offline payment
+│   │   ├── AdmissionFeePage.jsx       ← feeTypeCategory=Admission; joinTypeFilter='New' (student search restricted to join_type=New)
+│   │   ├── SchoolFeePage.jsx          ← feeTypeCategory=School
+│   │   ├── TransportFeePage.jsx       ← feeTypeCategory=Transport
+│   │   ├── HostelFeePage.jsx          ← feeTypeCategory=Hostel
+│   │   ├── OtherFeePage.jsx           ← feeTypeCategory=Other
+│   │   ├── ReceiptsPage.jsx           ← filterable receipts list + detail Drawer + cancel Modal; "Created after" DatePicker (for end-of-day sync) + "Export CSV" button (client-side papaparse)
+│   │   └── FeeConcessionPage.jsx      ← 3-tab page; global Radio.Group toggle: "School Fee" | "Transport" | "Hostel"; Individual Entry (student search → school: fee type+term/period; transport: route+term; hostel: hostel+term/period → type+amount+remarks → save); Bulk Apply (school: fee type+term/period+load by class; transport: route+term+load by busRouteId; hostel: hostel+term/period+load by hostelId → editable amount/remarks per row + apply-to-all → save); Concession List (load by year+class+section; "Fee Type / Route / Hostel" column shows feeTypeName, routeName, or hostelName; Print Selected → multi-page jsPDF with amountToWords)
 │   ├── master/
-│   │   ├── MasterDataPage.jsx ← Tabs container; loads shared lookups (academic years, class groups, fee categories, classes)
+│   │   ├── MasterDataPage.jsx ← Tabs container; each tab loads its own data independently (no shared prop-drilling)
 │   │   ├── AcademicYearsTab.jsx
 │   │   ├── ClassGroupsTab.jsx
 │   │   ├── FeeCategoriesTab.jsx
-│   │   ├── ClassesTab.jsx     ← receives classGroups + feeCategories as props
+│   │   ├── ClassesTab.jsx
 │   │   ├── SectionsTab.jsx    ← class dropdown → section list per class → create/edit modal
-│   │   ├── FeeTypesTab.jsx    ← receives academicYears as props
-│   │   ├── TermsTab.jsx       ← receives academicYears as props
-│   │   ├── SubjectsTab.jsx    ← receives academicYears as props
-│   │   └── PaymentModesTab.jsx
+│   │   ├── FeeTypesTab.jsx
+│   │   ├── TermsTab.jsx
+│   │   ├── SubjectsTab.jsx
+│   │   ├── PaymentModesTab.jsx
+│   │   └── FeePeriodsTab.jsx  ← academic year dropdown → fee periods list → create/edit modal (month, year, label, sequence)
 │   ├── sms/
 │   │   └── SMSPage.jsx        ← two tabs: Send SMS (type selector → filters → load recipients → select rows → batch size 25/50 → message preview → send with progress) + SMS History (filterable log)
 │   └── reports/
@@ -518,7 +549,28 @@ ascent-school-app/src/
 │   └── HomeworkPage.jsx       ← list with class filter + create/edit modal; Section dropdown (loaded by class, optional); section column in table
 ├── announcements/
 │   └── AnnouncementsPage.jsx  ← list (pinned first) + create/edit modal (scope School/Class)
-└── App.jsx                    ← branding load, silent refresh on mount, routes: /login, /master, /students, /students/import, /students/promote, /students/blood-group, /fees/structure, /fees/structure/import, /marks, /homework, /announcements, /sms, /reports, /settings/*
+├── transport/
+│   └── TransportPage.jsx      ← 4-tab page: Buses (create/edit), Routes (create/edit), Bus Fee Structure (route+year → term amounts), Student Assignment (Year/Class/Section/Route filter bar → load → edit modal; PUT uses studentUniqueId; body includes academicYearId)
+├── hostel/
+│   └── HostelPage.jsx         ← 4-tab page: Hostels CRUD (hostelName, description, capacity, noOfRooms, contactNo, address); Fee Structure (hostel+year+paymentType Term/Monthly → term/period amount columns → save); Student Assignment (Year/Class/Section/Hostel filter bar → load → edit modal with hostel dropdown; PUT uses studentUniqueId + academicYearId); Bulk Import CSV (hostel fee structure rows: HoslelId/AcademicYearId/TermId/Amount → POST /school/hostel/fee-structure/bulk)
+└── App.jsx                    ← branding load, silent refresh on mount, routes: /login, /master, /students, /students/import, /students/promote, /students/blood-group, /fees/structure, /fees/structure/import, /fees/collect/admission, /fees/collect/school, /fees/collect/transport, /fees/collect/hostel, /fees/collect/other, /fees/receipts, /fees/receipts/import, /fees/concessions, /hostel, /marks, /homework, /announcements, /sms, /reports, /settings/*
+
+ascent-parent-app/src/
+├── api/
+│   └── axiosInstance.js     ← sends X-School-Code + X-Subdomain headers; silent refresh via /mobile/auth/parent/refresh; same api.get/post interface
+├── store/
+│   ├── authStore.js         ← accessToken (memory only), parent {parentId, displayName}, child {studentId, studentName, className, admissionNo}; login/setChild/logout/setToken
+│   └── brandingStore.js     ← same pattern as school app
+├── layouts/
+│   └── AppLayout.jsx        ← header shows child name + class Tag + Switch Child / Logout dropdown
+├── pages/
+│   ├── auth/
+│   │   ├── LoginPage.jsx        ← Step 0: 10-digit mobile → OTP; Step 1: AntD Input.OTP 6-digit + 30s resend countdown
+│   │   └── ChildSelectorPage.jsx← loads /mobile/auth/parent/children, POST select-child, navigate to /fees
+│   └── fees/
+│       ├── FeeHomePage.jsx      ← 3 tabs (School/Transport/Hostel); each tab independent with own useEffect; FeeTab + YearSection components; Razorpay checkout; loadRazorpayScript lazy loader
+│       └── PaymentSuccessPage.jsx← receipt Descriptions + items Table + print button (@media print CSS)
+└── App.jsx                  ← RequireAuth + RequireChild guards; silent refresh on mount; routes: /login, /select-child, /fees, /fees/success
 ```
 
 ---
@@ -570,7 +622,10 @@ ascent-school-app/src/
 | GET  | `/school/master/payment-modes` | School JWT | List payment modes |
 | POST | `/school/master/payment-modes` | School JWT | Create |
 | PUT  | `/school/master/payment-modes/{id}` | School JWT | Update |
-| GET  | `/school/students` | School JWT | List students (search, classId, sectionId, academicYearId, status, bloodGroup) |
+| GET  | `/school/master/fee-periods` | School JWT | List fee periods (?academicYearId optional) |
+| POST | `/school/master/fee-periods` | School JWT | Create fee period |
+| PUT  | `/school/master/fee-periods/{id}` | School JWT | Update fee period |
+| GET  | `/school/students` | School JWT | List students (search, classId, sectionId, academicYearId, status, bloodGroup, joinType) |
 | GET  | `/school/students/{id}` | School JWT | Full student detail |
 | POST | `/school/students` | School JWT | Create student |
 | PUT  | `/school/students/{id}` | School JWT | Update student |
@@ -582,14 +637,19 @@ ascent-school-app/src/
 | PUT  | `/school/students/{id}/unblock` | School JWT | Set status=Active, clear blocked_reason |
 | PUT  | `/school/students/{id}/detain` | School JWT | Set is_detained=1 with mandatory reason |
 | PUT  | `/school/students/{id}/release` | School JWT | Set is_detained=0, clear detained_reason |
-| GET  | `/school/fees/structure` | School JWT | Get fee structure (classId, feeCategoryId, academicYearId) |
-| POST | `/school/fees/structure` | School JWT | Save fee structure (delete+insert in transaction) |
+| GET  | `/school/fees/structure` | School JWT | Get fee structure (classId, feeCategoryId, academicYearId, admissionType optional) |
+| POST | `/school/fees/structure` | School JWT | Save fee structure (delete+insert scoped by admissionType slice; supports payment_type=Term|Monthly and fee_period_id) |
 | POST | `/school/fees/structure/bulk` | School JWT | Bulk upsert fee structure rows from CSV (max 500); each row = one Class+Category+FeeType+Term |
 | GET  | `/school/fees/student/{studentId}` | School JWT | Student fee summary with outstanding dues |
 | POST | `/school/fees/collect` | School JWT | Collect fee + generate receipt |
 | GET  | `/school/fees/receipts` | School JWT | List receipts (search, dateFrom, dateTo, status) |
 | GET  | `/school/fees/receipts/{id}` | School JWT | Full receipt detail with line items |
 | PUT  | `/school/fees/receipts/{id}/cancel` | School JWT | Cancel receipt (requires CancelReason) |
+| POST | `/school/fees/receipts/bulk` | School JWT | Bulk import legacy receipts from CSV rows (max 1000); groups by LegacyReceiptNo or AdmissionNo+Date+Mode |
+| GET    | `/school/fees/concessions` | School JWT | List concessions (?academicYearId, ?classId, ?sectionId) |
+| POST   | `/school/fees/concessions` | School JWT | Save/upsert individual concession (one active record per student+fee_type+term/period) |
+| POST   | `/school/fees/concessions/bulk` | School JWT | Bulk save concessions for a class — one row per student |
+| DELETE | `/school/fees/concessions/{id}` | School JWT | Soft-cancel concession (sets status=Cancelled; outstanding recalculates on next load) |
 | GET  | `/school/fees/gateway-config` | School JWT | Active gateway key_id (no secret) for checkout |
 | GET  | `/school/fees/gateway-settings` | School JWT | Admin settings view (key_id + hasWebhookSecret flag) |
 | PUT  | `/school/fees/gateway-settings` | School JWT | Save/update gateway API keys |
@@ -621,6 +681,24 @@ ascent-school-app/src/
 | GET    | `/school/sms/recipients` | School JWT | Load SMS recipients by smsType (Absent/FeeDue/Custom) with filters |
 | POST   | `/school/sms/send` | School JWT | Send SMS batch; parallel dispatch via Task.WhenAll; logs results to sms_logs |
 | GET    | `/school/sms/logs` | School JWT | SMS history (smsType, date filters) |
+| GET  | `/school/transport/buses` | School JWT | List buses |
+| POST | `/school/transport/buses` | School JWT | Create bus |
+| PUT  | `/school/transport/buses/{id}` | School JWT | Update bus |
+| GET  | `/school/transport/routes` | School JWT | List routes |
+| POST | `/school/transport/routes` | School JWT | Create route |
+| PUT  | `/school/transport/routes/{id}` | School JWT | Update route |
+| GET  | `/school/transport/fee-structure` | School JWT | Get bus fee structure (?routeId, ?academicYearId required) |
+| POST | `/school/transport/fee-structure` | School JWT | Save bus fee structure (delete+insert per route+year) |
+| GET  | `/school/transport/students` | School JWT | List students with transport (?routeId, ?academicYearId, ?classId, ?sectionId optional) |
+| PUT  | `/school/transport/students/{studentUniqueId}` | School JWT | Update student transport (body includes academicYearId; WHERE uses student_unique_id + academic_year_id) |
+| GET  | `/school/hostel` | School JWT | List hostels for the school |
+| POST | `/school/hostel` | School JWT | Create hostel |
+| PUT  | `/school/hostel/{id}` | School JWT | Update hostel |
+| GET  | `/school/hostel/fee-structure` | School JWT | Get hostel fee structure (?hostelId, ?academicYearId required) |
+| POST | `/school/hostel/fee-structure` | School JWT | Save hostel fee structure (delete+insert per hostel+year; supports Term/Monthly) |
+| POST | `/school/hostel/fee-structure/bulk` | School JWT | Bulk upsert hostel fee structure from CSV rows |
+| GET  | `/school/hostel/students` | School JWT | List students with hostel assignment (?academicYearId, ?classId, ?sectionId, ?hostelId optional) |
+| PUT  | `/school/hostel/students/{studentUniqueId}` | School JWT | Update student hostel assignment (body includes academicYearId + hostelId; WHERE uses student_unique_id + academic_year_id) |
 
 ## Mobile App API Endpoints (Phase 6B + 10)
 
@@ -658,6 +736,10 @@ ascent-school-app/src/
 | GET  | `/mobile/student/homework` | student/parent JWT | Recent homework for student's class |
 | GET  | `/mobile/student/announcements` | student/parent JWT | School + class announcements (pinned first) |
 | GET  | `/mobile/student/events` | student/parent JWT | School + class events (pinned first, most recent 50) |
+| GET  | `/mobile/fees/outstanding` | parent JWT (child ctx) | Cross-year outstanding summary by feeTypeCategory for selected child |
+| GET  | `/mobile/fees/gateway-config` | parent JWT (child ctx) | Active gateway key_id for Razorpay checkout |
+| POST | `/mobile/fees/payment-orders` | parent JWT (child ctx) | Create Razorpay order; server resolves student_unique_id + year student_id + online payment_mode_id |
+| POST | `/mobile/fees/payment-orders/{id}/verify` | parent JWT (child ctx) | Verify Razorpay HMAC signature, create receipt |
 
 ---
 
@@ -749,6 +831,27 @@ ascent-school-app/src/
 48. **Android Compose logo — use `ic_launcher_round` not `ic_launcher`** — `painterResource(R.mipmap.ic_launcher)` throws a runtime crash on API 26+ because `ic_launcher` resolves to an adaptive icon XML (`<adaptive-icon>`) which `painterResource` cannot decode. `ic_launcher_round` is a pre-rendered WebP bitmap and loads correctly. Always use `R.mipmap.ic_launcher_round` when displaying the launcher icon inside Compose.
 49. **`Dp.Unspecified` crashes Material3 `NavigationBar`** — `Dp.Unspecified` equals `Float.NaN`. Passing it as `tonalElevation` to `NavigationBar` causes `surfaceColorAtElevation` to call `Color.copy(alpha = NaN)`, throwing `IllegalArgumentException` and crashing immediately. Never pass `Dp.Unspecified` to any composable that performs arithmetic on it — omit the parameter or use `0.dp`.
 50. **R8 strips Google Tink in release builds — `EncryptedSharedPreferences` crash** — `EncryptedSharedPreferences` uses Google Tink internally and loads `KeyTypeManager` subclasses via reflection. R8 removes them as "unused", causing a crash in `Application.onCreate()` before any Activity starts (splash screen + immediate stop). Fix: add `-keep class com.google.crypto.tink.** { *; }` and matching `-keepnames` rules for `KeyTypeManager`/`PrivateKeyTypeManager` to `proguard-rules.pro`. Also wrap `EncryptedSharedPreferences.create()` in try-catch with a plain `SharedPreferences` fallback so future failures degrade gracefully.
+51. **Fee type category detection via `description` LIKE** — The 5 fee collection screens filter `fee_types` by `description` column using LIKE patterns: Admission=`%admission%`, School=`%school%|%tuition%`, Transport=`%transport%|%bus%`, Hostel=`%hostel%`, Other=catch-all (NOT matching any of the above). School admins must set `description` on fee types to match the expected keyword (e.g. "Transport Fee", "Hostel Fee") for them to appear in the correct screen. Fee types with no description fall into the Other screen.
+52. **Receipt number format change (Phase 24)** — New format: `{prefix}{yr6}{00001}`. `yr6` = `LEFT(academic_year,4) + RIGHT(academic_year,2)` e.g. "2024-25"→"202425". Prefix: T (Transport), H (Hostel), O (Other), or `class_groups.prefix` for Admission/School (falls back to "S"). Counter = MAX of last 5 digits matching `{prefix}{yr6}%` per school. Since the software was not live at the time of this change, no backfill of old receipts is needed.
+53. **Cross-year fee outstanding** — `GET /school/fees/student-unique/{uniqueId}?feeTypeCategory=Transport` returns all academic year rows for a student (by `student_unique_id`), with outstanding per year. Each year row uses its own `student_id` for paid-amount calculation (since `fee_receipts.student_id` points to the year-specific student row). `student_unique_id` is also stored in `fee_receipts` for future cross-year reporting.
+54. **`student_unique_id` — stable cross-year student identifier** — `students.student_unique_id` is an INT column that stays the same across all promoted rows for the same physical student. Different from `student_id` (IDENTITY, changes every year on promotion) and `admission_no` (can change at class 6 in some schools). Auto-assigned on INSERT via `MAX(student_unique_id)+1 WHERE school_id=@schoolId` — no sequence object needed. Promotion copies the value. Fee collection uses this to look up all academic year balances. `student_unique_id_migration.sql` backfills existing rows by grouping on `admission_no+school_id`.
+55. **Monthly payment type for fee structures** — `fee_structures.payment_type` can be 'Term' or 'Monthly'. Term mode uses `term_id` FK; Monthly mode uses `fee_period_id` FK → `fee_periods` table. `FeeStructurePage` detects the type from loaded rows and shows the correct column set. Amount map key format: `{feeTypeId}_T_{termId}` (Term) or `{feeTypeId}_P_{periodId}` (Monthly). Switching payment type in the UI clears the map to prevent stale data. Fee periods are managed in Master Data → Fee Periods tab and loaded by academic year.
+56. **Fee concession receipt number format** — `CFR{yr8}{D5}`: prefix "CFR" (3), yr8 = academic_year digits concatenated ("2026-2027"→"20262027", "2026-27"→"202627"), 5-digit counter per school per year. `FeeConcessionRepository.FormatYr8` splits on '-' and concatenates both parts. Counter = `MAX(TRY_CAST(RIGHT(receipt_no,5) AS INT))` filtered by pattern + exact length. Contrast with fee receipt format `{prefix}{yr6}{D5}` which uses only last 6 year digits.
+57. **Fee concession outstanding integration** — `fee_concessions` stores one active concession per (student_id, fee_type_id, school_id, term_id) for Term-based fees and per (student_id, fee_type_id, school_id, fee_period_id) for Monthly fees. The outstanding subquery in `FeeRepository.GetStudentFeeSummary` and `GetCrossYearFeeSummary` matches by `ISNULL(fc.term_id,0)=ISNULL(fs.term_id,0)` and `ISNULL(fc.fee_period_id,0)=ISNULL(fs.fee_period_id,0)` so each term/period line only deducts its own concession. `outstanding = structure_amount - paid_receipts - concession_amount`. `ConcessionAmount` added to `FeeLineItemDto` — NOT included in PaidAmount. `FeeConcessionPage` loads terms+fee_periods when year changes and exposes Term/Period dropdowns in both Individual and Bulk tabs; term/period column shown in Concession List and printed on PDF receipt.
+58. **Fee concession per-term unique index** — SQL Server treats NULLs as distinct in standard unique indexes (two NULL/NULL rows are allowed). For fee_concessions where term_id or fee_period_id is NULL for the other type, a single unique index on (student_id, fee_type_id, school_id, term_id, fee_period_id) would allow unlimited NULL pairs. Solution: two separate filtered indexes — `UQ_fee_concessions_term` WHERE term_id IS NOT NULL and `UQ_fee_concessions_period` WHERE fee_period_id IS NOT NULL. This enforces exactly one active concession per student+fee_type per term (or per period) while allowing both types to coexist.
+59. **Transport update uses student_unique_id, not student_id** — `students.student_id` is a BIGINT IDENTITY that changes every year on promotion. Using it as the transport update key would silently fail after promotion (no matching row). `PUT /school/transport/students/{studentUniqueId}` uses `student_unique_id` (stable INT, same across promotions) + `academic_year_id` (from request body) in the WHERE clause. `StudentTransportDto.StudentUniqueId` and `AcademicYearId` are returned from `GetStudentTransport` so the React modal has these values available when submitting the update.
+60. **Transport fee collection uses bus_fee_structures, not fee_structures** — `GetCrossYearFeeSummary` with `feeTypeCategory=Transport` bypasses `fee_structures` entirely. It reads amounts from `bus_fee_structures` (keyed by `route_id + term_id + academic_year_id`) and matches them to the student's `bus_route_id`. Years where the student has no route assigned are skipped (not shown at all). Paid-amount tracking uses the new `fee_receipt_items.bus_route_id` column. This means different students in the same class correctly see different outstanding amounts based on which route they ride.
+61. **Transport concession via fee_concessions** — `fee_concessions.fee_type_id` is now nullable; when NULL, `bus_route_id` is set instead (transport concession). The concession subquery in `GetTransportLineItems` matches by `bus_route_id + term_id`. Existing school-fee unique indexes recreated with `AND fee_type_id IS NOT NULL` in filter so transport rows (NULL fee_type_id) are excluded; a separate `UQ_fee_concessions_transport` index enforces one active transport concession per `(student_id, bus_route_id, school_id, term_id)`. `FeeConcessionPage` global toggle "School Fee | Transport" switches both Individual Entry (route+term instead of fee type) and Bulk Apply (loads students by `?busRouteId=` via new filter on `GET /school/students`).
+62. **Parent portal is gateway-only** — parents can only pay via Razorpay (UPI/card/netbanking); cash/cheque is not offered through the portal. `MobileFeesController` creates Razorpay orders and verifies HMAC signatures server-side; it never calls `CollectFee` with an offline payment mode. The fee items are sent with `Amount = li.outstanding` and `ConcessionAmount = 0` because `outstanding` already nets out concessions; the server-side outstanding calculation (`GetCrossYearFeeSummary`) applies concessions before returning line items.
+63. **Parent portal child context — session-scoped** — after page reload the silent refresh (`POST /mobile/auth/parent/refresh`) restores the parent JWT (without child context, since the cookie is the parent refresh token). The app redirects to `/select-child` rather than persisting the child selection to localStorage. This is intentional: each session the parent explicitly picks which child to pay for, preventing accidental payment for the wrong child.
+64. **`Input.OTP` requires AntD ≥ 5.16.0** — `Input.OTP` component was added in AntD 5.16.0. The parent app `package.json` is pinned to `^5.16.0`; the school app is on `^6.x`. Using `^5.14.0` (the original minimum) could install a version without `Input.OTP` if a lockfile is present. Always ensure AntD ≥ 5.16 when `Input.OTP` is used.
+65. **Legacy receipt grouping key** — `BulkImportReceipts` groups CSV rows into receipts. When `LegacyReceiptNo` is non-empty, all rows sharing the same `{LegacyReceiptNo}+{AdmissionNo}+{AcademicYear}` form one receipt (preserving the original receipt boundary). When `LegacyReceiptNo` is blank, rows are grouped by `{AdmissionNo}+{AcademicYear}+{PaymentDate}+{PaymentMode}` — one receipt per student per date per payment mode. This covers both: schools that have legacy receipt numbers (use them as keys) and those that only have raw payment data (auto-group by date/mode). `LegacyReceiptNo` is stored in `fee_receipts.remarks` as `"Legacy: {no}"` for audit traceability.
+66. **End-of-day receipt sync** — `GET /school/fees/receipts` accepts `?createdAfter=datetime` (ISO 8601) which filters on `fee_receipts.created_at`. The school's legacy system calls this at end-of-day with the previous sync timestamp to get only that day's new receipts, then downloads as CSV via the "Export CSV" button. The `ReceiptsPage` client-side papaparse export matches the exact columns the legacy system expects.
+67. **`MobileParentOrderRequest` vs `MobileCreateOrderRequest` — naming disambiguation** — `GatewayDtos.cs` (namespace `School.Fee`) originally defined `MobileCreateOrderRequest` for the parent portal endpoint (`POST /mobile/fees/payment-orders`). `Mobile/Data/FeeDtos.cs` already had a `MobileCreateOrderRequest` for the old student fee endpoint. Both were imported in `MobileStudentController.cs`, causing CS0104 ambiguous reference. Fix: renamed the `School.Fee` version to `MobileParentOrderRequest` throughout `GatewayDtos.cs` and `MobileFeesController.cs`. The two types have different shapes: `MobileParentOrderRequest` has `FeeTypeCategory + List<CollectFeeItem>` (server resolves payment mode); `MobileCreateOrderRequest` has `PaymentModeId + List<MobileFeeOrderItem>` (client-provided mode).
+68. **CORS — `X-School-Code` must be in `Access-Control-Allow-Headers`** — `Global.asax.cs` `Application_BeginRequest` sets the preflight response headers. `X-School-Code` was missing from `Access-Control-Allow-Headers`, blocking the parent web app (`localhost:5174`) from sending that header. Added alongside `X-Subdomain`. Both headers must be listed whenever a new custom header is introduced; otherwise the browser blocks the preflight before any request reaches the API.
+69. **Android fee screen — selection scoped to one academic year** — items from different academic years cannot be mixed in a single Razorpay order because the backend `POST /mobile/fees/payment-orders` accepts a single `academicYearId`. `FeeScreen.kt` tracks `selectedYearId`; tapping an item from a different year automatically clears the previous selection and starts fresh. This prevents a silent wrong-year order on the backend.
+70. **Android persistent cookie jar — OkHttp default jar is in-memory** — OkHttp's `CookieJar.NO_COOKIES` (the default) discards all cookies when the process dies. The server's `parentRefreshToken` (7-day HttpOnly sliding-expiry) was lost on every app kill, forcing OTP re-login the next day. Fix: `PersistentCookieJar` implements `CookieJar`, serializes each `Cookie` as a `SerializedCookie` data class (name, value, domain, path, expiresAt, secure, httpOnly) to a plain `SharedPreferences` file via Gson. Cookies are reloaded into an in-memory `cache` map on construction (keyed `"domain|name"`) and flushed on every `saveFromResponse`. Existing ProGuard rule `-keep class com.ascentschools.mobile.data.api.**` covers `SerializedCookie` and `PersistentCookieJar` (both live in that package).
+71. **Android startup silent refresh** — after fixing cookie persistence (see #70), a cold start may still have an expired access token (30-min JWT) even though the refresh cookie is valid. `MainActivity` tracks `isCheckingSession` (initially `true` when `tokenStore.isLoggedIn`). A `LaunchedEffect(Unit)` calls `authRepo.silentRefresh()` (parent) or `authRepo.silentRefreshTeacher()` based on `tokenStore.userType`, shows `CircularProgressIndicator` while in progress, then sets `isCheckingSession = false`. On success: home screen is shown with a fresh token. On failure: `tokenStore.clear()` is called and the user lands on the OTP login screen. This mirrors the silent refresh pattern already used in both React web apps.
 
 ---
 
@@ -773,12 +876,15 @@ ui/teacher/
 ├── TeacherHomeworkScreen.kt  ← homework list with due-date highlighting; FAB → CreateHomeworkSheet
 └── TeacherViewModel.kt       ← loadClasses/Sections/Attendance/Homework; toggleStudentStatus; markAllPresent; saveAttendance; createHomework
 data/local/TokenStore.kt      ← deviceId (auto-UUID, never cleared); userType; accessToken; studentName etc.
-data/repository/AuthRepository.kt    ← requestOtp, verifyOtp, loginTeacher, logoutTeacher, logoutParent, getChildren, selectChild
+data/repository/AuthRepository.kt    ← requestOtp, verifyOtp, loginTeacher, logoutTeacher, logoutParent, getChildren, selectChild, silentRefresh (parent), silentRefreshTeacher
 data/repository/StudentRepository.kt ← getProfile, getAttendance, getMarks, getHomework, getAnnouncements, getEvents
+data/repository/FeeRepository.kt     ← getOutstanding(feeTypeCategory) → List<MobileFeeSummaryDto>; createOrder(MobileCreateOrderRequest); verifyPayment(gatewayOrderId, MobileVerifyRequest)
 data/repository/TeacherRepository.kt ← getClasses, getSections, getAttendance, saveAttendance, getHomework, createHomework
+ui/fee/FeeViewModel.kt        ← categories list (School/Transport/Hostel); selectedCategory StateFlow; FeeUiState.Success holds List<MobileFeeSummaryDto> (cross-year); initiatePayment(items, academicYearId, feeTypeCategory); verifyPayment passes gatewayOrderId as path param
+ui/fee/FeeScreen.kt           ← TabRow (School/Transport/Hostel); LazyColumn grouped by academic year; per-year YearSummaryCard + pending/paid items; selection scoped to one year (switching year clears prior selection); concession shown in blue on item card; sticky pay bar
 ui/events/EventsViewModel.kt         ← Loading/Success/Error state; load()
 ui/events/EventsScreen.kt            ← card list with Coil thumbnail; YouTube overlay (dark scrim + SmartDisplay icon + red badge); attachment OutlinedButton opens Intent.ACTION_VIEW
-MainActivity.kt               ← routes: not logged in → SmsAuthScreen; userType=teacher → TeacherHomeScreen; else → HomeScreen (parent)
+MainActivity.kt               ← routes: not logged in → SmsAuthScreen; userType=teacher → TeacherHomeScreen; else → HomeScreen (parent); onInitiatePayment callback takes feeTypeCategory: String (not paymentModeId); startup silent refresh via isCheckingSession + LaunchedEffect(Unit) → CircularProgressIndicator while refreshing, force re-login on failure
 ```
 - **Screens (Parent):** SmsAuthScreen → Child Selector → HomeScreen → Attendance / Marks / Homework / Announcements / Profile / Fees / Events (Phase 11)
 - **Screens (Teacher):** SmsAuthScreen (Staff Login sheet) → TeacherHomeScreen → TeacherAttendanceScreen / TeacherHomeworkScreen
@@ -787,7 +893,6 @@ MainActivity.kt               ← routes: not logged in → SmsAuthScreen; userT
 
 ## Pending / TBD
 - **Staff UI** — `staff`, `staff_attendance`, `staff_advances`, `staff_salaries` tables exist in DB (via `staff_tables_migration.sql`) and the Staff section exists in the school app nav, but the full staff management UI (StaffPage, StaffAttendancePage, etc.) may need completion/verification
-- **Hostel table** — `hostel_name` in `students` is NULL for now; table to be designed separately
 - **SMS DLT templates** — `SmsHelper.AbsentTemplateId`, `FeeDueTemplateId`, `CustomTemplateId` are placeholder constants; register actual templates with smslogin.mobi before SMS Center goes live
 - **`ascent-control-app` env** — create `.env.local` with `VITE_API_URL=http://localhost:62845` for local dev
 - **`ascent-school-app` env for local dev** — the school `.env.{school}` files point to `https://edu-care.in/api`; for local dev against a local API, temporarily change `VITE_API_BASE_URL` to `http://localhost:62845`
@@ -800,7 +905,7 @@ MainActivity.kt               ← routes: not logged in → SmsAuthScreen; userT
 | `Database\master_tables.sql` | Run once to create `ascent_master` DB (15 tables, includes parent mobile tables) |
 | `Database\master_db_migration.sql` | Add `db_name` column to existing `ascent_master.school_groups` |
 | `Database\master_db_credentials_migration.sql` | Add `db_username` and `db_password` columns to `ascent_master.school_groups` |
-| `Database\tenant_tables.sql` | Run once per school group for `ascent_group_{id}` DB (42 tables + permissions + roles; includes all migrations up to Phase 15) |
+| `Database\tenant_tables.sql` | Run once per school group for `ascent_group_{id}` DB (46 tables + permissions + roles; includes all migrations up to Phase 30) |
 | `Database\seed_control_user.sql` | Seed a control app login user into `ascent_master.control_users` |
 | `Database\seed_tenant_data.sql` | Seed role-permission mappings, payment modes, default school admin login into tenant DB |
 | `Database\sections_migration.sql` | Add `sections` table + `section_id` column to `students` on existing tenant DBs |
@@ -822,6 +927,13 @@ MainActivity.kt               ← routes: not logged in → SmsAuthScreen; userT
 | `Database\subjects_status_migration.sql` | Widen subjects.status VARCHAR(5→10); normalise 'Y'→'Active', 'N'→'Inactive' on existing tenant DBs |
 | `Database\homework_attachment_url_migration.sql` | Add `attachment_url` column to `homework` table on existing tenant DBs |
 | `Database\homework_section_migration.sql` | Add `section_id` nullable FK column to `homework` table on existing tenant DBs |
+| `Database\fee_periods_migration.sql` | Add `fee_periods` table + `payment_type`/`fee_period_id` to `fee_structures` + `fee_period_id` to `fee_receipt_items` on existing tenant DBs |
+| `Database\student_unique_id_migration.sql` | Add `student_unique_id` INT column to `students` and backfill (groups by admission_no+school_id) on existing tenant DBs |
+| `Database\fee_collection_redesign_migration.sql` | Add `student_unique_id` column to `fee_receipts` on existing tenant DBs |
+| `Database\fee_concessions_migration.sql` | Add `fee_concessions` table (with `term_id`/`fee_period_id` columns and two filtered unique indexes) on existing tenant DBs |
+| `Database\transport_receipt_migration.sql` | Add `bus_route_id INT NULL` + FK to `fee_receipt_items` on existing tenant DBs |
+| `Database\transport_concession_migration.sql` | Make `fee_concessions.fee_type_id` nullable; add `bus_route_id INT NULL` + FK; recreate term/period unique indexes with `fee_type_id IS NOT NULL` filter; add `UQ_fee_concessions_transport` index on existing tenant DBs |
+| `Database\hostel_migration.sql` | Add `hostels` table, `hostel_fee_structures` table; add `hostel_id INT NULL FK` to `students`, `fee_receipt_items`, `fee_concessions`; add hostel concession filtered unique indexes on existing tenant DBs |
 | `Database\create_tables.sql` | Legacy single-DB version — reference only, do not use |
 | `Schema_Proposal.md` | Full old VB6 → new column mapping with FK summary |
 | `Clarification Answers.txt` | 35 domain Q&A answered by client |

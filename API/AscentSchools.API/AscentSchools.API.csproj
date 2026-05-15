@@ -193,12 +193,15 @@
     <Compile Include="Controllers\School\StaffController.cs" />
     <Compile Include="Controllers\School\StudentsController.cs" />
     <Compile Include="Controllers\School\FeeController.cs" />
+    <Compile Include="Controllers\School\FeeConcessionController.cs" />
+    <Compile Include="Controllers\School\HostelController.cs" />
     <Compile Include="Controllers\School\PublicController.cs" />
     <Compile Include="Controllers\School\RolesController.cs" />
     <Compile Include="Controllers\School\SchoolUsersController.cs" />
     <Compile Include="Controllers\School\SchoolAuthController.cs" />
     <Compile Include="Controllers\Mobile\MobileAuthController.cs" />
     <Compile Include="Controllers\Mobile\MobileStudentController.cs" />
+    <Compile Include="Controllers\Mobile\MobileFeesController.cs" />
     <Compile Include="Controllers\School\AttendanceController.cs" />
     <Compile Include="Controllers\School\DashboardController.cs" />
     <Compile Include="Controllers\School\TransportController.cs" />

@@ -8,22 +8,30 @@ const STATUS_OPTIONS = [
   { value: 'Inactive', label: 'Inactive' },
 ]
 
-export default function ClassesTab({ classGroups, feeCategories }) {
-  const [rows,    setRows]    = useState([])
-  const [loading, setLoading] = useState(false)
-  const [open,    setOpen]    = useState(false)
-  const [editing, setEditing] = useState(null)
-  const [saving,  setSaving]  = useState(false)
+export default function ClassesTab() {
+  const [rows,          setRows]          = useState([])
+  const [classGroups,   setClassGroups]   = useState([])
+  const [feeCategories, setFeeCategories] = useState([])
+  const [loading,       setLoading]       = useState(false)
+  const [open,          setOpen]          = useState(false)
+  const [editing,       setEditing]       = useState(null)
+  const [saving,        setSaving]        = useState(false)
   const [form] = Form.useForm()
 
-  const groupOptions    = (classGroups   || []).map((g) => ({ value: g.classGroupId,   label: g.groupName }))
-  const categoryOptions = (feeCategories || []).map((c) => ({ value: c.feeCategoryId,  label: c.categoryName }))
+  const groupOptions    = classGroups.map((g)   => ({ value: g.classGroupId,  label: g.groupName }))
+  const categoryOptions = feeCategories.map((c) => ({ value: c.feeCategoryId, label: c.categoryName }))
 
   const load = async () => {
     setLoading(true)
     try {
-      const res = await api.get('/school/master/classes')
-      setRows(res.data?.data || [])
+      const [classRes, groupRes, catRes] = await Promise.all([
+        api.get('/school/master/classes'),
+        api.get('/school/master/class-groups'),
+        api.get('/school/master/fee-categories'),
+      ])
+      setRows(classRes.data?.data || [])
+      setClassGroups(groupRes.data?.data || [])
+      setFeeCategories(catRes.data?.data || [])
     } finally {
       setLoading(false)
     }

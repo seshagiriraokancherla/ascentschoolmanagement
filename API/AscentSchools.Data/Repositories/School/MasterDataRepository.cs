@@ -362,5 +362,45 @@ namespace AscentSchools.Data.Repositories.School
                       WHERE payment_mode_id = @id AND school_id = @schoolId",
                     new { r.ModeName, r.Description, r.Status, r.IsOnline, id, schoolId });
         }
+
+        // ── Fee Periods ───────────────────────────────────────────────────
+
+        public IEnumerable<FeePeriodDto> GetFeePeriods(string tenantDbName, int schoolId, int? academicYearId)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.Query<FeePeriodDto>(
+                    @"SELECT fee_period_id FeePeriodId, school_id SchoolId,
+                             academic_year_id AcademicYearId, month_no MonthNo,
+                             year_no YearNo, period_label PeriodLabel,
+                             sequence_no SequenceNo, status Status
+                      FROM fee_periods
+                      WHERE school_id = @schoolId
+                        AND (@academicYearId IS NULL OR academic_year_id = @academicYearId)
+                      ORDER BY year_no, month_no",
+                    new { schoolId, academicYearId });
+        }
+
+        public int CreateFeePeriod(string tenantDbName, int schoolId, string createdBy, SaveFeePeriodRequest r)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.QuerySingle<int>(
+                    @"INSERT INTO fee_periods
+                        (school_id, academic_year_id, month_no, year_no, period_label, sequence_no, status, created_by)
+                      VALUES
+                        (@schoolId, @AcademicYearId, @MonthNo, @YearNo, @PeriodLabel, @SequenceNo, @Status, @createdBy);
+                      SELECT CAST(SCOPE_IDENTITY() AS INT)",
+                    new { schoolId, createdBy, r.AcademicYearId, r.MonthNo, r.YearNo, r.PeriodLabel, r.SequenceNo, r.Status });
+        }
+
+        public void UpdateFeePeriod(string tenantDbName, int schoolId, int id, SaveFeePeriodRequest r)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                conn.Execute(
+                    @"UPDATE fee_periods
+                      SET academic_year_id = @AcademicYearId, month_no = @MonthNo, year_no = @YearNo,
+                          period_label = @PeriodLabel, sequence_no = @SequenceNo, status = @Status
+                      WHERE fee_period_id = @id AND school_id = @schoolId",
+                    new { r.AcademicYearId, r.MonthNo, r.YearNo, r.PeriodLabel, r.SequenceNo, r.Status, id, schoolId });
+        }
     }
 }

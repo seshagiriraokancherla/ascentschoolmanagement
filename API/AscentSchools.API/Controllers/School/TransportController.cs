@@ -89,15 +89,18 @@ namespace AscentSchools.API.Controllers.School
         // ── Student Transport ─────────────────────────────────────────────────
 
         [HttpGet, Route("students")]
-        public HttpResponseMessage GetStudentTransport([FromUri] int? routeId = null)
-            => Ok(_repo.GetStudentTransport(Tenant.TenantDbName, Tenant.SchoolId, routeId));
+        public HttpResponseMessage GetStudentTransport(
+            [FromUri] int? routeId = null, [FromUri] int? academicYearId = null,
+            [FromUri] int? classId = null, [FromUri] int? sectionId = null)
+            => Ok(_repo.GetStudentTransport(
+                Tenant.TenantDbName, Tenant.SchoolId, routeId, academicYearId, classId, sectionId));
 
-        [HttpPut, Route("students/{studentId:long}")]
-        public HttpResponseMessage UpdateStudentTransport(long studentId, [FromBody] UpdateStudentTransportRequest request)
+        [HttpPut, Route("students/{studentUniqueId:int}")]
+        public HttpResponseMessage UpdateStudentTransport(int studentUniqueId, [FromBody] UpdateStudentTransportRequest request)
         {
-            if (request == null)
-                return BadRequest("Request body is required.");
-            _repo.UpdateStudentTransport(Tenant.TenantDbName, Tenant.SchoolId, studentId, request);
+            if (request == null || request.AcademicYearId <= 0)
+                return BadRequest("Request body and academicYearId are required.");
+            _repo.UpdateStudentTransport(Tenant.TenantDbName, Tenant.SchoolId, studentUniqueId, request);
             return Ok(true, "Student transport updated.");
         }
     }

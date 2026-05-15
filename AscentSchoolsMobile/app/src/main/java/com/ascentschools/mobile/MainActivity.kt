@@ -7,7 +7,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import com.ascentschools.mobile.data.api.MobileOrderResponse
 import com.ascentschools.mobile.data.repository.AuthRepository
 import com.ascentschools.mobile.data.repository.FeeRepository
@@ -59,10 +64,38 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
 
         setContent {
             AscentTheme {
-                var isLoggedIn by remember { mutableStateOf(tokenStore.isLoggedIn) }
-                var userType   by remember { mutableStateOf(tokenStore.userType) }
+                var isLoggedIn        by remember { mutableStateOf(tokenStore.isLoggedIn) }
+                var userType          by remember { mutableStateOf(tokenStore.userType) }
+                // Show a loading indicator while we silently refresh an existing session.
+                // Without this, a cold start with an expired access token would immediately
+                // show the home screen, then fail on every API call until the user notices.
+                var isCheckingSession by remember { mutableStateOf(tokenStore.isLoggedIn) }
 
-                if (isLoggedIn && userType == "teacher") {
+                // On cold start: silently refresh the stored session so the access token
+                // is valid before any screen tries to make API calls.
+                // The refresh cookie is now persisted by PersistentCookieJar, so this
+                // works even after the app was killed and restarted.
+                LaunchedEffect(Unit) {
+                    if (isCheckingSession) {
+                        when (tokenStore.userType) {
+                            "parent"  -> authRepo.silentRefresh()
+                            "teacher" -> authRepo.silentRefreshTeacher()
+                            else      -> Result.failure<Unit>(Exception("Unknown user type"))
+                        }.onFailure {
+                            // Refresh failed — session is truly expired; force re-login
+                            tokenStore.clear()
+                            isLoggedIn = false
+                            userType   = ""
+                        }
+                        isCheckingSession = false
+                    }
+                }
+
+                if (isCheckingSession) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                } else if (isLoggedIn && userType == "teacher") {
                     val teacherVm = remember { TeacherViewModel(teacherRepo) }
                     var teacherScreen by remember { mutableStateOf<TeacherScreen>(TeacherScreen.Home) }
 
@@ -110,8 +143,8 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                         repo       = studentRepo,
                         feeVm      = feeVm,
                         tokenStore = tokenStore,
-                        onInitiatePayment = { items, academicYearId, paymentModeId ->
-                            feeVm.initiatePayment(items, academicYearId, paymentModeId)
+                        onInitiatePayment = { items, academicYearId, feeTypeCategory ->
+                            feeVm.initiatePayment(items, academicYearId, feeTypeCategory)
                         },
                         onLogout = {
                             CoroutineScope(Dispatchers.IO).launch {

@@ -48,6 +48,9 @@ ascent-school-app/.env.stannsasf
 ascent-school-app/.env.holyspiritjm
 ascent-school-app/.env.holyspiritjm
 ascent-school-app/.env.depaulemyv
+# Parent app school-specific env files
+ascent-parent-app/.env.demo
+ascent-parent-app/.env.srividya
 
 # Package manager logs
 npm-debug.log*

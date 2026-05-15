@@ -5,22 +5,24 @@ namespace AscentSchools.Core.DTOs.School.Students
     /// <summary>Light DTO for list view — avoids SELECT *.</summary>
     public class StudentListDto
     {
-        public long      StudentId    { get; set; }
-        public string    AdmissionNo  { get; set; }
-        public string    StudentName  { get; set; }
-        public string    ClassName    { get; set; }
-        public string    SectionName  { get; set; }
-        public string    Gender       { get; set; }
-        public string    Status       { get; set; }
-        public string    PhotoPath    { get; set; }
-        public int       SchoolId     { get; set; }
-        public DateTime? DateOfBirth  { get; set; }
-        public string    FatherName     { get; set; }
-        public string    FatherMobile   { get; set; }
-        public string    BloodGroup     { get; set; }
-        public string    BlockedReason  { get; set; }
-        public bool      IsDetained     { get; set; }
-        public string    DetainedReason { get; set; }
+        public long      StudentId       { get; set; }
+        public int?      StudentUniqueId { get; set; }
+        public string    AdmissionNo     { get; set; }
+        public string    StudentName     { get; set; }
+        public string    ClassName       { get; set; }
+        public string    SectionName     { get; set; }
+        public string    Gender          { get; set; }
+        public string    Status          { get; set; }
+        public string    PhotoPath       { get; set; }
+        public int       SchoolId        { get; set; }
+        public DateTime? DateOfBirth     { get; set; }
+        public string    FatherName      { get; set; }
+        public string    FatherMobile    { get; set; }
+        public string    BloodGroup      { get; set; }
+        public string    BlockedReason   { get; set; }
+        public bool      IsDetained      { get; set; }
+        public string    DetainedReason  { get; set; }
+        public string    JoinType        { get; set; }
     }
 
     public class BlockStudentRequest
@@ -102,7 +104,8 @@ namespace AscentSchools.Core.DTOs.School.Students
         public string    BusTrip                { get; set; }
         // Other
         public string    StudentType            { get; set; }
-        public string    HostelName             { get; set; }
+        public int?      HostelId               { get; set; }
+        public string    HostelName             { get; set; }   // from JOIN on hostels
         public string    ScholarshipStatus      { get; set; }
         public string    ScholarshipDescription { get; set; }
         public string    MotherTongue           { get; set; }
@@ -179,7 +182,7 @@ namespace AscentSchools.Core.DTOs.School.Students
         public string    BusTrip                { get; set; }
         // Other
         public string    StudentType            { get; set; }
-        public string    HostelName             { get; set; }
+        public int?      HostelId               { get; set; }
         public string    ScholarshipStatus      { get; set; }
         public string    ScholarshipDescription { get; set; }
         public string    MotherTongue           { get; set; }

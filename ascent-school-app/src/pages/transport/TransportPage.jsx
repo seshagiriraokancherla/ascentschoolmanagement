@@ -353,25 +353,64 @@ function BusFeeTab() {
 function StudentsTab() {
   const { message } = AntApp.useApp()
   const [form] = Form.useForm()
-  const [routes,       setRoutes]       = useState([])
-  const [buses,        setBuses]        = useState([])
-  const [students,     setStudents]     = useState([])
-  const [routeFilter,  setRouteFilter]  = useState(null)
-  const [loading,      setLoading]      = useState(false)
-  const [modal,        setModal]        = useState({ open: false, student: null })
-  const [saving,       setSaving]       = useState(false)
 
-  const loadData = (routeId) => {
-    setLoading(true)
-    const url = routeId ? `/school/transport/students?routeId=${routeId}` : '/school/transport/students'
-    api.get(url).then(r => setStudents(r.data.data || [])).finally(() => setLoading(false))
-  }
+  // lookup data
+  const [years,   setYears]   = useState([])
+  const [classes, setClasses] = useState([])
+  const [sections,setSections]= useState([])
+  const [routes,  setRoutes]  = useState([])
+  const [buses,   setBuses]   = useState([])
+
+  // filters
+  const [yearFilter,    setYearFilter]    = useState(null)
+  const [classFilter,   setClassFilter]   = useState(null)
+  const [sectionFilter, setSectionFilter] = useState(null)
+  const [routeFilter,   setRouteFilter]   = useState(null)
+
+  // data
+  const [students,  setStudents]  = useState([])
+  const [loaded,    setLoaded]    = useState(false)
+  const [loading,   setLoading]   = useState(false)
+  const [modal,     setModal]     = useState({ open: false, student: null })
+  const [saving,    setSaving]    = useState(false)
 
   useEffect(() => {
-    api.get('/school/transport/routes').then(r => setRoutes(r.data.data || []))
-    api.get('/school/transport/buses').then(r => setBuses(r.data.data || []))
-    loadData(null)
+    Promise.all([
+      api.get('/school/master/academic-years'),
+      api.get('/school/master/classes'),
+      api.get('/school/transport/routes'),
+      api.get('/school/transport/buses'),
+    ]).then(([yr, cl, ro, bu]) => {
+      setYears(yr.data.data   || [])
+      setClasses(cl.data.data || [])
+      setRoutes(ro.data.data  || [])
+      setBuses(bu.data.data   || [])
+    })
   }, [])
+
+  // reload sections when class changes
+  useEffect(() => {
+    if (!classFilter) { setSections([]); setSectionFilter(null); return }
+    api.get(`/school/master/sections?classId=${classFilter}`)
+       .then(r => setSections(r.data.data || []))
+       .catch(() => setSections([]))
+    setSectionFilter(null)
+  }, [classFilter])
+
+  const loadData = async () => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (yearFilter)    params.set('academicYearId', yearFilter)
+      if (classFilter)   params.set('classId',        classFilter)
+      if (sectionFilter) params.set('sectionId',      sectionFilter)
+      if (routeFilter)   params.set('routeId',        routeFilter)
+      const r = await api.get(`/school/transport/students?${params}`)
+      setStudents(r.data.data || [])
+      setLoaded(true)
+    } catch { message.error('Failed to load students.') }
+    finally  { setLoading(false) }
+  }
 
   const openEdit = (student) => {
     form.setFieldsValue({
@@ -387,10 +426,13 @@ function StudentsTab() {
     const values = await form.validateFields()
     setSaving(true)
     try {
-      await api.put(`/school/transport/students/${modal.student.studentId}`, values)
+      await api.put(`/school/transport/students/${modal.student.studentUniqueId}`, {
+        ...values,
+        academicYearId: modal.student.academicYearId,
+      })
       message.success('Transport updated.')
       setModal({ open: false, student: null })
-      loadData(routeFilter)
+      loadData()
     } catch (e) {
       message.error(e.message || 'Failed to save.')
     } finally {
@@ -409,9 +451,9 @@ function StudentsTab() {
         </div>
       ),
     },
-    { title: 'Class',          dataIndex: 'className',     key: 'className',     width: 100 },
+    { title: 'Class',          dataIndex: 'className',     key: 'className',     width: 110 },
     { title: 'Transport Type', dataIndex: 'transportType', key: 'transportType', width: 120,
-      render: t => t ? <Tag>{t}</Tag> : <Text type="secondary">—</Text> },
+      render: t => t ? <Tag color="blue">{t}</Tag> : <Text type="secondary">—</Text> },
     { title: 'Route',          dataIndex: 'routeName',     key: 'routeName',     width: 160,
       render: r => r || <Text type="secondary">—</Text> },
     { title: 'Bus',            dataIndex: 'busName',       key: 'busName',       width: 120,
@@ -425,18 +467,62 @@ function StudentsTab() {
   ]
 
   return (
-    <Card
-      extra={
-        <Select
-          style={{ width: 200 }}
-          placeholder="Filter by route"
-          allowClear
-          value={routeFilter}
-          onChange={v => { setRouteFilter(v); loadData(v) }}
-          options={routes.map(r => ({ label: r.routeName, value: r.routeId }))}
-        />
-      }
-    >
+    <Card>
+      {/* Filter bar */}
+      <Row gutter={12} align="bottom" style={{ marginBottom: 16 }} wrap>
+        <Col>
+          <Text strong>Academic Year</Text>
+          <Select
+            style={{ display: 'block', width: 160, marginTop: 4 }}
+            placeholder="All years"
+            allowClear
+            value={yearFilter}
+            onChange={setYearFilter}
+            options={years.map(y => ({ label: y.academicYear, value: y.academicYearId }))}
+          />
+        </Col>
+        <Col>
+          <Text strong>Class</Text>
+          <Select
+            style={{ display: 'block', width: 160, marginTop: 4 }}
+            placeholder="All classes"
+            allowClear
+            value={classFilter}
+            onChange={v => { setClassFilter(v); setSectionFilter(null) }}
+            options={classes.map(c => ({ label: c.className, value: c.classId }))}
+          />
+        </Col>
+        {sections.length > 0 && (
+          <Col>
+            <Text strong>Section</Text>
+            <Select
+              style={{ display: 'block', width: 120, marginTop: 4 }}
+              placeholder="All sections"
+              allowClear
+              value={sectionFilter}
+              onChange={setSectionFilter}
+              options={sections.map(s => ({ label: s.sectionName, value: s.sectionId }))}
+            />
+          </Col>
+        )}
+        <Col>
+          <Text strong>Route</Text>
+          <Select
+            style={{ display: 'block', width: 180, marginTop: 4 }}
+            placeholder="All routes"
+            allowClear
+            value={routeFilter}
+            onChange={setRouteFilter}
+            options={routes.map(r => ({ label: r.routeName, value: r.routeId }))}
+          />
+        </Col>
+        <Col style={{ marginTop: 20 }}>
+          <Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={loadData}>
+            Load
+          </Button>
+        </Col>
+      </Row>
+
       <Table
         dataSource={students}
         columns={columns}
@@ -444,6 +530,7 @@ function StudentsTab() {
         loading={loading}
         pagination={{ pageSize: 30 }}
         size="middle"
+        locale={{ emptyText: loaded ? 'No students found' : 'Select filters and click Load' }}
       />
 
       <Modal

@@ -62,6 +62,16 @@ namespace AscentSchools.Data.Repositories.School
                     new { schoolId });
         }
 
+        /// <summary>Returns the payment_mode_id for the online payment mode (used by parent portal).</summary>
+        public int? GetOnlinePaymentModeId(string tenantDbName, int schoolId)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.QueryFirstOrDefault<int?>(
+                    @"SELECT TOP 1 payment_mode_id FROM payment_modes
+                      WHERE is_online = 1 AND school_id = @schoolId",
+                    new { schoolId });
+        }
+
         /// <summary>Returns raw webhook_secret for webhook signature verification only.</summary>
         public string GetWebhookSecret(string tenantDbName, int schoolId)
         {

@@ -69,7 +69,6 @@ namespace AscentSchools.Data.Repositories.School
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
             {
-                conn.Open();
                 using (var tx = conn.BeginTransaction())
                 {
                     try

@@ -10,13 +10,18 @@ import UsersPage        from './pages/rbac/UsersPage'
 import MasterDataPage   from './pages/master/MasterDataPage'
 import StudentsPage        from './pages/students/StudentsPage'
 import StudentFormPage     from './pages/students/StudentFormPage'
-import FeeStructurePage    from './pages/fee/FeeStructurePage'
-import FeeCollectionPage   from './pages/fee/FeeCollectionPage'
-import ReceiptsPage        from './pages/fee/ReceiptsPage'
-import GatewaySettingsPage   from './pages/fee/GatewaySettingsPage'
+import FeeStructurePage       from './pages/fee/FeeStructurePage'
+import AdmissionFeePage       from './pages/fee/AdmissionFeePage'
+import SchoolFeePage          from './pages/fee/SchoolFeePage'
+import TransportFeePage       from './pages/fee/TransportFeePage'
+import HostelFeePage          from './pages/fee/HostelFeePage'
+import OtherFeePage           from './pages/fee/OtherFeePage'
+import ReceiptsPage           from './pages/fee/ReceiptsPage'
+import GatewaySettingsPage    from './pages/fee/GatewaySettingsPage'
 import DashboardPage         from './pages/dashboard/DashboardPage'
 import AttendancePage        from './pages/attendance/AttendancePage'
 import TransportPage         from './pages/transport/TransportPage'
+import HostelPage            from './pages/hostel/HostelPage'
 import MarksEntryPage        from './pages/marks/MarksEntryPage'
 import HomeworkPage          from './pages/homework/HomeworkPage'
 import AnnouncementsPage     from './pages/announcements/AnnouncementsPage'
@@ -24,6 +29,7 @@ import EventsPage            from './pages/events/EventsPage'
 import StudentsImportPage    from './pages/students/StudentsImportPage'
 import PromoteStudentsPage   from './pages/students/PromoteStudentsPage'
 import FeeStructureImportPage from './pages/fee/FeeStructureImportPage'
+import FeeReceiptsImportPage  from './pages/fee/FeeReceiptsImportPage'
 import ReportsPage            from './pages/reports/ReportsPage'
 import StaffPage                   from './pages/staff/StaffPage'
 import StaffAttendancePage         from './pages/staff/StaffAttendancePage'
@@ -32,6 +38,7 @@ import StaffAdvancesPage           from './pages/staff/StaffAdvancesPage'
 import StaffSalariesPage           from './pages/staff/StaffSalariesPage'
 import BloodGroupSearchPage        from './pages/students/BloodGroupSearchPage'
 import SMSPage                    from './pages/sms/SMSPage'
+import FeeConcessionPage          from './pages/fee/FeeConcessionPage'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:62845'
 
@@ -119,13 +126,20 @@ function App() {
               <Route path="students/promote"         element={<PromoteStudentsPage />} />
               <Route path="students/blood-group"     element={<BloodGroupSearchPage />} />
               <Route path="students/:id"          element={<StudentFormPage />} />
-              <Route path="fees/structure"        element={<FeeStructurePage />} />
-              <Route path="fees/structure/import" element={<FeeStructureImportPage />} />
-              <Route path="fees/collect"          element={<FeeCollectionPage />} />
-              <Route path="fees/receipts"         element={<ReceiptsPage />} />
+              <Route path="fees/structure"             element={<FeeStructurePage />} />
+              <Route path="fees/structure/import"      element={<FeeStructureImportPage />} />
+              <Route path="fees/collect/admission"     element={<AdmissionFeePage />} />
+              <Route path="fees/collect/school"        element={<SchoolFeePage />} />
+              <Route path="fees/collect/transport"     element={<TransportFeePage />} />
+              <Route path="fees/collect/hostel"        element={<HostelFeePage />} />
+              <Route path="fees/collect/other"         element={<OtherFeePage />} />
+              <Route path="fees/receipts"              element={<ReceiptsPage />} />
+              <Route path="fees/receipts/import"      element={<FeeReceiptsImportPage />} />
+              <Route path="fees/concessions"          element={<FeeConcessionPage />} />
               <Route path="master"           element={<MasterDataPage />} />
               <Route path="attendance"               element={<AttendancePage />} />
               <Route path="transport"                element={<TransportPage />} />
+              <Route path="hostel"                  element={<HostelPage />} />
               <Route path="marks"                    element={<MarksEntryPage />} />
               <Route path="homework"                 element={<HomeworkPage />} />
               <Route path="announcements"            element={<AnnouncementsPage />} />

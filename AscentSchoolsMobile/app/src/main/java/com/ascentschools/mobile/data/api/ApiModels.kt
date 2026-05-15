@@ -225,59 +225,68 @@ data class SchoolEventDto(
 )
 
 // ── Fee ───────────────────────────────────────────────────────────────────────
-// Matches MobileFeeSummaryDto / MobileFeeLineItemDto on backend
+// Matches CrossYearFeeSummaryDto / FeeLineItemDto on backend (mobile/fees/outstanding)
 
 data class MobileFeeSummaryDto(
-    val academicYearId: Int?,
-    val academicYear: String?,
-    val totalAmount: Double,
-    val paidAmount: Double,
-    val outstandingAmount: Double,
-    val lineItems: List<MobileFeeLineItemDto>
+    val academicYearId    : Int?,
+    val academicYear      : String?,
+    val totalAmount       : Double,
+    val paidAmount        : Double,
+    val outstandingAmount : Double,
+    val lineItems         : List<MobileFeeLineItemDto>
 )
 
 data class MobileFeeLineItemDto(
-    val feeTypeId: Int?,
-    val feeTypeName: String?,
-    val termId: Int?,
-    val termName: String?,
-    val amount: Double,
-    val paidAmount: Double,
-    val outstanding: Double,
-    val isPaid: Boolean
+    val feeTypeId        : Int?,
+    val feeTypeName      : String?,
+    val termId           : Int?,
+    val termName         : String?,
+    val feePeriodId      : Int?,
+    val busRouteId       : Int?,
+    val hostelId         : Int?,
+    val amount           : Double,
+    val paidAmount       : Double,
+    val outstanding      : Double,
+    val concessionAmount : Double = 0.0,
+    val isPaid           : Boolean
 )
 
+// feeTypeCategory replaces paymentModeId — server resolves the online payment mode
 data class MobileCreateOrderRequest(
-    val academicYearId: Int,
-    val paymentModeId: Int,
-    val items: List<MobileFeeOrderItem>
+    val academicYearId  : Int,
+    val feeTypeCategory : String,
+    val items           : List<MobileFeeOrderItem>
 )
 
 data class MobileFeeOrderItem(
-    val feeTypeId: Int,
-    val termId: Int?,
-    val amount: Double,
-    val concessionAmount: Double = 0.0
+    val feeTypeId        : Int?,
+    val termId           : Int?,
+    val feePeriodId      : Int?,
+    val busRouteId       : Int?,
+    val hostelId         : Int?,
+    val amount           : Double,
+    val concessionAmount : Double = 0.0
 )
 
 data class MobileOrderResponse(
-    val gatewayOrderId: Int,
-    val externalOrderId: String,
-    val keyId: String,
-    val amountInPaise: Long,
-    val currency: String
+    val gatewayOrderId  : Int,
+    val externalOrderId : String,
+    val keyId           : String,
+    val amountInPaise   : Long,
+    val currency        : String,
+    val gatewayName     : String = "Razorpay"
 )
 
 data class MobileVerifyRequest(
-    val gatewayOrderId: Int,
-    val paymentId: String,
-    val orderId: String,
-    val signature: String
+    val gatewayOrderId : Int,
+    val paymentId      : String,
+    val orderId        : String,
+    val signature      : String
 )
 
 data class MobilePaymentResultDto(
-    val receiptId: Int,
-    val receiptNo: String?,
-    val amount: Double,
-    val message: String?
+    val receiptId : Int,
+    val receiptNo : String?,
+    val amount    : Double,
+    val message   : String?
 )

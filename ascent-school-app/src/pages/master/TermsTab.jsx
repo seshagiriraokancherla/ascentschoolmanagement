@@ -8,15 +8,16 @@ const STATUS_OPTIONS = [
   { value: 'Inactive', label: 'Inactive' },
 ]
 
-export default function TermsTab({ academicYears }) {
-  const [rows,    setRows]    = useState([])
-  const [loading, setLoading] = useState(false)
-  const [open,    setOpen]    = useState(false)
-  const [editing, setEditing] = useState(null)
-  const [saving,  setSaving]  = useState(false)
+export default function TermsTab() {
+  const [rows,         setRows]         = useState([])
+  const [academicYears, setAcademicYears] = useState([])
+  const [loading,      setLoading]      = useState(false)
+  const [open,         setOpen]         = useState(false)
+  const [editing,      setEditing]      = useState(null)
+  const [saving,       setSaving]       = useState(false)
   const [form] = Form.useForm()
 
-  const yearOptions = (academicYears || []).map((y) => ({
+  const yearOptions = academicYears.map((y) => ({
     value: y.academicYearId,
     label: y.academicYear,
   }))
@@ -24,8 +25,12 @@ export default function TermsTab({ academicYears }) {
   const load = async () => {
     setLoading(true)
     try {
-      const res = await api.get('/school/master/terms')
-      setRows(res.data?.data || [])
+      const [dataRes, yearRes] = await Promise.all([
+        api.get('/school/master/terms'),
+        api.get('/school/master/academic-years'),
+      ])
+      setRows(dataRes.data?.data || [])
+      setAcademicYears(yearRes.data?.data || [])
     } finally {
       setLoading(false)
     }

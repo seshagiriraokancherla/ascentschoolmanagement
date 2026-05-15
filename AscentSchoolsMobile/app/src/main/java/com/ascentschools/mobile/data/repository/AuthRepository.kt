@@ -104,6 +104,29 @@ class AuthRepository(
         tokenStore.clear()
     }
 
+    // ── Silent token refresh (called on cold start) ───────────────────────────
+
+    suspend fun silentRefresh(): Result<Unit> {
+        return runCatching {
+            val resp = api.refreshParentToken()
+            val body = resp.bodyOrError()
+            if (!body.success || body.data == null) error(body.message ?: "Session expired")
+            tokenStore.accessToken = body.data.accessToken
+            tokenStore.tokenType   = body.data.tokenType
+            body.data.fullName?.let { tokenStore.studentName = it }
+        }
+    }
+
+    suspend fun silentRefreshTeacher(): Result<Unit> {
+        return runCatching {
+            val resp = api.refreshTeacherToken()
+            val body = resp.bodyOrError()
+            if (!body.success || body.data == null) error(body.message ?: "Session expired")
+            tokenStore.accessToken = body.data.accessToken
+            body.data.fullName?.let { tokenStore.studentName = it }
+        }
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun <T> Response<T>.bodyOrError(): T {

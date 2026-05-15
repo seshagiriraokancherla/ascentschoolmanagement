@@ -237,5 +237,29 @@ namespace AscentSchools.API.Controllers.School
             _repo.UpdateSection(Tenant.TenantDbName, Tenant.SchoolId, id, request);
             return Ok(_repo.GetSections(Tenant.TenantDbName, Tenant.SchoolId, request.ClassId));
         }
+
+        // ── Fee Periods ───────────────────────────────────────────────────
+
+        [HttpGet, Route("fee-periods")]
+        public HttpResponseMessage GetFeePeriods([FromUri] int? academicYearId = null)
+            => Ok(_repo.GetFeePeriods(Tenant.TenantDbName, Tenant.SchoolId, academicYearId));
+
+        [HttpPost, Route("fee-periods")]
+        public HttpResponseMessage CreateFeePeriod([FromBody] SaveFeePeriodRequest request)
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.PeriodLabel))
+                return BadRequest("Period label is required.");
+            _repo.CreateFeePeriod(Tenant.TenantDbName, Tenant.SchoolId, Tenant.FullName, request);
+            return Created(_repo.GetFeePeriods(Tenant.TenantDbName, Tenant.SchoolId, request.AcademicYearId), "Fee period created.");
+        }
+
+        [HttpPut, Route("fee-periods/{id:int}")]
+        public HttpResponseMessage UpdateFeePeriod(int id, [FromBody] SaveFeePeriodRequest request)
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.PeriodLabel))
+                return BadRequest("Period label is required.");
+            _repo.UpdateFeePeriod(Tenant.TenantDbName, Tenant.SchoolId, id, request);
+            return Ok(_repo.GetFeePeriods(Tenant.TenantDbName, Tenant.SchoolId, request.AcademicYearId));
+        }
     }
 }

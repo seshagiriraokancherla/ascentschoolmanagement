@@ -80,23 +80,26 @@ namespace AscentSchools.Core.DTOs.School.Transport
 
     public class StudentTransportDto
     {
-        public long   StudentId     { get; set; }
-        public string StudentName   { get; set; }
-        public string AdmissionNo   { get; set; }
-        public string ClassName     { get; set; }
-        public string TransportType { get; set; }
-        public int?   BusRouteId    { get; set; }
-        public string RouteName     { get; set; }
-        public int?   BusId         { get; set; }
-        public string BusName       { get; set; }
-        public string BusTrip       { get; set; }
+        public long   StudentId       { get; set; }
+        public int?   StudentUniqueId { get; set; }
+        public int?   AcademicYearId  { get; set; }
+        public string StudentName     { get; set; }
+        public string AdmissionNo     { get; set; }
+        public string ClassName       { get; set; }
+        public string TransportType   { get; set; }
+        public int?   BusRouteId      { get; set; }
+        public string RouteName       { get; set; }
+        public int?   BusId           { get; set; }
+        public string BusName         { get; set; }
+        public string BusTrip         { get; set; }
     }
 
     public class UpdateStudentTransportRequest
     {
-        public string TransportType { get; set; }
-        public int?   BusRouteId    { get; set; }
-        public int?   BusId         { get; set; }
-        public string BusTrip       { get; set; }
+        public int    AcademicYearId { get; set; }
+        public string TransportType  { get; set; }
+        public int?   BusRouteId     { get; set; }
+        public int?   BusId          { get; set; }
+        public string BusTrip        { get; set; }
     }
 }

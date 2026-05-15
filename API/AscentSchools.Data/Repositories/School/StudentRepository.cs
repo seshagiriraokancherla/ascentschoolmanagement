@@ -16,7 +16,7 @@ namespace AscentSchools.Data.Repositories.School
         public IEnumerable<StudentListDto> GetAll(
             string tenantDbName, int schoolId,
             string search, int? classId, int? sectionId, int? academicYearId, string status,
-            string bloodGroup = null)
+            string bloodGroup = null, string joinType = null, int? busRouteId = null, int? hostelId = null)
         {
             var where = new StringBuilder("s.school_id = @schoolId");
             if (!string.IsNullOrWhiteSpace(search))
@@ -31,9 +31,16 @@ namespace AscentSchools.Data.Repositories.School
                 where.Append(" AND s.status = @status");
             if (!string.IsNullOrWhiteSpace(bloodGroup))
                 where.Append(" AND s.blood_group = @bloodGroup");
+            if (!string.IsNullOrWhiteSpace(joinType))
+                where.Append(" AND s.join_type = @joinType");
+            if (busRouteId.HasValue)
+                where.Append(" AND s.bus_route_id = @busRouteId");
+            if (hostelId.HasValue)
+                where.Append(" AND s.hostel_id = @hostelId");
 
             var sql = $@"
-                SELECT s.student_id StudentId, s.admission_no AdmissionNo,
+                SELECT s.student_id StudentId, s.student_unique_id StudentUniqueId,
+                       s.admission_no AdmissionNo,
                        s.student_name StudentName, c.class_name ClassName,
                        sec.section_name SectionName,
                        s.gender Gender, s.status Status,
@@ -44,7 +51,8 @@ namespace AscentSchools.Data.Repositories.School
                        s.blood_group BloodGroup,
                        s.blocked_reason BlockedReason,
                        ISNULL(s.is_detained, 0) IsDetained,
-                       s.detained_reason DetainedReason
+                       s.detained_reason DetainedReason,
+                       s.join_type JoinType
                 FROM students s
                 LEFT JOIN classes  c   ON c.class_id   = s.class_id
                 LEFT JOIN sections sec ON sec.section_id = s.section_id
@@ -60,8 +68,31 @@ namespace AscentSchools.Data.Repositories.School
                     sectionId,
                     academicYearId,
                     status,
-                    bloodGroup
+                    bloodGroup,
+                    joinType,
+                    busRouteId,
+                    hostelId
                 });
+        }
+
+        // ── Unique-ID helpers (used by parent portal fee lookup) ──────────
+
+        public int? GetStudentUniqueId(string tenantDbName, int schoolId, long studentId)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.QueryFirstOrDefault<int?>(
+                    "SELECT student_unique_id FROM students WHERE student_id = @studentId AND school_id = @schoolId",
+                    new { studentId, schoolId });
+        }
+
+        public long? GetStudentIdForYear(string tenantDbName, int schoolId, int studentUniqueId, int academicYearId)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.QueryFirstOrDefault<long?>(
+                    @"SELECT student_id FROM students
+                      WHERE student_unique_id = @studentUniqueId AND academic_year_id = @academicYearId
+                        AND school_id = @schoolId",
+                    new { studentUniqueId, academicYearId, schoolId });
         }
 
         // ── Detail ────────────────────────────────────────────────────────
@@ -105,7 +136,8 @@ namespace AscentSchools.Data.Repositories.School
                         s.biometric_id BiometricId,
                         s.transport_type TransportType,
                         s.bus_route_id BusRouteId, s.bus_id BusId, s.bus_trip BusTrip,
-                        s.student_type StudentType, s.hostel_name HostelName,
+                        s.student_type StudentType,
+                        s.hostel_id HostelId, h.hostel_name HostelName,
                         s.scholarship_status ScholarshipStatus,
                         s.scholarship_description ScholarshipDescription,
                         s.mother_tongue MotherTongue,
@@ -118,6 +150,7 @@ namespace AscentSchools.Data.Repositories.School
                     LEFT JOIN classes        c   ON c.class_id         = s.class_id
                     LEFT JOIN sections      sec ON sec.section_id      = s.section_id
                     LEFT JOIN academic_years ay  ON ay.academic_year_id = s.academic_year_id
+                    LEFT JOIN hostels        h   ON h.hostel_id        = s.hostel_id
                     WHERE s.student_id = @studentId AND s.school_id = @schoolId",
                     new { studentId, schoolId });
         }
@@ -129,6 +162,7 @@ namespace AscentSchools.Data.Repositories.School
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 return conn.QuerySingle<long>(
                     @"INSERT INTO students (
+                        student_unique_id,
                         admission_no, school_unique_id, student_name, short_name, join_type,
                         gender, date_of_birth, blood_group, status,
                         academic_year_id, class_id, branch_name, section_id, roll_no,
@@ -146,12 +180,13 @@ namespace AscentSchools.Data.Repositories.School
                         dob_proof_submitted, caste_cert_submitted, other_certificates,
                         disability_status, disability_type, biometric_id,
                         transport_type, bus_route_id, bus_id, bus_trip,
-                        student_type, hostel_name,
+                        student_type, hostel_id,
                         scholarship_status, scholarship_description,
                         mother_tongue, first_language, second_language, third_language,
                         reference_name, remarks, spare_field_1, spare_field_2,
                         school_id
                       ) VALUES (
+                        (SELECT ISNULL(MAX(student_unique_id), 0) + 1 FROM students WHERE school_id = @schoolId),
                         @AdmissionNo, @SchoolUniqueId, @StudentName, @ShortName, @JoinType,
                         @Gender, @DateOfBirth, @BloodGroup, @Status,
                         @AcademicYearId, @ClassId, @BranchName, @SectionId, @RollNo,
@@ -169,7 +204,7 @@ namespace AscentSchools.Data.Repositories.School
                         @DobProofSubmitted, @CasteCertSubmitted, @OtherCertificates,
                         @DisabilityStatus, @DisabilityType, @BiometricId,
                         @TransportType, @BusRouteId, @BusId, @BusTrip,
-                        @StudentType, @HostelName,
+                        @StudentType, @HostelId,
                         @ScholarshipStatus, @ScholarshipDescription,
                         @MotherTongue, @FirstLanguage, @SecondLanguage, @ThirdLanguage,
                         @ReferenceName, @Remarks, @SpareField1, @SpareField2,
@@ -195,7 +230,7 @@ namespace AscentSchools.Data.Repositories.School
                         r.DobProofSubmitted, r.CasteCertSubmitted, r.OtherCertificates,
                         r.DisabilityStatus, r.DisabilityType, r.BiometricId,
                         r.TransportType, r.BusRouteId, r.BusId, r.BusTrip,
-                        r.StudentType, r.HostelName,
+                        r.StudentType, r.HostelId,
                         r.ScholarshipStatus, r.ScholarshipDescription,
                         r.MotherTongue, r.FirstLanguage, r.SecondLanguage, r.ThirdLanguage,
                         r.ReferenceName, r.Remarks, r.SpareField1, r.SpareField2,
@@ -210,7 +245,7 @@ namespace AscentSchools.Data.Repositories.School
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 conn.Execute(
                     @"UPDATE students SET
-                        admission_no = @AdmissionNo, school_unique_id = @SchoolUniqueId,
+                        admission_no = @AdmissionNo,
                         student_name = @StudentName, short_name = @ShortName,
                         join_type = @JoinType, gender = @Gender,
                         date_of_birth = @DateOfBirth, blood_group = @BloodGroup, status = @Status,
@@ -240,7 +275,7 @@ namespace AscentSchools.Data.Repositories.School
                         biometric_id = @BiometricId,
                         transport_type = @TransportType,
                         bus_route_id = @BusRouteId, bus_id = @BusId, bus_trip = @BusTrip,
-                        student_type = @StudentType, hostel_name = @HostelName,
+                        student_type = @StudentType, hostel_id = @HostelId,
                         scholarship_status = @ScholarshipStatus,
                         scholarship_description = @ScholarshipDescription,
                         mother_tongue = @MotherTongue,
@@ -251,7 +286,7 @@ namespace AscentSchools.Data.Repositories.School
                       WHERE student_id = @studentId AND school_id = @schoolId",
                     new
                     {
-                        r.AdmissionNo, r.SchoolUniqueId, r.StudentName, r.ShortName, r.JoinType,
+                        r.AdmissionNo, r.StudentName, r.ShortName, r.JoinType,
                         r.Gender, r.DateOfBirth, r.BloodGroup, r.Status,
                         r.AcademicYearId, r.ClassId, r.BranchName, r.SectionId, r.RollNo,
                         r.DateOfJoining, r.AdmissionDate, r.FeeCategoryId,
@@ -268,7 +303,7 @@ namespace AscentSchools.Data.Repositories.School
                         r.DobProofSubmitted, r.CasteCertSubmitted, r.OtherCertificates,
                         r.DisabilityStatus, r.DisabilityType, r.BiometricId,
                         r.TransportType, r.BusRouteId, r.BusId, r.BusTrip,
-                        r.StudentType, r.HostelName,
+                        r.StudentType, r.HostelId,
                         r.ScholarshipStatus, r.ScholarshipDescription,
                         r.MotherTongue, r.FirstLanguage, r.SecondLanguage, r.ThirdLanguage,
                         r.ReferenceName, r.Remarks, r.SpareField1, r.SpareField2,
@@ -362,7 +397,7 @@ namespace AscentSchools.Data.Repositories.School
                     // Copy all personal fields; set new academic placement
                     conn.Execute(@"
                         INSERT INTO students (
-                            school_id, admission_no, school_unique_id, student_name, short_name,
+                            school_id, student_unique_id, admission_no, school_unique_id, student_name, short_name,
                             join_type, guardian_type,
                             father_name, father_qualification, father_occupation,
                             father_employment_type, father_mobile,
@@ -383,7 +418,7 @@ namespace AscentSchools.Data.Repositories.School
                             academic_year_id, class_id, section_id, roll_no, status, created_by
                         )
                         SELECT
-                            school_id, admission_no, school_unique_id, student_name, short_name,
+                            school_id, student_unique_id, admission_no, school_unique_id, student_name, short_name,
                             join_type, guardian_type,
                             father_name, father_qualification, father_occupation,
                             father_employment_type, father_mobile,
@@ -518,14 +553,16 @@ namespace AscentSchools.Data.Repositories.School
                     // ── Insert ────────────────────────────────────────────────
                     conn.Execute(@"
                         INSERT INTO students
-                            (school_id, admission_no, student_name, gender, date_of_birth,
+                            (student_unique_id,
+                             school_id, admission_no, student_name, gender, date_of_birth,
                              academic_year_id, class_id, section_id, roll_no,
                              fee_category_id, father_name, mother_name,
                              father_mobile, mother_mobile,
                              aadhar_no, caste, caste_code, religion,
                              joining_class, mother_tongue, status)
                         VALUES
-                            (@schoolId, @admissionNo, @studentName, @gender, @dob,
+                            ((SELECT ISNULL(MAX(student_unique_id), 0) + 1 FROM students WHERE school_id = @schoolId),
+                             @schoolId, @admissionNo, @studentName, @gender, @dob,
                              @academicYearId, @classId, @sectionId, @rollNo,
                              @feeCategoryId, @fatherName, @motherName,
                              @fatherMobile, @motherMobile,

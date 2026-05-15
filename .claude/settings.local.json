@@ -17,7 +17,9 @@
       "Bash(ipconfig)",
       "PowerShell(netsh http *)",
       "Bash(grep -n '\"\\\\$' \"D:\\\\AscentSchoolsApplication\\\\API\\\\AscentSchools.API\\\\Controllers\\\\School\\\\StaffController.cs\")",
-      "Bash(grep *)"
+      "Bash(grep *)",
+      "Bash(Get-ChildItem -Path \"D:\\\\AscentSchoolsApplication\" -Directory)",
+      "Bash(Select-Object Name)"
     ]
   }
 }

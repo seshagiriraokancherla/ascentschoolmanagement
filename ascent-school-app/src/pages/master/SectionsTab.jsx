@@ -8,19 +8,26 @@ const STATUS_OPTIONS = [
   { value: 'Inactive', label: 'Inactive' },
 ]
 
-export default function SectionsTab({ classes }) {
+export default function SectionsTab() {
   const [classId,  setClassId]  = useState(null)
   const [rows,     setRows]     = useState([])
+  const [classes,  setClasses]  = useState([])
   const [loading,  setLoading]  = useState(false)
   const [open,     setOpen]     = useState(false)
   const [editing,  setEditing]  = useState(null)
   const [saving,   setSaving]   = useState(false)
   const [form] = Form.useForm()
 
-  const classOptions = (classes || []).map((c) => ({
+  const classOptions = classes.map((c) => ({
     value: c.classId,
     label: c.className,
   }))
+
+  useEffect(() => {
+    api.get('/school/master/classes')
+       .then((r) => setClasses(r.data?.data || []))
+       .catch(() => {})
+  }, [])
 
   async function load(cId) {
     if (!cId) { setRows([]); return }

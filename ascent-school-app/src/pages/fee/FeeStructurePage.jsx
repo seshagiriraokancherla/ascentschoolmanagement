@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react'
 import {
-  Card, Form, Select, Button, Table, InputNumber, Typography, Alert, Row, Col, App as AntApp,
+  Card, Form, Select, Button, Table, InputNumber, Typography,
+  Alert, Row, Col, App as AntApp, Radio, Tag,
 } from 'antd'
 import { SaveOutlined, SearchOutlined } from '@ant-design/icons'
 import api from '../../api/axiosInstance'
 
 const { Text } = Typography
+
+const ADMISSION_TYPE_OPTIONS = [
+  { value: '',    label: 'All / Not Set' },
+  { value: 'New', label: 'New Students' },
+  { value: 'Old', label: 'Old Students' },
+]
 
 export default function FeeStructurePage() {
   const { message } = AntApp.useApp()
@@ -16,11 +23,20 @@ export default function FeeStructurePage() {
   const [feeCategories,  setFeeCategories]  = useState([])
   const [feeTypes,       setFeeTypes]       = useState([])
   const [terms,          setTerms]          = useState([])
+  const [feePeriods,     setFeePeriods]     = useState([])
 
   // Filter state
-  const [filters, setFilters] = useState({ academicYearId: null, classId: null, feeCategoryId: null })
+  const [filters, setFilters] = useState({
+    academicYearId: null,
+    classId:        null,
+    feeCategoryId:  null,
+    admissionType:  '',
+  })
 
-  // Grid data: Map of "feeTypeId_termId" → amount
+  // Payment type — detected from loaded data or set by user
+  const [paymentType, setPaymentType] = useState('Term')
+
+  // Grid state: "feeTypeId_T_termId" or "feeTypeId_P_periodId" → amount
   const [amountMap, setAmountMap] = useState({})
   const [loaded,    setLoaded]    = useState(false)
   const [loading,   setLoading]   = useState(false)
@@ -42,8 +58,26 @@ export default function FeeStructurePage() {
     }).catch(() => {})
   }, [])
 
+  // Load fee periods when academic year changes
+  async function loadFeePeriods(yearId) {
+    if (!yearId) { setFeePeriods([]); return }
+    try {
+      const res = await api.get(`/school/master/fee-periods?academicYearId=${yearId}`)
+      setFeePeriods(res.data?.data || [])
+    } catch {
+      setFeePeriods([])
+    }
+  }
+
+  function onYearChange(val) {
+    setFilters((f) => ({ ...f, academicYearId: val }))
+    loadFeePeriods(val)
+    setLoaded(false)
+    setAmountMap({})
+  }
+
   const loadStructure = async () => {
-    const { academicYearId, classId, feeCategoryId } = filters
+    const { academicYearId, classId, feeCategoryId, admissionType } = filters
     if (!academicYearId || !classId || !feeCategoryId) {
       message.warning('Select academic year, class and fee category first.')
       return
@@ -51,13 +85,24 @@ export default function FeeStructurePage() {
     setLoading(true)
     setLoaded(false)
     try {
-      const res = await api.get(
-        `/school/fees/structure?classId=${classId}&feeCategoryId=${feeCategoryId}&academicYearId=${academicYearId}`
-      )
+      const params = new URLSearchParams({
+        classId, feeCategoryId, academicYearId,
+        ...(admissionType ? { admissionType } : {}),
+      })
+      const res  = await api.get(`/school/fees/structure?${params}`)
       const items = res.data?.data || []
-      const map   = {}
+
+      // Detect payment type from loaded data
+      const detectedType = items.find((i) => i.paymentType === 'Monthly')
+        ? 'Monthly' : 'Term'
+      setPaymentType(detectedType)
+
+      // Build amount map
+      const map = {}
       items.forEach((item) => {
-        const key = `${item.feeTypeId}_${item.termId ?? 0}`
+        const key = item.feePeriodId
+          ? `${item.feeTypeId}_P_${item.feePeriodId}`
+          : `${item.feeTypeId}_T_${item.termId ?? 0}`
         map[key] = item.amount
       })
       setAmountMap(map)
@@ -67,23 +112,36 @@ export default function FeeStructurePage() {
     }
   }
 
-  const handleAmountChange = (feeTypeId, termId, value) => {
-    const key = `${feeTypeId}_${termId ?? 0}`
+  function handleAmountChange(feeTypeId, colKey, value) {
+    const key = `${feeTypeId}_${colKey}`
     setAmountMap((prev) => ({ ...prev, [key]: value || 0 }))
   }
 
-  const handleSave = async () => {
-    const { academicYearId, classId, feeCategoryId } = filters
+  function onPaymentTypeChange(val) {
+    setPaymentType(val)
+    // Reset amounts when switching type to avoid stale data confusion
+    setAmountMap({})
+  }
 
-    // Build items list from amountMap (only non-zero entries)
+  const handleSave = async () => {
+    const { academicYearId, classId, feeCategoryId, admissionType } = filters
+
     const items = []
     for (const [key, amount] of Object.entries(amountMap)) {
       if ((amount || 0) <= 0) continue
-      const [feeTypeId, termId] = key.split('_').map(Number)
+      // key format: "feeTypeId_T_termId" or "feeTypeId_P_periodId"
+      const parts     = key.split('_')
+      const feeTypeId = Number(parts[0])
+      const kind      = parts[1]      // 'T' or 'P'
+      const colId     = Number(parts[2])
+
       items.push({
-        FeeTypeId: feeTypeId,
-        TermId:    termId === 0 ? null : termId,
-        Amount:    amount,
+        FeeTypeId:     feeTypeId,
+        TermId:        kind === 'T' && colId !== 0 ? colId : null,
+        FeePeriodId:   kind === 'P' ? colId : null,
+        PaymentType:   paymentType,
+        AdmissionType: admissionType || null,
+        Amount:        amount,
       })
     }
 
@@ -93,6 +151,8 @@ export default function FeeStructurePage() {
         ClassId:        classId,
         FeeCategoryId:  feeCategoryId,
         AcademicYearId: academicYearId,
+        AdmissionType:  admissionType || null,
+        PaymentType:    paymentType,
         Items:          items,
       })
       message.success('Fee structure saved.')
@@ -103,68 +163,109 @@ export default function FeeStructurePage() {
     }
   }
 
-  // Build columns: one per term (+ "No Term" column)
-  const activeTerms = terms
-    .filter((t) => t.status !== 'Inactive')
-    .sort((a, b) => (a.orderNo ?? 999) - (b.orderNo ?? 999))
-
-  const columns = [
-    {
-      title:     'Fee Type',
-      dataIndex: 'feeTypeName',
-      key:       'feeTypeName',
-      width:     180,
-      render:    (v) => <Text strong>{v}</Text>,
-    },
-    // One column per term
-    ...activeTerms.map((term) => ({
-      title: term.termName,
-      key:   `term_${term.termId}`,
-      width: 130,
-      render: (_, row) => (
-        <InputNumber
-          style={{ width: '100%' }}
-          min={0}
-          precision={2}
-          value={amountMap[`${row.feeTypeId}_${term.termId}`] ?? 0}
-          onChange={(v) => handleAmountChange(row.feeTypeId, term.termId, v)}
-          disabled={!loaded}
-        />
-      ),
-    })),
-    // Column for fees with no term
-    {
-      title: '(No Term)',
-      key:   'term_none',
-      width: 130,
-      render: (_, row) => (
-        <InputNumber
-          style={{ width: '100%' }}
-          min={0}
-          precision={2}
-          value={amountMap[`${row.feeTypeId}_0`] ?? 0}
-          onChange={(v) => handleAmountChange(row.feeTypeId, null, v)}
-          disabled={!loaded}
-        />
-      ),
-    },
-  ]
-
+  // Columns based on payment type
   const activeFeeTypes = feeTypes
     .filter((f) => f.status !== 'Inactive')
     .sort((a, b) => (a.sequenceNo ?? 999) - (b.sequenceNo ?? 999))
 
+  const periodColumns = paymentType === 'Monthly'
+    ? feePeriods
+        .filter((p) => p.status !== 'Inactive')
+        .sort((a, b) => {
+          if (a.yearNo !== b.yearNo) return a.yearNo - b.yearNo
+          return a.monthNo - b.monthNo
+        })
+    : null
+
+  const termColumns = paymentType === 'Term'
+    ? terms
+        .filter((t) => t.status !== 'Inactive')
+        .sort((a, b) => (a.orderNo ?? 999) - (b.orderNo ?? 999))
+    : null
+
+  const buildColumns = () => {
+    const base = [{
+      title:     'Fee Type',
+      dataIndex: 'feeTypeName',
+      key:       'feeTypeName',
+      width:     180,
+      fixed:     'left',
+      render:    (v) => <Text strong>{v}</Text>,
+    }]
+
+    if (paymentType === 'Term') {
+      const tCols = (termColumns || []).map((term) => ({
+        title: term.termName,
+        key:   `term_${term.termId}`,
+        width: 130,
+        render: (_, row) => (
+          <InputNumber
+            style={{ width: '100%' }}
+            min={0}
+            precision={2}
+            value={amountMap[`${row.feeTypeId}_T_${term.termId}`] ?? 0}
+            onChange={(v) => handleAmountChange(row.feeTypeId, `T_${term.termId}`, v)}
+            disabled={!loaded}
+          />
+        ),
+      }))
+      // Legacy no-term column
+      tCols.push({
+        title: '(No Term)',
+        key:   'term_none',
+        width: 130,
+        render: (_, row) => (
+          <InputNumber
+            style={{ width: '100%' }}
+            min={0}
+            precision={2}
+            value={amountMap[`${row.feeTypeId}_T_0`] ?? 0}
+            onChange={(v) => handleAmountChange(row.feeTypeId, 'T_0', v)}
+            disabled={!loaded}
+          />
+        ),
+      })
+      return [...base, ...tCols]
+    }
+
+    // Monthly
+    const pCols = (periodColumns || []).map((period) => ({
+      title: period.periodLabel,
+      key:   `period_${period.feePeriodId}`,
+      width: 130,
+      render: (_, row) => (
+        <InputNumber
+          style={{ width: '100%' }}
+          min={0}
+          precision={2}
+          value={amountMap[`${row.feeTypeId}_P_${period.feePeriodId}`] ?? 0}
+          onChange={(v) => handleAmountChange(row.feeTypeId, `P_${period.feePeriodId}`, v)}
+          disabled={!loaded}
+        />
+      ),
+    }))
+
+    if (pCols.length === 0) {
+      pCols.push({
+        title: 'No periods defined',
+        key:   'no_periods',
+        render: () => <Text type="secondary">Add Fee Periods in Master Data first</Text>,
+      })
+    }
+    return [...base, ...pCols]
+  }
+
   return (
     <Card title="Fee Structure Setup">
       {/* Filters */}
-      <Row gutter={12} style={{ marginBottom: 16 }}>
+      <Row gutter={[12, 12]} style={{ marginBottom: 16 }} align="middle">
         <Col flex="200px">
           <Select
             style={{ width: '100%' }}
             placeholder="Academic Year"
             options={academicYears.map((y) => ({ value: y.academicYearId, label: y.academicYear }))}
             value={filters.academicYearId}
-            onChange={(v) => setFilters((f) => ({ ...f, academicYearId: v }))}
+            onChange={onYearChange}
           />
         </Col>
         <Col flex="200px">
@@ -173,7 +274,7 @@ export default function FeeStructurePage() {
             placeholder="Class"
             options={classes.map((c) => ({ value: c.classId, label: c.className }))}
             value={filters.classId}
-            onChange={(v) => setFilters((f) => ({ ...f, classId: v }))}
+            onChange={(v) => { setFilters((f) => ({ ...f, classId: v })); setLoaded(false); setAmountMap({}) }}
           />
         </Col>
         <Col flex="200px">
@@ -182,7 +283,16 @@ export default function FeeStructurePage() {
             placeholder="Fee Category"
             options={feeCategories.map((c) => ({ value: c.feeCategoryId, label: c.categoryName }))}
             value={filters.feeCategoryId}
-            onChange={(v) => setFilters((f) => ({ ...f, feeCategoryId: v }))}
+            onChange={(v) => { setFilters((f) => ({ ...f, feeCategoryId: v })); setLoaded(false); setAmountMap({}) }}
+          />
+        </Col>
+        <Col flex="160px">
+          <Select
+            style={{ width: '100%' }}
+            placeholder="Admission Type"
+            options={ADMISSION_TYPE_OPTIONS}
+            value={filters.admissionType}
+            onChange={(v) => { setFilters((f) => ({ ...f, admissionType: v })); setLoaded(false); setAmountMap({}) }}
           />
         </Col>
         <Col>
@@ -192,9 +302,34 @@ export default function FeeStructurePage() {
         </Col>
       </Row>
 
+      {loaded && (
+        <Row style={{ marginBottom: 12 }} align="middle" gutter={16}>
+          <Col>
+            <Text strong>Payment Type:</Text>
+          </Col>
+          <Col>
+            <Radio.Group
+              value={paymentType}
+              onChange={(e) => onPaymentTypeChange(e.target.value)}
+              optionType="button"
+              buttonStyle="solid"
+              size="small"
+            >
+              <Radio.Button value="Term">Term</Radio.Button>
+              <Radio.Button value="Monthly">Monthly</Radio.Button>
+            </Radio.Group>
+          </Col>
+          {paymentType === 'Monthly' && feePeriods.length === 0 && (
+            <Col>
+              <Tag color="warning">No fee periods defined for this year — add them in Master Data → Fee Periods</Tag>
+            </Col>
+          )}
+        </Row>
+      )}
+
       {!loaded && (
         <Alert
-          message="Select academic year, class and fee category, then click Load to view or edit the fee structure."
+          message="Select academic year, class, fee category and admission type, then click Load."
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
@@ -206,7 +341,7 @@ export default function FeeStructurePage() {
           <Table
             rowKey="feeTypeId"
             dataSource={activeFeeTypes}
-            columns={columns}
+            columns={buildColumns()}
             pagination={false}
             size="small"
             bordered

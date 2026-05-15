@@ -13,7 +13,7 @@ import kotlinx.coroutines.launch
 
 sealed class FeeUiState {
     object Loading : FeeUiState()
-    data class Success(val summary: MobileFeeSummaryDto) : FeeUiState()
+    data class Success(val years: List<MobileFeeSummaryDto>) : FeeUiState()
     data class Error(val message: String) : FeeUiState()
 }
 
@@ -31,43 +31,57 @@ sealed class PaymentState {
 
 class FeeViewModel(private val repo: FeeRepository) : ViewModel() {
 
+    val categories = listOf("School", "Transport", "Hostel")
+
+    private val _selectedCategory = MutableStateFlow("School")
+    val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
+
     private val _uiState      = MutableStateFlow<FeeUiState>(FeeUiState.Loading)
     val uiState: StateFlow<FeeUiState> = _uiState.asStateFlow()
 
     private val _paymentState = MutableStateFlow<PaymentState>(PaymentState.Idle)
     val paymentState: StateFlow<PaymentState> = _paymentState.asStateFlow()
 
-    // Holds the selected items for the pending order (used after Razorpay callback)
-    private var pendingOrderRequest: MobileCreateOrderRequest? = null
-
     init { loadFees() }
+
+    fun selectCategory(category: String) {
+        if (_selectedCategory.value == category) return
+        _selectedCategory.value = category
+        loadFees()
+    }
 
     fun loadFees() {
         _uiState.value = FeeUiState.Loading
         viewModelScope.launch {
-            repo.getFees().fold(
+            repo.getOutstanding(_selectedCategory.value).fold(
                 onSuccess = { _uiState.value = FeeUiState.Success(it) },
                 onFailure = { _uiState.value = FeeUiState.Error(it.message ?: "Unknown error") }
             )
         }
     }
 
-    /** Called when the user taps "Pay" on selected fee items. */
-    fun initiatePayment(items: List<MobileFeeLineItemDto>, academicYearId: Int, paymentModeId: Int) {
+    /** Called when the user taps "Pay" on selected fee items from a single academic year. */
+    fun initiatePayment(
+        items          : List<MobileFeeLineItemDto>,
+        academicYearId : Int,
+        feeTypeCategory: String
+    ) {
         val orderItems = items.map { li ->
             MobileFeeOrderItem(
-                feeTypeId        = li.feeTypeId ?: 0,
+                feeTypeId        = li.feeTypeId,
                 termId           = li.termId,
-                amount           = li.outstanding,
-                concessionAmount = 0.0
+                feePeriodId      = li.feePeriodId,
+                busRouteId       = li.busRouteId,
+                hostelId         = li.hostelId,
+                amount           = li.outstanding.coerceAtLeast(0.0),
+                concessionAmount = 0.0  // outstanding already nets out concessions
             )
         }
         val request = MobileCreateOrderRequest(
-            academicYearId = academicYearId,
-            paymentModeId  = paymentModeId,
-            items          = orderItems
+            academicYearId  = academicYearId,
+            feeTypeCategory = feeTypeCategory,
+            items           = orderItems
         )
-        pendingOrderRequest = request
         _paymentState.value = PaymentState.CreatingOrder
 
         viewModelScope.launch {
@@ -82,23 +96,25 @@ class FeeViewModel(private val repo: FeeRepository) : ViewModel() {
     fun verifyPayment(gatewayOrderId: Int, paymentId: String, orderId: String, signature: String) {
         _paymentState.value = PaymentState.Verifying
         viewModelScope.launch {
-            repo.verifyPayment(MobileVerifyRequest(gatewayOrderId, paymentId, orderId, signature)).fold(
+            repo.verifyPayment(
+                gatewayOrderId,
+                MobileVerifyRequest(gatewayOrderId, paymentId, orderId, signature)
+            ).fold(
                 onSuccess = {
                     _paymentState.value = PaymentState.Success(it)
-                    loadFees() // Refresh fee list
+                    loadFees()
                 },
                 onFailure = { _paymentState.value = PaymentState.Failed(it.message ?: "Verification failed") }
             )
         }
     }
 
-    /** Called by MainActivity when Razorpay returns an error/cancellation. */
+    /** Called by MainActivity when Razorpay returns an error or the user cancels. */
     fun onPaymentFailed(message: String) {
         _paymentState.value = PaymentState.Failed(message)
     }
 
     fun resetPaymentState() {
         _paymentState.value = PaymentState.Idle
-        pendingOrderRequest = null
     }
 }

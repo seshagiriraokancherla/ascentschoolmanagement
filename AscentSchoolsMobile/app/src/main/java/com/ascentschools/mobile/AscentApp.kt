@@ -12,6 +12,6 @@ class AscentApp : Application() {
     override fun onCreate() {
         super.onCreate()
         tokenStore = TokenStore(this)
-        RetrofitClient.init(tokenStore)
+        RetrofitClient.init(tokenStore, applicationContext)
     }
 }

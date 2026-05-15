@@ -19,7 +19,7 @@ namespace AscentSchools.API
                 HttpContext.Current.Response.Headers.Set("Access-Control-Allow-Origin",      origin);
                 HttpContext.Current.Response.Headers.Set("Access-Control-Allow-Credentials", "true");
                 HttpContext.Current.Response.Headers.Set("Access-Control-Allow-Methods",     "GET, POST, PUT, DELETE, OPTIONS");
-                HttpContext.Current.Response.Headers.Set("Access-Control-Allow-Headers",     "Content-Type, Authorization, X-Subdomain");
+                HttpContext.Current.Response.Headers.Set("Access-Control-Allow-Headers",     "Content-Type, Authorization, X-Subdomain, X-School-Code");
                 HttpContext.Current.Response.Headers.Set("Access-Control-Expose-Headers",    "Set-Cookie");
             }
 

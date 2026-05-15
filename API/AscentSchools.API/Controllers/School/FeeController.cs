@@ -29,12 +29,13 @@ namespace AscentSchools.API.Controllers.School
 
         // ── Fee Structure ─────────────────────────────────────────────────
 
-        // GET school/fees/structure?classId=&feeCategoryId=&academicYearId=
+        // GET school/fees/structure?classId=&feeCategoryId=&academicYearId=&admissionType=
         [HttpGet, Route("structure")]
-        public HttpResponseMessage GetFeeStructure(int classId, int feeCategoryId, int academicYearId)
+        public HttpResponseMessage GetFeeStructure(
+            int classId, int feeCategoryId, int academicYearId, string admissionType = null)
         {
             var items = _repo.GetFeeStructure(
-                Tenant.TenantDbName, Tenant.SchoolId, classId, feeCategoryId, academicYearId);
+                Tenant.TenantDbName, Tenant.SchoolId, classId, feeCategoryId, academicYearId, admissionType);
             return Ok(items);
         }
 
@@ -49,7 +50,8 @@ namespace AscentSchools.API.Controllers.School
 
             var updated = _repo.GetFeeStructure(
                 Tenant.TenantDbName, Tenant.SchoolId,
-                request.ClassId.Value, request.FeeCategoryId.Value, request.AcademicYearId.Value);
+                request.ClassId.Value, request.FeeCategoryId.Value, request.AcademicYearId.Value,
+                request.AdmissionType);
             return Ok(updated, "Fee structure saved.");
         }
 
@@ -61,6 +63,18 @@ namespace AscentSchools.API.Controllers.School
         {
             var summary = _repo.GetStudentFeeSummary(
                 Tenant.TenantDbName, Tenant.SchoolId, studentId, academicYearId ?? 0);
+            if (summary == null) return NotFound("Student not found.");
+            return Ok(summary);
+        }
+
+        // ── Cross-year fee summary ────────────────────────────────────────
+
+        // GET school/fees/student-unique/{uniqueId}?feeTypeCategory=Transport
+        [HttpGet, Route("student-unique/{uniqueId:int}")]
+        public HttpResponseMessage GetCrossYearFeeSummary(int uniqueId, string feeTypeCategory = null)
+        {
+            var summary = _repo.GetCrossYearFeeSummary(
+                Tenant.TenantDbName, Tenant.SchoolId, uniqueId, feeTypeCategory);
             if (summary == null) return NotFound("Student not found.");
             return Ok(summary);
         }
@@ -86,16 +100,17 @@ namespace AscentSchools.API.Controllers.School
 
         // ── Receipts ──────────────────────────────────────────────────────
 
-        // GET school/fees/receipts?search=&dateFrom=&dateTo=&status=
+        // GET school/fees/receipts?search=&dateFrom=&dateTo=&status=&createdAfter=
         [HttpGet, Route("receipts")]
         public HttpResponseMessage GetReceipts(
-            string    search   = null,
-            DateTime? dateFrom = null,
-            DateTime? dateTo   = null,
-            string    status   = null)
+            string    search       = null,
+            DateTime? dateFrom     = null,
+            DateTime? dateTo       = null,
+            string    status       = null,
+            DateTime? createdAfter = null)
         {
             var receipts = _repo.GetReceipts(
-                Tenant.TenantDbName, Tenant.SchoolId, search, dateFrom, dateTo, status);
+                Tenant.TenantDbName, Tenant.SchoolId, search, dateFrom, dateTo, status, createdAfter);
             return Ok(receipts);
         }
 
@@ -254,12 +269,14 @@ namespace AscentSchools.API.Controllers.School
 
             var collectRequest = new CollectFeeRequest
             {
-                StudentId      = order.StudentId,
-                AcademicYearId = order.AcademicYearId,
-                PaymentModeId  = order.PaymentModeId,
-                PaymentDate    = originalRequest?.PaymentDate ?? DateTime.UtcNow,
-                Remarks        = $"Online ({order.GatewayName}). Ref: {request.PaymentId}",
-                Items          = originalRequest?.Items ?? new List<CollectFeeItem>(),
+                StudentId        = order.StudentId,
+                StudentUniqueId  = originalRequest?.StudentUniqueId,
+                FeeTypeCategory  = originalRequest?.FeeTypeCategory,
+                AcademicYearId   = order.AcademicYearId,
+                PaymentModeId    = order.PaymentModeId,
+                PaymentDate      = originalRequest?.PaymentDate ?? DateTime.UtcNow,
+                Remarks          = $"Online ({order.GatewayName}). Ref: {request.PaymentId}",
+                Items            = originalRequest?.Items ?? new List<CollectFeeItem>(),
             };
 
             var receiptId = _repo.CollectFee(
@@ -328,12 +345,14 @@ namespace AscentSchools.API.Controllers.School
 
                 var collectRequest = new CollectFeeRequest
                 {
-                    StudentId      = order.StudentId,
-                    AcademicYearId = order.AcademicYearId,
-                    PaymentModeId  = order.PaymentModeId,
-                    PaymentDate    = originalRequest?.PaymentDate ?? DateTime.UtcNow,
-                    Remarks        = $"Online ({order.GatewayName}) via webhook. Ref: {paymentId}",
-                    Items          = originalRequest?.Items ?? new List<CollectFeeItem>(),
+                    StudentId        = order.StudentId,
+                    StudentUniqueId  = originalRequest?.StudentUniqueId,
+                    FeeTypeCategory  = originalRequest?.FeeTypeCategory,
+                    AcademicYearId   = order.AcademicYearId,
+                    PaymentModeId    = order.PaymentModeId,
+                    PaymentDate      = originalRequest?.PaymentDate ?? DateTime.UtcNow,
+                    Remarks          = $"Online ({order.GatewayName}) via webhook. Ref: {paymentId}",
+                    Items            = originalRequest?.Items ?? new List<CollectFeeItem>(),
                 };
 
                 var receiptId = _repo.CollectFee(dbName, schoolId, order.CreatedBy, collectRequest);
@@ -361,6 +380,23 @@ namespace AscentSchools.API.Controllers.School
                 request.Rows[i].RowNumber = i + 2;
 
             var result = _repo.BulkSaveFeeStructure(Tenant.TenantDbName, Tenant.SchoolId, request);
+            return Ok(result);
+        }
+
+        // POST school/fees/receipts/bulk  — legacy receipt upload
+        [HttpPost, Route("receipts/bulk")]
+        public HttpResponseMessage BulkImportReceipts([FromBody] BulkReceiptImportRequest request)
+        {
+            if (request == null || request.Rows == null || request.Rows.Count == 0)
+                return BadRequest("No rows provided.");
+            if (request.Rows.Count > 1000)
+                return BadRequest("Maximum 1000 rows per upload.");
+
+            for (int i = 0; i < request.Rows.Count; i++)
+                request.Rows[i].RowNumber = i + 2;
+
+            var result = _repo.BulkImportReceipts(
+                Tenant.TenantDbName, Tenant.SchoolId, Tenant.FullName, request);
             return Ok(result);
         }
     }

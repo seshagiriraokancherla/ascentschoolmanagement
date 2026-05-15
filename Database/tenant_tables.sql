@@ -399,8 +399,30 @@ GO
 
 
 -- ============================================================
--- 17. fee_structures  (was SAS_FeeMaster)
---     Fee amount per class + category + fee type + term
+-- 17. fee_periods
+--     Monthly fee periods per school per academic year
+--     Used when fee_structures.payment_type = 'Monthly'
+-- ============================================================
+CREATE TABLE fee_periods (
+    fee_period_id    INT          NOT NULL IDENTITY(1,1),
+    school_id        INT          NOT NULL,
+    academic_year_id INT          NULL,
+    month_no         TINYINT      NOT NULL,   -- 1=Jan .. 12=Dec
+    year_no          SMALLINT     NOT NULL,   -- e.g. 2024
+    period_label     VARCHAR(20)  NOT NULL,   -- e.g. "April 2024"
+    sequence_no      INT          NULL,
+    status           VARCHAR(10)  NOT NULL DEFAULT 'Active',
+    created_by       VARCHAR(25)  NULL,
+    created_at       DATETIME     NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT PK_fee_periods               PRIMARY KEY (fee_period_id),
+    CONSTRAINT FK_fee_periods_academic_year FOREIGN KEY (academic_year_id) REFERENCES academic_years(academic_year_id)
+);
+GO
+
+
+-- ============================================================
+-- 18. fee_structures  (was SAS_FeeMaster)
+--     Fee amount per class + category + fee type + term/period
 -- ============================================================
 CREATE TABLE fee_structures (
     fee_structure_id    INT             NOT NULL IDENTITY(1,1),
@@ -408,7 +430,9 @@ CREATE TABLE fee_structures (
     class_id            INT             NULL,
     fee_type_id         INT             NULL,
     fee_type_name       VARCHAR(25)     NULL,   -- Nullable; UI sends null
-    term_id             INT             NULL,
+    term_id             INT             NULL,   -- set when payment_type = 'Term'
+    fee_period_id       INT             NULL,   -- set when payment_type = 'Monthly'
+    payment_type        VARCHAR(10)     NULL,   -- Term / Monthly
     amount              DECIMAL(12,2)   NULL,
     description         VARCHAR(50)     NULL,
     status              VARCHAR(10)      NULL,
@@ -425,6 +449,7 @@ CREATE TABLE fee_structures (
     CONSTRAINT FK_fee_structures_class          FOREIGN KEY (class_id)         REFERENCES classes(class_id),
     CONSTRAINT FK_fee_structures_fee_type       FOREIGN KEY (fee_type_id)      REFERENCES fee_types(fee_type_id),
     CONSTRAINT FK_fee_structures_term           FOREIGN KEY (term_id)          REFERENCES terms(term_id),
+    CONSTRAINT FK_fee_structures_fee_period     FOREIGN KEY (fee_period_id)    REFERENCES fee_periods(fee_period_id),
     CONSTRAINT FK_fee_structures_payment_mode   FOREIGN KEY (payment_mode_id)  REFERENCES payment_modes(payment_mode_id),
     CONSTRAINT FK_fee_structures_academic_year  FOREIGN KEY (academic_year_id) REFERENCES academic_years(academic_year_id)
 );
@@ -506,12 +531,58 @@ GO
 
 
 -- ============================================================
--- 21. students  (was SAS_StudentMaster)
+-- 21. hostels
+--     Hostel master per school branch.
+--     Students are linked via hostel_id FK on the students table.
+-- ============================================================
+CREATE TABLE hostels (
+    hostel_id    INT           NOT NULL IDENTITY(1,1),
+    hostel_name  VARCHAR(100)  NOT NULL,
+    description  VARCHAR(200)  NULL,
+    capacity     INT           NULL,
+    contact_no   VARCHAR(20)   NULL,
+    address      VARCHAR(200)  NULL,
+    no_of_rooms  INT           NULL,
+    school_id    INT           NOT NULL,
+    created_by   VARCHAR(25)   NULL,
+    created_at   DATETIME      NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT PK_hostels      PRIMARY KEY (hostel_id),
+    CONSTRAINT UQ_hostels_name UNIQUE (hostel_name, school_id)
+);
+GO
+
+
+-- ============================================================
+-- 22. hostel_fee_structures
+--     Hostel fee per hostel + academic year + term/period.
+--     payment_type: Term | Monthly (same as fee_structures)
+-- ============================================================
+CREATE TABLE hostel_fee_structures (
+    hostel_fee_structure_id INT           NOT NULL IDENTITY(1,1),
+    hostel_id               INT           NOT NULL,
+    academic_year_id        INT           NOT NULL,
+    term_id                 INT           NULL,
+    fee_period_id           INT           NULL,
+    payment_type            VARCHAR(10)   NOT NULL DEFAULT 'Term',
+    amount                  DECIMAL(12,2) NOT NULL DEFAULT 0,
+    school_id               INT           NOT NULL,
+    CONSTRAINT PK_hostel_fee_structures PRIMARY KEY (hostel_fee_structure_id),
+    CONSTRAINT FK_hfs_hostel            FOREIGN KEY (hostel_id)        REFERENCES hostels(hostel_id),
+    CONSTRAINT FK_hfs_year              FOREIGN KEY (academic_year_id) REFERENCES academic_years(academic_year_id),
+    CONSTRAINT FK_hfs_term              FOREIGN KEY (term_id)          REFERENCES terms(term_id),
+    CONSTRAINT FK_hfs_period            FOREIGN KEY (fee_period_id)    REFERENCES fee_periods(fee_period_id)
+);
+GO
+
+
+-- ============================================================
+-- 23. students  (was SAS_StudentMaster)
 --     PK: BIGINT IDENTITY (was FLOAT in VB6 — critical fix)
 -- ============================================================
 CREATE TABLE students (
     student_id                  BIGINT          NOT NULL IDENTITY(1,1),
-    admission_no                VARCHAR(20)     NULL,   -- School-issued human-readable ID
+    student_unique_id           INT             NULL,   -- Stable cross-year identifier; auto-calculated MAX+1 on insert; same value retained on promotion
+    admission_no                VARCHAR(20)     NULL,   -- School-issued human-readable ID (can change at 6th class)
     school_unique_id            VARCHAR(20)     NULL,   -- School-assigned student unique ID
     student_name                VARCHAR(105)    NOT NULL,
     short_name                  VARCHAR(55)     NULL,
@@ -567,7 +638,8 @@ CREATE TABLE students (
     bus_id                      INT             NULL,
     bus_trip                    VARCHAR(10)     NULL,   -- 1st Trip / 2nd Trip / 3rd Trip
     join_term                   VARCHAR(20)     NULL,
-    hostel_name                 VARCHAR(10)     NULL,   -- NULL; hostel table TBD
+    hostel_name                 VARCHAR(10)     NULL,   -- Legacy free-text; use hostel_id FK for new data
+    hostel_id                   INT             NULL,   -- FK → hostels
     biometric_id                VARCHAR(5)      NULL,   -- Biometric device enrollment ID
     mother_tongue               VARCHAR(25)     NULL,
     first_language              VARCHAR(25)     NULL,
@@ -592,7 +664,8 @@ CREATE TABLE students (
     CONSTRAINT FK_students_class            FOREIGN KEY (class_id)         REFERENCES classes(class_id),
     CONSTRAINT FK_students_section          FOREIGN KEY (section_id)       REFERENCES sections(section_id),
     CONSTRAINT FK_students_bus_route        FOREIGN KEY (bus_route_id)     REFERENCES bus_routes(route_id),
-    CONSTRAINT FK_students_bus              FOREIGN KEY (bus_id)           REFERENCES buses(bus_id)
+    CONSTRAINT FK_students_bus              FOREIGN KEY (bus_id)           REFERENCES buses(bus_id),
+    CONSTRAINT FK_students_hostel           FOREIGN KEY (hostel_id)        REFERENCES hostels(hostel_id)
 );
 GO
 
@@ -606,6 +679,7 @@ CREATE TABLE fee_receipts (
     receipt_id          INT             NOT NULL IDENTITY(1,1),
     receipt_no          VARCHAR(20)     NOT NULL,
     student_id          BIGINT          NOT NULL,
+    student_unique_id   INT             NULL,   -- Stable cross-year identifier copied from students.student_unique_id
     academic_year_id    INT             NULL,
     payment_date        DATE            NOT NULL DEFAULT CAST(GETDATE() AS DATE),
     total_amount        DECIMAL(12,2)   NOT NULL DEFAULT 0,
@@ -640,14 +714,20 @@ CREATE TABLE fee_receipt_items (
     receipt_id          INT             NOT NULL,
     fee_type_id         INT             NULL,
     term_id             INT             NULL,
+    fee_period_id       INT             NULL,   -- set when payment_type = 'Monthly'
+    bus_route_id        INT             NULL,   -- set for transport fee receipts
+    hostel_id           INT             NULL,   -- set for hostel fee receipts
     amount              DECIMAL(12,2)   NOT NULL DEFAULT 0,   -- Face amount collected
     concession_amount   DECIMAL(12,2)   NOT NULL DEFAULT 0,   -- Concession applied
     net_amount          DECIMAL(12,2)   NOT NULL DEFAULT 0,   -- amount - concession
     school_id           INT             NOT NULL,
     CONSTRAINT PK_fee_receipt_items             PRIMARY KEY (item_id),
-    CONSTRAINT FK_fee_receipt_items_receipt     FOREIGN KEY (receipt_id)  REFERENCES fee_receipts(receipt_id),
-    CONSTRAINT FK_fee_receipt_items_fee_type    FOREIGN KEY (fee_type_id) REFERENCES fee_types(fee_type_id),
-    CONSTRAINT FK_fee_receipt_items_term        FOREIGN KEY (term_id)     REFERENCES terms(term_id)
+    CONSTRAINT FK_fee_receipt_items_receipt     FOREIGN KEY (receipt_id)    REFERENCES fee_receipts(receipt_id),
+    CONSTRAINT FK_fee_receipt_items_fee_type    FOREIGN KEY (fee_type_id)   REFERENCES fee_types(fee_type_id),
+    CONSTRAINT FK_fee_receipt_items_term        FOREIGN KEY (term_id)       REFERENCES terms(term_id),
+    CONSTRAINT FK_fee_receipt_items_fee_period  FOREIGN KEY (fee_period_id) REFERENCES fee_periods(fee_period_id),
+    CONSTRAINT FK_fee_receipt_items_bus_route   FOREIGN KEY (bus_route_id)  REFERENCES bus_routes(route_id),
+    CONSTRAINT FK_fee_receipt_items_hostel      FOREIGN KEY (hostel_id)     REFERENCES hostels(hostel_id)
 );
 GO
 
@@ -813,6 +893,7 @@ CREATE TABLE homework (
     description     NVARCHAR(MAX)   NULL,
     subject_id      INT             NULL,
     class_id        INT             NULL,
+    section_id      INT             NULL,       -- NULL = class-wide; set for section-specific homework
     assigned_date   DATE            NOT NULL DEFAULT CAST(GETDATE() AS DATE),
     due_date        DATE            NOT NULL,
     school_id       INT             NOT NULL,
@@ -824,7 +905,8 @@ CREATE TABLE homework (
     attachment_url  VARCHAR(4000)   NULL,       -- optional PDF/doc link (Google Drive, Cloudinary)
     CONSTRAINT PK_homework          PRIMARY KEY (homework_id),
     CONSTRAINT FK_homework_subject  FOREIGN KEY (subject_id) REFERENCES subjects(subject_id),
-    CONSTRAINT FK_homework_class    FOREIGN KEY (class_id)   REFERENCES classes(class_id)
+    CONSTRAINT FK_homework_class    FOREIGN KEY (class_id)   REFERENCES classes(class_id),
+    CONSTRAINT FK_homework_section  FOREIGN KEY (section_id) REFERENCES sections(section_id)
 );
 CREATE INDEX IX_homework_class_due ON homework (class_id, due_date, school_id);
 GO
@@ -1093,7 +1175,70 @@ CREATE TABLE sms_logs (
 );
 CREATE INDEX IX_sms_logs_school_type_date ON sms_logs (school_id, sms_type, sent_at DESC);
 GO
-ALTER TABLE homework                                                                                  
-        ADD section_id INT NULL,                                                                              
-            CONSTRAINT FK_homework_section FOREIGN KEY (section_id) REFERENCES sections(section_id)
-            
+-- ============================================================
+-- 44. fee_concessions
+--     One active concession per student per fee type per school (school fees),
+--     or per student per bus route per term (transport concessions).
+--     Reduces outstanding in fee summary (structure - paid - concession).
+--     receipt_no format: CFR{yr8}{D5}
+--       yr8  = academic_year digits concatenated ("2026-2027" → "20262027")
+--       D5   = 5-digit counter per school per academic year
+-- ============================================================
+CREATE TABLE fee_concessions (
+    concession_id     INT           NOT NULL IDENTITY(1,1),
+    school_id         INT           NOT NULL,
+    academic_year_id  INT           NOT NULL,
+    student_id        BIGINT        NOT NULL,
+    student_unique_id INT           NULL,   -- copied from students.student_unique_id for cross-year reference
+    fee_type_id       INT           NULL,   -- NULL for transport/hostel concessions
+    bus_route_id      INT           NULL,   -- set for transport concessions
+    hostel_id         INT           NULL,   -- set for hostel concessions
+    term_id           INT           NULL,        -- FK → terms; set for Term-based fee structures
+    fee_period_id     INT           NULL,        -- FK → fee_periods; set for Monthly fee structures
+    concession_type   VARCHAR(30)   NOT NULL,   -- Poor / Not Applicable / Staff Child
+    amount            DECIMAL(12,2) NOT NULL,
+    remarks           VARCHAR(500)  NULL,
+    receipt_no        VARCHAR(25)   NOT NULL,
+    status            VARCHAR(10)   NOT NULL DEFAULT 'Active',
+    created_by        VARCHAR(25)   NULL,
+    created_at        DATETIME      NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT PK_fee_concessions           PRIMARY KEY (concession_id),
+    CONSTRAINT FK_fee_concessions_students  FOREIGN KEY (student_id)       REFERENCES students(student_id),
+    CONSTRAINT FK_fee_concessions_types     FOREIGN KEY (fee_type_id)      REFERENCES fee_types(fee_type_id),
+    CONSTRAINT FK_fee_concessions_ay        FOREIGN KEY (academic_year_id) REFERENCES academic_years(academic_year_id),
+    CONSTRAINT FK_fee_concessions_term      FOREIGN KEY (term_id)          REFERENCES terms(term_id),
+    CONSTRAINT FK_fee_concessions_period    FOREIGN KEY (fee_period_id)    REFERENCES fee_periods(fee_period_id),
+    CONSTRAINT FK_fee_concessions_bus_route FOREIGN KEY (bus_route_id)     REFERENCES bus_routes(route_id),
+    CONSTRAINT FK_fee_concessions_hostel    FOREIGN KEY (hostel_id)        REFERENCES hostels(hostel_id)
+);
+GO
+
+-- One active concession per student+fee_type+term (Term-based school fees)
+CREATE UNIQUE INDEX UQ_fee_concessions_term
+    ON fee_concessions (student_id, fee_type_id, school_id, term_id)
+    WHERE status = 'Active' AND term_id IS NOT NULL AND fee_type_id IS NOT NULL;
+GO
+
+-- One active concession per student+fee_type+period (Monthly school fees)
+CREATE UNIQUE INDEX UQ_fee_concessions_period
+    ON fee_concessions (student_id, fee_type_id, school_id, fee_period_id)
+    WHERE status = 'Active' AND fee_period_id IS NOT NULL AND fee_type_id IS NOT NULL;
+GO
+
+-- One active concession per student+bus_route+term (transport fees)
+CREATE UNIQUE INDEX UQ_fee_concessions_transport
+    ON fee_concessions (student_id, bus_route_id, school_id, term_id)
+    WHERE status = 'Active' AND bus_route_id IS NOT NULL AND term_id IS NOT NULL;
+GO
+
+-- One active hostel concession per student+hostel+term (Term-based)
+CREATE UNIQUE INDEX UQ_fee_concessions_hostel
+    ON fee_concessions (student_id, hostel_id, school_id, term_id)
+    WHERE status = 'Active' AND hostel_id IS NOT NULL AND term_id IS NOT NULL;
+GO
+
+-- One active hostel concession per student+hostel+period (Monthly)
+CREATE UNIQUE INDEX UQ_fee_concessions_hostel_period
+    ON fee_concessions (student_id, hostel_id, school_id, fee_period_id)
+    WHERE status = 'Active' AND hostel_id IS NOT NULL AND fee_period_id IS NOT NULL;
+GO

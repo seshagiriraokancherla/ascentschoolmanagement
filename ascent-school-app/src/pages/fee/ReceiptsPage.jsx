@@ -3,7 +3,8 @@ import {
   Card, Table, Button, Input, Select, DatePicker, Tag, Drawer,
   Descriptions, Row, Col, Divider, Typography, Space, Modal, Form, App as AntApp,
 } from 'antd'
-import { SearchOutlined, EyeOutlined, StopOutlined } from '@ant-design/icons'
+import { SearchOutlined, EyeOutlined, StopOutlined, DownloadOutlined } from '@ant-design/icons'
+import Papa from 'papaparse'
 import dayjs from 'dayjs'
 import api from '../../api/axiosInstance'
 
@@ -21,9 +22,10 @@ export default function ReceiptsPage() {
 
   const [receipts,  setReceipts]  = useState([])
   const [loading,   setLoading]   = useState(false)
-  const [search,    setSearch]    = useState('')
-  const [dateRange, setDateRange] = useState(null)
-  const [status,    setStatus]    = useState('')
+  const [search,       setSearch]       = useState('')
+  const [dateRange,    setDateRange]    = useState(null)
+  const [status,       setStatus]       = useState('')
+  const [createdAfter, setCreatedAfter] = useState(null)
 
   // Receipt detail drawer
   const [drawerOpen,  setDrawerOpen]  = useState(false)
@@ -40,10 +42,11 @@ export default function ReceiptsPage() {
     setLoading(true)
     try {
       const q = new URLSearchParams()
-      if (search)           q.set('search',   search)
-      if (dateRange?.[0])   q.set('dateFrom', dateRange[0].format('YYYY-MM-DD'))
-      if (dateRange?.[1])   q.set('dateTo',   dateRange[1].format('YYYY-MM-DD'))
-      if (status)           q.set('status',   status)
+      if (search)           q.set('search',       search)
+      if (dateRange?.[0])   q.set('dateFrom',     dateRange[0].format('YYYY-MM-DD'))
+      if (dateRange?.[1])   q.set('dateTo',       dateRange[1].format('YYYY-MM-DD'))
+      if (status)           q.set('status',       status)
+      if (createdAfter)     q.set('createdAfter', createdAfter.format('YYYY-MM-DDTHH:mm:ss'))
       const res = await api.get(`/school/fees/receipts?${q}`)
       setReceipts(res.data?.data || [])
     } finally {
@@ -88,6 +91,24 @@ export default function ReceiptsPage() {
     } finally {
       setCancelling(false)
     }
+  }
+
+  const exportCsv = () => {
+    if (receipts.length === 0) { message.warning('No receipts to export.'); return }
+    const rows = receipts.map((r) => ({
+      ReceiptNo:       r.receiptNo,
+      StudentName:     r.studentName,
+      AdmissionNo:     r.admissionNo,
+      Class:           r.className,
+      PaymentDate:     r.paymentDate ? dayjs(r.paymentDate).format('DD-MM-YYYY') : '',
+      Amount:          Number(r.totalAmount).toFixed(2),
+      PaymentMode:     r.paymentModeName,
+      Status:          r.status,
+    }))
+    const csv = Papa.unparse(rows)
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+    const a   = Object.assign(document.createElement('a'), { href: url, download: 'receipts.csv' })
+    a.click(); URL.revokeObjectURL(url)
   }
 
   const columns = [
@@ -172,7 +193,20 @@ export default function ReceiptsPage() {
             />
           </Col>
           <Col>
+            <DatePicker
+              placeholder="Created after (sync filter)"
+              showTime={{ format: 'HH:mm' }}
+              format="DD-MM-YYYY HH:mm"
+              value={createdAfter}
+              onChange={setCreatedAfter}
+              allowClear
+            />
+          </Col>
+          <Col>
             <Button icon={<SearchOutlined />} onClick={load}>Search</Button>
+          </Col>
+          <Col>
+            <Button icon={<DownloadOutlined />} onClick={exportCsv}>Export CSV</Button>
           </Col>
         </Row>
 

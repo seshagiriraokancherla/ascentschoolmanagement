@@ -50,7 +50,7 @@ fun HomeScreen(
     repo              : StudentRepository,
     feeVm             : FeeViewModel,
     tokenStore        : TokenStore,
-    onInitiatePayment : (items: List<MobileFeeLineItemDto>, academicYearId: Int, paymentModeId: Int) -> Unit,
+    onInitiatePayment : (items: List<MobileFeeLineItemDto>, academicYearId: Int, feeTypeCategory: String) -> Unit,
     onLogout          : () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }

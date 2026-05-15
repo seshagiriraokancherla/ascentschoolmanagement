@@ -5,7 +5,7 @@ import {
   SafetyOutlined, SettingOutlined, DatabaseOutlined, SolutionOutlined,
   DollarOutlined, FormOutlined, BookOutlined, NotificationOutlined,
   CalendarOutlined, CarOutlined, VideoCameraOutlined, BarChartOutlined,
-  IdcardOutlined, MessageOutlined,
+  IdcardOutlined, MessageOutlined, HomeOutlined,
 } from '@ant-design/icons'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import api from '../api/axiosInstance'
@@ -31,10 +31,16 @@ const NAV_ITEMS = [
     icon:  <DollarOutlined />,
     label: 'Fees',
     children: [
-      { key: '/fees/structure',        label: 'Fee Structure' },
-      { key: '/fees/structure/import', label: 'Bulk Import Structure' },
-      { key: '/fees/collect',          label: 'Fee Collection' },
-      { key: '/fees/receipts',         label: 'Receipts' },
+      { key: '/fees/structure',           label: 'Fee Structure' },
+      { key: '/fees/structure/import',    label: 'Bulk Import Structure' },
+      { key: '/fees/collect/admission',   label: 'Admission Fee' },
+      { key: '/fees/collect/school',      label: 'School Fee' },
+      { key: '/fees/collect/transport',   label: 'Transport Fee' },
+      { key: '/fees/collect/hostel',      label: 'Hostel Fee' },
+      { key: '/fees/collect/other',       label: 'Other Fee' },
+      { key: '/fees/receipts',            label: 'Receipts' },
+      { key: '/fees/receipts/import',     label: 'Legacy Receipt Import' },
+      { key: '/fees/concessions',         label: 'Fee Concession' },
     ],
   },
   {
@@ -63,6 +69,11 @@ const NAV_ITEMS = [
     key:   '/transport',
     icon:  <CarOutlined />,
     label: 'Transport',
+  },
+  {
+    key:   '/hostel',
+    icon:  <HomeOutlined />,
+    label: 'Hostel',
   },
   {
     key:   '/homework',

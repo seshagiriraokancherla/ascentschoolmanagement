@@ -143,11 +143,15 @@ namespace AscentSchools.Data.Repositories.School
 
         // ── Student Transport ─────────────────────────────────────────────────
 
-        public IEnumerable<StudentTransportDto> GetStudentTransport(string tenantDbName, int schoolId, int? routeId)
+        public IEnumerable<StudentTransportDto> GetStudentTransport(
+            string tenantDbName, int schoolId,
+            int? routeId, int? academicYearId, int? classId, int? sectionId)
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 return conn.Query<StudentTransportDto>(
-                    @"SELECT s.student_id StudentId, s.student_name StudentName, s.admission_no AdmissionNo,
+                    @"SELECT s.student_id StudentId, s.student_unique_id StudentUniqueId,
+                             s.academic_year_id AcademicYearId,
+                             s.student_name StudentName, s.admission_no AdmissionNo,
                              c.class_name ClassName, s.transport_type TransportType,
                              s.bus_route_id BusRouteId, r.route_name RouteName,
                              s.bus_id BusId, b.bus_name BusName, s.bus_trip BusTrip
@@ -156,13 +160,16 @@ namespace AscentSchools.Data.Repositories.School
                       LEFT JOIN bus_routes r ON r.route_id   = s.bus_route_id
                       LEFT JOIN buses      b ON b.bus_id     = s.bus_id
                       WHERE s.school_id = @schoolId
-                        AND s.status    = 'Active'
-                        AND (@routeId IS NULL OR s.bus_route_id = @routeId)
+                        AND s.status IN ('Active', 'Y')
+                        AND (@routeId      IS NULL OR s.bus_route_id    = @routeId)
+                        AND (@academicYearId IS NULL OR s.academic_year_id = @academicYearId)
+                        AND (@classId      IS NULL OR s.class_id        = @classId)
+                        AND (@sectionId    IS NULL OR s.section_id      = @sectionId)
                       ORDER BY c.class_name, s.student_name",
-                    new { schoolId, routeId });
+                    new { schoolId, routeId, academicYearId, classId, sectionId });
         }
 
-        public void UpdateStudentTransport(string tenantDbName, int schoolId, long studentId, UpdateStudentTransportRequest req)
+        public void UpdateStudentTransport(string tenantDbName, int schoolId, int studentUniqueId, UpdateStudentTransportRequest req)
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 conn.Execute(
@@ -171,8 +178,11 @@ namespace AscentSchools.Data.Repositories.School
                           bus_route_id   = @busRouteId,
                           bus_id         = @busId,
                           bus_trip       = @busTrip
-                      WHERE student_id = @studentId AND school_id = @schoolId",
-                    new { req.TransportType, req.BusRouteId, req.BusId, req.BusTrip, studentId, schoolId });
+                      WHERE student_unique_id = @studentUniqueId
+                        AND academic_year_id  = @academicYearId
+                        AND school_id         = @schoolId",
+                    new { req.TransportType, req.BusRouteId, req.BusId, req.BusTrip,
+                          studentUniqueId, academicYearId = req.AcademicYearId, schoolId });
         }
 
         // ── Internal row types ────────────────────────────────────────────────
