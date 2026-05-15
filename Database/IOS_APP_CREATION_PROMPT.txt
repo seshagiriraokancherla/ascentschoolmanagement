@@ -1,0 +1,75 @@
+ Short answer: Clone the repo on the Mac and run Claude Code there. Don't try to do iOS development from    
+  Windows.                                                                                
+                                                                                                             
+  Here's why, and what to do:                                                                                                                                                                                             
+  ---                                                                                                          Why Mac is required (non-negotiable)                      
+
+  - Xcode runs only on macOS — no exceptions, no workarounds
+  - iOS Simulator is macOS-only
+  - Code signing and provisioning require Xcode
+  - Even React Native / Flutter iOS builds require a Mac with Xcode
+
+  If you generate iOS code on Windows and push it, you'd be flying blind — any build error, missing import,
+  or API mismatch means a round-trip: push from Windows, pull on Mac, build, find error, push fix from
+  Windows... very slow.
+
+  ---
+  Recommended approach: Mac + Claude Code
+
+  1. Install Git + clone the repo on the Mac
+  2. Install Claude Code on the Mac  (npm install -g @anthropic-ai/claude-code)
+  3. Open a terminal in the project directory
+  4. Run: claude
+  5. Ask it to build the iOS app
+
+  Claude Code on Mac can:
+  - Run xcodebuild and see compile errors
+  - Read the Android code to match feature parity
+  - Test in the iOS Simulator
+  - Iterate fast with real feedback
+
+  ---
+  What the iOS app will look like
+
+  The backend API is identical — only the UI layer changes:
+
+  ┌──────────────────────────────┬──────────────────────────────────┐
+  │      Android (current)       │            iOS (new)             │
+  ├──────────────────────────────┼──────────────────────────────────┤
+  │ Kotlin                       │ Swift                            │
+  ├──────────────────────────────┼──────────────────────────────────┤
+  │ Jetpack Compose              │ SwiftUI                          │
+  ├──────────────────────────────┼──────────────────────────────────┤
+  │ Retrofit + OkHttp            │ URLSession (built-in)            │
+  ├──────────────────────────────┼──────────────────────────────────┤
+  │ EncryptedSharedPreferences   │ Keychain                         │
+  ├──────────────────────────────┼──────────────────────────────────┤
+  │ MVVM + StateFlow             │ MVVM + @StateObject / @Published │
+  ├──────────────────────────────┼──────────────────────────────────┤
+  │ Razorpay Android SDK         │ Razorpay iOS SDK                 │
+  ├──────────────────────────────┼──────────────────────────────────┤
+  │ Product flavors (per school) │ Xcode targets (per school)       │
+  └──────────────────────────────┴──────────────────────────────────┘
+
+  All API endpoints, auth flow, JWT, OTP login, fee collection — identical to Android, same server.
+
+  ---
+  What to tell Claude Code on Mac
+
+  Once you're on Mac with the repo, say:
+
+  ▎ "Build an iOS app in Swift + SwiftUI with the same features as the Android app in AscentSchoolsMobile/.
+  ▎ Read the Android code for feature parity. The backend API is at https://edu-care.in/api/. Use the same
+  ▎ school flavor approach — one Xcode target per school with a baked-in SCHOOL_CODE. Start with auth (SMS
+  ▎ OTP + teacher login) and the home screen tabs."
+
+  Claude Code will read the Android source, the API structure in CLAUDE.md, and produce equivalent Swift code — and can
+  actually compile and test it since it's running on Mac with Xcode.
+
+  ---
+  If you want to start right now on Windows
+
+  I can generate the complete Swift/SwiftUI source files here. You'd push them to Git, pull on Mac, open in Xcode, and fix   any issues there. It's workable but slower — every compile error requires a feedback loop. I'd recommend this only if
+  you want to review the structure before sitting at the Mac.
+
+  Which way do you want to go?
