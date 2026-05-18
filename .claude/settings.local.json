@@ -19,7 +19,12 @@
       "Bash(grep -n '\"\\\\$' \"D:\\\\AscentSchoolsApplication\\\\API\\\\AscentSchools.API\\\\Controllers\\\\School\\\\StaffController.cs\")",
       "Bash(grep *)",
       "Bash(Get-ChildItem -Path \"D:\\\\AscentSchoolsApplication\" -Directory)",
-      "Bash(Select-Object Name)"
+      "Bash(Select-Object Name)",
+      "Bash(Get-Content \"D:\\\\AscentSchoolsApplication\\\\Database\\\\tenant_tables.sql\")",
+      "Bash(Select-String -Pattern \"school_settings\" -Context 10,40)",
+      "PowerShell(New-Item *)",
+      "Bash(Remove-Item \"D:\\\\AscentSchoolsApplication\\\\ascent-parent-app\\\\src\\\\.env.demo\" -Force)",
+      "Bash(Remove-Item \"D:\\\\AscentSchoolsApplication\\\\ascent-parent-app\\\\src\\\\.env.stannsbng\" -Force)"
     ]
   }
 }

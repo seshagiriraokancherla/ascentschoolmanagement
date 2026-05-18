@@ -543,11 +543,11 @@ export default function FeeCollectionBase({ title, feeTypeCategory, joinTypeFilt
                     {!isOnlineMode && (
                       <>
                         <Col xs={24} md={6}>
-                          <div style={{ marginBottom: 8 }}><label>Cheque No</label></div>
+                          <div style={{ marginBottom: 8 }}><label>Reference No</label></div>
                           <Input value={chequeNo} onChange={(e) => setChequeNo(e.target.value)} />
                         </Col>
                         <Col xs={24} md={6}>
-                          <div style={{ marginBottom: 8 }}><label>Cheque Date</label></div>
+                          <div style={{ marginBottom: 8 }}><label>Reference Date</label></div>
                           <DatePicker
                             style={{ width: '100%' }}
                             value={chequeDate}

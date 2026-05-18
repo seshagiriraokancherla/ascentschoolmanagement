@@ -65,6 +65,7 @@
     <Compile Include="DTOs\School\Auth\SchoolUserRecord.cs" />
     <Compile Include="DTOs\School\Events\SchoolEventDto.cs" />
     <Compile Include="DTOs\School\Master\FeePeriodDtos.cs" />
+    <Compile Include="DTOs\School\Settings\SchoolSettingsDtos.cs" />
     <Compile Include="DTOs\School\Master\SectionDtos.cs" />
     <Compile Include="DTOs\School\Reports\ReportDtos.cs" />
     <Compile Include="DTOs\School\Sms\SmsDtos.cs" />

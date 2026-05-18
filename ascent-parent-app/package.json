@@ -7,7 +7,8 @@
     "build": "vite build",
     "build:demo":     "vite build --mode demo",
     "build:srividya": "vite build --mode srividya",
-    "preview": "vite preview"
+    "build:stannsbng": "vite build --mode stannsbng",
+    "preview": "vite preview"      
   },
   "dependencies": {
     "antd": "^5.16.0",

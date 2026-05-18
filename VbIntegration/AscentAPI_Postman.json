@@ -1,0 +1,452 @@
+{
+  "info": {
+    "name": "Ascent Schools — VB Integration API",
+    "description": "One example per section from AscentAPI.bas. Auth: X-Api-Key header. Set the 'apiKey' and 'baseUrl' collection variables before running.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://edu-care.in/api", "type": "string" },
+    { "key": "apiKey",  "value": "PASTE-YOUR-KEY-HERE",    "type": "string" }
+  ],
+  "item": [
+
+    {
+      "name": "S1 — Connection Test",
+      "item": [
+        {
+          "name": "GET academic-years (connection test)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" },
+              { "key": "Accept",    "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/school/master/academic-years",
+              "host": ["{{baseUrl}}"],
+              "path": ["school", "master", "academic-years"]
+            },
+            "description": "Maps to AscentAPI.TestConnection() / GetAcademicYears(). If success=true the key is valid."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "S4 — Master Data",
+      "item": [
+        {
+          "name": "GET classes",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/school/master/classes",
+              "host": ["{{baseUrl}}"],
+              "path": ["school", "master", "classes"]
+            },
+            "description": "Returns all classes. Fields: classId, className, classGroupId, classGroupName."
+          }
+        },
+        {
+          "name": "GET sections for a class",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/school/master/sections?classId=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["school", "master", "sections"],
+              "query": [{ "key": "classId", "value": "1", "description": "Replace with a real classId" }]
+            },
+            "description": "Returns sections for classId=1. Fields: sectionId, sectionName, classId."
+          }
+        },
+        {
+          "name": "GET fee-types",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/school/master/fee-types",
+              "host": ["{{baseUrl}}"],
+              "path": ["school", "master", "fee-types"]
+            },
+            "description": "Returns all fee types. Fields: feeTypeId, feeTypeName, description."
+          }
+        },
+        {
+          "name": "GET terms",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/school/master/terms",
+              "host": ["{{baseUrl}}"],
+              "path": ["school", "master", "terms"]
+            },
+            "description": "Returns all terms. Fields: termId, termName, academicYearId."
+          }
+        },
+        {
+          "name": "GET payment-modes",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/school/master/payment-modes",
+              "host": ["{{baseUrl}}"],
+              "path": ["school", "master", "payment-modes"]
+            },
+            "description": "Returns Cash / Cheque / Online modes. Fields: paymentModeId, modeName, isOnline."
+          }
+        },
+        {
+          "name": "GET fee-categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/school/master/fee-categories",
+              "host": ["{{baseUrl}}"],
+              "path": ["school", "master", "fee-categories"]
+            },
+            "description": "Returns fee categories. Fields: feeCategoryId, categoryName."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "S5 — Students",
+      "item": [
+        {
+          "name": "GET students (with filters)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/school/students?academicYearId=1&classId=2&sectionId=1&status=Active",
+              "host": ["{{baseUrl}}"],
+              "path": ["school", "students"],
+              "query": [
+                { "key": "academicYearId", "value": "1" },
+                { "key": "classId",        "value": "2" },
+                { "key": "sectionId",      "value": "1" },
+                { "key": "status",         "value": "Active" },
+                { "key": "search",         "value": "", "disabled": true }
+              ]
+            },
+            "description": "Maps to GetStudents(). Returns list with studentId, studentUniqueId, admissionNo, studentName, className, sectionName, fatherMobile, status."
+          }
+        },
+        {
+          "name": "GET student by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/school/students/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["school", "students", "1"]
+            },
+            "description": "Maps to GetStudent(nStudentId). Returns full student detail object."
+          }
+        },
+        {
+          "name": "POST create student",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Key",     "value": "{{apiKey}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"AdmissionNo\": \"2025001\",\n  \"StudentName\": \"Ravi Kumar\",\n  \"AcademicYearId\": 1,\n  \"ClassId\": 2,\n  \"SectionId\": 1,\n  \"FeeCategoryId\": 1,\n  \"DateOfBirth\": \"2010-06-15\",\n  \"Gender\": \"Male\",\n  \"FatherName\": \"Suresh Kumar\",\n  \"FatherMobile\": \"9876543210\",\n  \"MotherName\": \"Latha Kumar\",\n  \"MotherMobile\": \"9876543211\",\n  \"BloodGroup\": \"B+\",\n  \"JoinType\": \"New\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Maps to CreateStudent(). Returns {studentId} on success. Required: AdmissionNo, StudentName, AcademicYearId, ClassId, SectionId, FeeCategoryId."
+          }
+        },
+        {
+          "name": "PUT update student",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "X-Api-Key",    "value": "{{apiKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"AdmissionNo\": \"2025001\",\n  \"StudentName\": \"Ravi Kumar\",\n  \"AcademicYearId\": 1,\n  \"ClassId\": 2,\n  \"SectionId\": 1,\n  \"FeeCategoryId\": 1,\n  \"FatherMobile\": \"9876543210\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/school/students/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["school", "students", "1"]
+            },
+            "description": "Maps to UpdateStudent(nStudentId, ...). Returns the updated student object."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "S6 — Fees",
+      "item": [
+        {
+          "name": "GET student fee summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/school/fees/student/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["school", "fees", "student", "1"]
+            },
+            "description": "Maps to GetStudentFees(nStudentId). Returns totalAmount, paidAmount, outstandingAmount, lineItems[]."
+          }
+        },
+        {
+          "name": "POST collect fee (cash)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Key",    "value": "{{apiKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"StudentId\": 1,\n  \"AcademicYearId\": 1,\n  \"PaymentModeId\": 1,\n  \"Remarks\": \"Cash collected at counter\",\n  \"Items\": [\n    {\n      \"FeeTypeId\": 2,\n      \"TermId\": 1,\n      \"FeePeriodId\": null,\n      \"BusRouteId\": null,\n      \"HostelId\": null,\n      \"Amount\": 5000,\n      \"ConcessionAmount\": 0\n    },\n    {\n      \"FeeTypeId\": 3,\n      \"TermId\": 1,\n      \"FeePeriodId\": null,\n      \"BusRouteId\": null,\n      \"HostelId\": null,\n      \"Amount\": 2000,\n      \"ConcessionAmount\": 0\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/school/fees/collect",
+              "host": ["{{baseUrl}}"],
+              "path": ["school", "fees", "collect"]
+            },
+            "description": "Maps to CollectFee(). PaymentModeId=1 is typically Cash. Returns {receiptId, receiptNo, totalAmount}."
+          }
+        },
+        {
+          "name": "POST collect fee (cheque)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Key",    "value": "{{apiKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"StudentId\": 1,\n  \"AcademicYearId\": 1,\n  \"PaymentModeId\": 2,\n  \"Remarks\": \"Cheque No: 123456, Bank: SBI\",\n  \"Items\": [\n    {\n      \"FeeTypeId\": 2,\n      \"TermId\": 1,\n      \"FeePeriodId\": null,\n      \"BusRouteId\": null,\n      \"HostelId\": null,\n      \"Amount\": 5000,\n      \"ConcessionAmount\": 0\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/school/fees/collect",
+              "host": ["{{baseUrl}}"],
+              "path": ["school", "fees", "collect"]
+            },
+            "description": "Same endpoint as cash — only PaymentModeId differs (2=Cheque typically). Store cheque number in Remarks."
+          }
+        },
+        {
+          "name": "GET receipts (date range)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/school/fees/receipts?dateFrom=2025-06-01&dateTo=2025-06-30&status=Active",
+              "host": ["{{baseUrl}}"],
+              "path": ["school", "fees", "receipts"],
+              "query": [
+                { "key": "dateFrom", "value": "2025-06-01" },
+                { "key": "dateTo",   "value": "2025-06-30" },
+                { "key": "status",   "value": "Active" },
+                { "key": "search",   "value": "", "disabled": true }
+              ]
+            },
+            "description": "Maps to GetReceipts(). Returns receipt list: receiptId, receiptNo, studentName, totalAmount, paymentMode, createdAt, status."
+          }
+        },
+        {
+          "name": "GET receipts (end-of-day sync — createdAfter)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/school/fees/receipts?createdAfter=2025-06-15T00:00:00",
+              "host": ["{{baseUrl}}"],
+              "path": ["school", "fees", "receipts"],
+              "query": [
+                { "key": "createdAfter", "value": "2025-06-15T00:00:00", "description": "ISO 8601 datetime — returns only receipts created after this timestamp" }
+              ]
+            },
+            "description": "End-of-day pull: returns every receipt created since the given timestamp. Use previous sync time as the value."
+          }
+        },
+        {
+          "name": "GET receipt detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/school/fees/receipts/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["school", "fees", "receipts", "1"]
+            },
+            "description": "Maps to GetReceipt(nReceiptId). Returns header + items[] including feeTypeName, termName, routeName."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "S7 — Attendance",
+      "item": [
+        {
+          "name": "GET attendance grid for a class+date",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/school/attendance?classId=2&sectionId=1&date=2025-06-15",
+              "host": ["{{baseUrl}}"],
+              "path": ["school", "attendance"],
+              "query": [
+                { "key": "classId",   "value": "2" },
+                { "key": "sectionId", "value": "1" },
+                { "key": "date",      "value": "2025-06-15", "description": "YYYY-MM-DD" }
+              ]
+            },
+            "description": "Maps to GetAttendance(). Returns student list with status P/A/Late/HalfDay/OnLeave for that date."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "S8 — Bulk Student Import",
+      "item": [
+        {
+          "name": "POST bulk import students",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Key",    "value": "{{apiKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Rows\": [\n    {\n      \"AdmissionNo\": \"2025001\",\n      \"StudentName\": \"Ravi Kumar\",\n      \"AcademicYearId\": 1,\n      \"ClassId\": 2,\n      \"SectionId\": 1,\n      \"FeeCategoryId\": 1,\n      \"DateOfBirth\": \"2010-06-15\",\n      \"Gender\": \"Male\",\n      \"FatherName\": \"Suresh Kumar\",\n      \"FatherMobile\": \"9876543210\",\n      \"BloodGroup\": \"B+\",\n      \"JoinType\": \"Old\"\n    },\n    {\n      \"AdmissionNo\": \"2025002\",\n      \"StudentName\": \"Priya Sharma\",\n      \"AcademicYearId\": 1,\n      \"ClassId\": 2,\n      \"SectionId\": 1,\n      \"FeeCategoryId\": 1,\n      \"DateOfBirth\": \"2011-03-20\",\n      \"Gender\": \"Female\",\n      \"FatherName\": \"Ramesh Sharma\",\n      \"FatherMobile\": \"9876543220\",\n      \"BloodGroup\": \"O+\",\n      \"JoinType\": \"Old\"\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/school/students/bulk",
+              "host": ["{{baseUrl}}"],
+              "path": ["school", "students", "bulk"]
+            },
+            "description": "Maps to BulkImportStudents(). Max 500 rows per call. Returns {total, imported, failed, errors:[{row, admissionNo, reason}]}."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "S9 — Legacy Receipt Import",
+      "item": [
+        {
+          "name": "POST bulk import legacy receipts",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Key",    "value": "{{apiKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Rows\": [\n    {\n      \"LegacyReceiptNo\": \"REC2024001\",\n      \"AdmissionNo\": \"2024001\",\n      \"AcademicYear\": \"2024-25\",\n      \"FeeTypeName\": \"Tuition Fee\",\n      \"TermName\": \"Term 1\",\n      \"Amount\": 5000,\n      \"ConcessionAmount\": 0,\n      \"PaymentDate\": \"2024-06-10\",\n      \"PaymentMode\": \"Cash\",\n      \"Remarks\": \"Migrated from SAS\"\n    },\n    {\n      \"LegacyReceiptNo\": \"REC2024001\",\n      \"AdmissionNo\": \"2024001\",\n      \"AcademicYear\": \"2024-25\",\n      \"FeeTypeName\": \"Library Fee\",\n      \"TermName\": \"Term 1\",\n      \"Amount\": 500,\n      \"ConcessionAmount\": 0,\n      \"PaymentDate\": \"2024-06-10\",\n      \"PaymentMode\": \"Cash\",\n      \"Remarks\": \"Migrated from SAS\"\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/school/fees/receipts/bulk",
+              "host": ["{{baseUrl}}"],
+              "path": ["school", "fees", "receipts", "bulk"]
+            },
+            "description": "Maps to BulkImportReceipts(). Two rows share the same LegacyReceiptNo — they are grouped into one receipt with two line items. Max 1000 rows. Returns {total, imported, failed, errors:[...]}."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "School Settings (Phase 36)",
+      "item": [
+        {
+          "name": "GET school settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/school/settings",
+              "host": ["{{baseUrl}}"],
+              "path": ["school", "settings"]
+            },
+            "description": "Returns the school's configuration (Admission, Fee & Billing, Reports & Institution). Returns empty defaults if no row exists yet."
+          }
+        },
+        {
+          "name": "PUT update school settings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "X-Api-Key",    "value": "{{apiKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"AdmissionNoType\": \"Prefix-Auto\",\n  \"CategoryWiseAdmissions\": \"N\",\n  \"NewStudentEntryMode\": \"Normal Entry\",\n  \"PrePrimaryAdmissionPrefix\": \"PP\",\n  \"PrimaryAdmissionPrefix\": \"PR\",\n  \"HighSchoolAdmissionPrefix\": \"HS\",\n  \"GeneralAdmissionPrefix\": \"GN\",\n  \"FeeReceiptLock\": 0,\n  \"FeeReceiptPrint\": \"Yes\",\n  \"ReceiptPrintCopies\": 2,\n  \"TransportFeeIncluded\": \"N\",\n  \"FineEnabled\": \"N\",\n  \"ReceiptFeeTypeSeparator\": \"/\",\n  \"BillNoSeriesType\": \"Academic Year\",\n  \"StudentConcessionEnabled\": \"Enable\",\n  \"FeeMessageToTeacher\": \"N\",\n  \"BillingStatus\": \"Active\",\n  \"ProgressReportType\": \"Grade\",\n  \"InstitutionHeadName\": \"Fr. Thomas\",\n  \"InstitutionHeadSignature\": \"/signatures/principal.png\",\n  \"OtherSubjectsType\": \"Optional\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/school/settings",
+              "host": ["{{baseUrl}}"],
+              "path": ["school", "settings"]
+            },
+            "description": "Upserts all school settings for the authenticated branch. Returns the saved settings object."
+          }
+        }
+      ]
+    }
+
+  ]
+}

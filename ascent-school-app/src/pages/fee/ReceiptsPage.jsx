@@ -261,7 +261,7 @@ export default function ReceiptsPage() {
               </Descriptions.Item>
               <Descriptions.Item label="Payment Mode">{detailReceipt.paymentModeName || '—'}</Descriptions.Item>
               {detailReceipt.chequeNo && (
-                <Descriptions.Item label="Cheque No">{detailReceipt.chequeNo}</Descriptions.Item>
+                <Descriptions.Item label="Reference No">{detailReceipt.chequeNo}</Descriptions.Item>
               )}
               {detailReceipt.bankName && (
                 <Descriptions.Item label="Bank">{detailReceipt.bankName}</Descriptions.Item>

@@ -1,10 +1,13 @@
 using AscentSchools.API.Helpers;
 using AscentSchools.API.Middleware;
 using AscentSchools.Core.DTOs.Mobile.Auth;
+using AscentSchools.Data.ConnectionFactory;
+using Dapper;
 using System;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Http.Filters;
@@ -12,27 +15,53 @@ using System.Web.Http.Filters;
 namespace AscentSchools.API.Filters
 {
     /// <summary>
-    /// Global filter — runs on every request.
-    /// Validates the Bearer JWT, populates TenantContext.Current.
-    /// Routes with [AllowAnonymous] skip the 401 response but still parse the token if present.
+    /// Global authentication filter — runs on every request before any controller action.
+    ///
+    /// Supports two authentication mechanisms:
+    ///   1. Bearer JWT  — school/control/mobile staff tokens
+    ///   2. X-Api-Key   — static key for VB6 legacy integration (no token management needed)
+    ///
+    /// API key lookup: master DB → school_settings.integration_api_key
+    ///   → grants full permissions so existing school endpoints work transparently.
     /// </summary>
     public class JwtAuthenticationFilter : IAuthenticationFilter
     {
         public bool AllowMultiple => false;
 
-        public Task AuthenticateAsync(HttpAuthenticationContext context, CancellationToken cancellationToken)
+        public async Task AuthenticateAsync(HttpAuthenticationContext context, CancellationToken cancellationToken)
         {
             var request = context.Request;
-            var auth    = request.Headers.Authorization;
 
+            // ── API Key auth (VB integration) ─────────────────────────────────
+            // Checked before Bearer so VB requests never need a JWT token.
+            var apiKey = request.Headers.TryGetValues("X-Api-Key", out var keyValues)
+                ? keyValues?.FirstOrDefault()?.Trim()
+                : null;
+
+            if (!string.IsNullOrEmpty(apiKey))
+            {
+                var tenantCtx = await LookupApiKeyAsync(apiKey);
+                if (tenantCtx == null)
+                {
+                    context.ErrorResult = new UnauthorizedResult(request, "Invalid API key.");
+                    return;
+                }
+                TenantContext.Current = tenantCtx;
+                context.Principal     = new ClaimsPrincipal(
+                    new ClaimsIdentity(new[] { new Claim("tokenType", "apikey") }, "ApiKey"));
+                return;
+            }
+
+            // ── Bearer JWT auth ───────────────────────────────────────────────
+            var auth = request.Headers.Authorization;
             if (auth == null || auth.Scheme != "Bearer" || string.IsNullOrWhiteSpace(auth.Parameter))
-                return Task.FromResult(0); // No token — let AllowAnonymous or RequirePermission handle it
+                return; // No token — SchoolAuthAttribute will return 401 if the endpoint requires auth
 
             var principal = JwtHelper.ValidateAccessToken(auth.Parameter);
             if (principal == null)
             {
-                context.ErrorResult = new UnauthorizedResult(request);
-                return Task.FromResult(0);
+                context.ErrorResult = new UnauthorizedResult(request, "Invalid or expired token.");
+                return;
             }
 
             var tokenType = principal.Claims.FirstOrDefault(c => c.Type == "tokenType")?.Value;
@@ -41,7 +70,7 @@ namespace AscentSchools.API.Filters
             if (tokenType == "control")
             {
                 context.Principal = principal;
-                return Task.FromResult(0);
+                return;
             }
 
             // Mobile tokens — populate MobileContext; skip TenantContext
@@ -64,7 +93,7 @@ namespace AscentSchools.API.Filters
                     };
                 }
                 context.Principal = principal;
-                return Task.FromResult(0);
+                return;
             }
 
             if (tokenType == "teacher")
@@ -82,7 +111,7 @@ namespace AscentSchools.API.Filters
                     FullName = c.FirstOrDefault(x => x.Type == "fullName")?.Value,
                 };
                 context.Principal = principal;
-                return Task.FromResult(0);
+                return;
             }
 
             if (tokenType == "parent")
@@ -104,17 +133,16 @@ namespace AscentSchools.API.Filters
                     };
                 }
                 context.Principal = principal;
-                return Task.FromResult(0);
+                return;
             }
 
             var claims = JwtHelper.ExtractClaims(principal);
             if (claims == null)
             {
-                context.ErrorResult = new UnauthorizedResult(request);
-                return Task.FromResult(0);
+                context.ErrorResult = new UnauthorizedResult(request, "Invalid or expired token.");
+                return;
             }
 
-            // Populate TenantContext for use in controllers and downstream filters
             TenantContext.Current = new TenantContext
             {
                 UserId       = claims.UserId,
@@ -126,23 +154,89 @@ namespace AscentSchools.API.Filters
             };
 
             context.Principal = principal;
-            return Task.FromResult(0);
         }
 
         public Task ChallengeAsync(HttpAuthenticationChallengeContext context, CancellationToken cancellationToken)
             => Task.FromResult(0);
+
+        // ── API Key lookup ────────────────────────────────────────────────────
+
+        private static async Task<TenantContext> LookupApiKeyAsync(string key)
+        {
+            try
+            {
+                var factory = new TenantConnectionFactory();
+                using (var conn = factory.GetMasterConnection())
+                {
+                    var row = await conn.QueryFirstOrDefaultAsync<ApiKeyRow>(
+                        @"SELECT ss.school_id SchoolId,
+                                 s.group_id   GroupId,
+                                 sg.db_name   DbName
+                          FROM   school_settings ss
+                          JOIN   schools s        ON s.school_id  = ss.school_id
+                          JOIN   school_groups sg ON sg.group_id  = s.group_id
+                          WHERE  ss.integration_api_key = @key
+                            AND  sg.status  = 'Active'
+                            AND  sg.db_name IS NOT NULL",
+                        new { key });
+
+                    if (row == null || string.IsNullOrEmpty(row.DbName))
+                        return null;
+
+                    return new TenantContext
+                    {
+                        UserId       = 0,
+                        FullName     = "VB Integration",
+                        GroupId      = row.GroupId,
+                        SchoolId     = row.SchoolId,
+                        TenantDbName = row.DbName,
+                        Permissions  = _allPermissions
+                    };
+                }
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private class ApiKeyRow
+        {
+            public int    SchoolId { get; set; }
+            public int    GroupId  { get; set; }
+            public string DbName   { get; set; }
+        }
+
+        // Full permission set granted to VB integration key — no per-user RBAC needed
+        private static readonly string[] _allPermissions =
+        {
+            "STUDENT_PROFILE.VIEW",  "STUDENT_PROFILE.CREATE", "STUDENT_PROFILE.EDIT", "STUDENT_PROFILE.DELETE",
+            "STUDENT_FEE.VIEW",      "STUDENT_FEE.COLLECT",    "STUDENT_FEE.EDIT",
+            "STUDENT_FEE.CANCEL_RECEIPT",                       "STUDENT_FEE.CONCESSION",
+            "ATTENDANCE.VIEW",       "ATTENDANCE.MARK",         "ATTENDANCE.EDIT",
+            "MARKS.VIEW",            "MARKS.ENTER",             "MARKS.EDIT",           "MARKS.PUBLISH",
+            "LIBRARY.VIEW",          "LIBRARY.ISSUE",           "LIBRARY.RETURN",       "LIBRARY.MANAGE",
+            "TRANSPORT.VIEW",        "TRANSPORT.MANAGE",
+            "HOSTEL.VIEW",           "HOSTEL.MANAGE"
+        };
     }
 
-    /// <summary>Helper to return a clean 401 response.</summary>
+    /// <summary>Returns a clean 401 response with a descriptive message.</summary>
     internal class UnauthorizedResult : System.Web.Http.IHttpActionResult
     {
         private readonly HttpRequestMessage _request;
-        public UnauthorizedResult(HttpRequestMessage request) { _request = request; }
+        private readonly string             _message;
+
+        public UnauthorizedResult(HttpRequestMessage request, string message = "Unauthorized.")
+        {
+            _request = request;
+            _message = message;
+        }
 
         public Task<HttpResponseMessage> ExecuteAsync(CancellationToken cancellationToken)
         {
             var response = _request.CreateResponse(HttpStatusCode.Unauthorized,
-                new { success = false, message = "Invalid or expired token." });
+                new { success = false, message = _message });
             return Task.FromResult(response);
         }
     }

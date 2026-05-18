@@ -117,6 +117,28 @@ namespace AscentSchools.API.Controllers.Control
             return Ok(_schools.GetById(schoolId));
         }
 
+        // GET control/school-groups/{id}/schools/{schoolId}/api-key
+        [HttpGet, Route("{id:int}/schools/{schoolId:int}/api-key")]
+        public HttpResponseMessage GetApiKey(int id, int schoolId)
+        {
+            var school = _schools.GetById(schoolId);
+            if (school == null || school.GroupId != id) return NotFound("School not found.");
+
+            var key = _schools.GetApiKey(schoolId);
+            return Ok(new { apiKey = key ?? "" });
+        }
+
+        // POST control/school-groups/{id}/schools/{schoolId}/api-key/generate
+        [HttpPost, Route("{id:int}/schools/{schoolId:int}/api-key/generate")]
+        public HttpResponseMessage GenerateApiKey(int id, int schoolId)
+        {
+            var school = _schools.GetById(schoolId);
+            if (school == null || school.GroupId != id) return NotFound("School not found.");
+
+            var key = _schools.GenerateApiKey(schoolId);
+            return Ok(new { apiKey = key });
+        }
+
         // ── Tenant Users ─────────────────────────────────────────────────
 
         // GET control/school-groups/{id}/roles  — tenant DB roles for dropdown

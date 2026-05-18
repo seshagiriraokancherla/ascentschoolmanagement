@@ -166,6 +166,7 @@ CREATE TABLE school_settings (
     institution_head_name           VARCHAR(20)     NULL,
     fee_message_to_teacher          VARCHAR(5)      NULL,  -- Y / N
     student_concession_enabled      VARCHAR(25)     NULL,  -- Enable / Disable discount for clerk
+    integration_api_key             VARCHAR(50)     NULL,  -- Static API key for VB6 legacy integration
     audit_log_id                    INT             NULL,
     created_by                      VARCHAR(25)     NULL,
     created_at                      DATETIME        NOT NULL DEFAULT GETDATE(),

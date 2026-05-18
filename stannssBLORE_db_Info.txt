@@ -1,0 +1,85 @@
+New Account Information
+
+Hosting Package: BASIC WINDOWS
+Domain: stannsschoolicse.in
+Username: stannwin9
+Password: 8nZ8z_E3k*4bWK
+
+Server Information
+
+Server Name: WIN9.FASTWEBHOST.COM
+Server IP: 104.243.32.43
+Nameserver 1: WNS17.FASTWEBHOST.COM
+Nameserver 1 IP: 104.243.32.43
+Nameserver 2: WNS18.FASTWEBHOST.COM
+Nameserver 2 IP: 104.243.32.43
+
+Control Panel Access
+
+Control Panel URL: https://104.243.32.43:8443/
+Once your domain has propogated, you may also use https://stannsschoolicse.in:8443/
+
+Uploading Your Website
+
+To publish your website (upload the files from your local computer)
+to your server, you need to use some sort of uploading software.
+There are many options available. Here are a few suggestions:
+
+1) SmartFTP : http://smartftp.com
+
+2) CuteFTP : http://cuteftp.com
+
+Temporarily you may use one of the addresses given below manage your web site:
+
+Temporary FTP Hostname: 104.243.32.43
+Temporary Webpage URL: http://104.243.32.43/$sitepreview/stannsschoolicse.in/
+
+And once your domain has propagated you may use the details below:
+
+FTP Hostname: ftp.stannsschoolicse.in
+Webpage URL: http://www.stannsschoolicse.in
+
+Username: stannwin9
+Password: 8nZ8z_E3k*4bWK
+
+Upload Directory: httpdocs
+
+Your home page must be placed in the " httpdocs "
+directory and must be named "index.htm" or index.html. This is the file
+that the server looks for when someone types your URL: http://www.stannsschoolicse.in
+
+
+SECURE SERVER INFORMATION:
+
+You can view web site using HTTPS. Please check below link.
+
+Your Secure server is:
+https://stannsschoolicse.in/
+
+Email Settings
+
+NOTE: Please create email accounts from Plesk control panel
+and use below configuration settings for accessing emails
+from POP3 clients.For other email accounts just use email user
+of newly created account instead of "info".
+
+For email accounts that you setup, you should use the following connection details in your email program:
+
+POP3 Host Address: mail.stannsschoolicse.in
+SMTP Host Address: mail.stannsschoolicse.in
+Username: The email address you are checking email for
+Password: As specified in your control panel
+
+Your Webmail is at: http://webmail.stannsschoolicse.in / or
+http://stannsschoolicse.in:8425
+
+
+---------- Sql ------------------------
+
+Database name	:	stannwin9_BngDb
+Database user 	:	StAnnsBng
+Password	:	4NU2bRzhqvoa&3a~
+
+Control Panel URL: https://104.243.32.43:8443/
+Username: stannwin9
+Password: 8nZ8z_E3k*4bWK

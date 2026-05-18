@@ -39,6 +39,7 @@ import StaffSalariesPage           from './pages/staff/StaffSalariesPage'
 import BloodGroupSearchPage        from './pages/students/BloodGroupSearchPage'
 import SMSPage                    from './pages/sms/SMSPage'
 import FeeConcessionPage          from './pages/fee/FeeConcessionPage'
+import SchoolSettingsPage         from './pages/settings/SchoolSettingsPage'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:62845'
 
@@ -151,6 +152,7 @@ function App() {
               <Route path="staff/advances"               element={<StaffAdvancesPage />} />
               <Route path="staff/salaries"               element={<StaffSalariesPage />} />
               <Route path="sms"                          element={<SMSPage />} />
+              <Route path="settings/school"          element={<SchoolSettingsPage />} />
               <Route path="settings/roles"           element={<RolesPage />} />
               <Route path="settings/users"           element={<UsersPage />} />
               <Route path="settings/payment-gateway" element={<GatewaySettingsPage />} />

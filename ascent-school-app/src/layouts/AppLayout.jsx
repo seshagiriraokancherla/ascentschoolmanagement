@@ -110,9 +110,10 @@ const NAV_ITEMS = [
     icon: <SettingOutlined />,
     label: 'Settings',
     children: [
-      { key: '/settings/roles',         icon: <SafetyOutlined />, label: 'Roles & Permissions' },
-      { key: '/settings/users',         icon: <TeamOutlined />,   label: 'User Management' },
-      { key: '/settings/payment-gateway',                          label: 'Payment Gateway' },
+      { key: '/settings/school',         icon: <SettingOutlined />, label: 'School Settings' },
+      { key: '/settings/roles',          icon: <SafetyOutlined />,  label: 'Roles & Permissions' },
+      { key: '/settings/users',          icon: <TeamOutlined />,    label: 'User Management' },
+      { key: '/settings/payment-gateway',                            label: 'Payment Gateway' },
     ],
   },
 ]

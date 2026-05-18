@@ -12,11 +12,13 @@
     "dev:stannsasf": "vite --mode stannsasf",
     "dev:holyspiritjm": "vite --mode holyspiritjm",
     "dev:depaulemyv": "vite --mode depaulemyv",
+    "dev:stannsbng": "vite --mode stannsbng",
     "build:demo": "vite build --mode demo",
     "build:stannsasf": "vite build --mode stannsasf",
     "build:holyspiritjm": "vite build --mode holyspiritjm",
     "build:depaulemyv": "vite build --mode depaulemyv",
-    "build:all": "npm run build:demo && npm run build:stannsasf && npm run build:holyspiritjm"
+    "build:stannsbng": "vite build --mode stannsbng",
+    "build:all": "npm run build:demo && npm run build:stannsasf && npm run build:holyspiritjm && npm run build:stannsbng"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
