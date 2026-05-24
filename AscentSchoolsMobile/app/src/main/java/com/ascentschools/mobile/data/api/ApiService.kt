@@ -96,7 +96,7 @@ interface ApiService {
     @GET("mobile/fees/outstanding")
     suspend fun getOutstanding(
         @Query("feeTypeCategory") feeTypeCategory: String
-    ): Response<ApiResponse<List<MobileFeeSummaryDto>>>
+    ): Response<ApiResponse<CrossYearFeeSummaryDto>>
 
     @POST("mobile/fees/payment-orders")
     suspend fun createPaymentOrder(

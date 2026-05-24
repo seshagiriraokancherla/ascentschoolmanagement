@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Deletion — DePaul Em School Yerravaram</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 20px; color: #333; line-height: 1.7; }
+        h1 { color: #1677FF; border-bottom: 2px solid #1677FF; padding-bottom: 10px; }
+        h2 { color: #444; margin-top: 28px; }
+        .card { background: #f5f7ff; border: 1px solid #d0d9ff; border-radius: 8px; padding: 20px 24px; margin: 20px 0; }
+        label { display: block; font-weight: bold; margin-bottom: 4px; margin-top: 14px; }
+        input, textarea {
+            width: 100%; padding: 9px 12px; border: 1px solid #ccc;
+            border-radius: 6px; font-size: 15px; box-sizing: border-box;
+        }
+        textarea { height: 90px; resize: vertical; }
+        button {
+            margin-top: 18px; background: #1677FF; color: #fff;
+            border: none; padding: 11px 28px; border-radius: 6px;
+            font-size: 16px; cursor: pointer; width: 100%;
+        }
+        button:hover { background: #0958d9; }
+        .note { background: #fff8e1; border-left: 4px solid #ffc107; padding: 10px 14px; border-radius: 4px; margin: 16px 0; font-size: 14px; }
+        ul { margin: 10px 0 10px 20px; }
+        a { color: #1677FF; }
+        .success { display:none; background:#f0fff4; border:1px solid #52c41a; border-radius:8px; padding:20px; text-align:center; color:#237804; }
+    </style>
+</head>
+<body>
+
+<h1>Account Deletion Request</h1>
+<p>
+    Use this form to request deletion of your <strong>DePaul Em School Yerravaram</strong> app
+    account and associated personal data. Developed by <strong>Sesh Rao</strong>, we will process
+    your request within <strong>7 business days</strong>.
+</p>
+
+<div class="note">
+    &#9888; <strong>Important:</strong> Deleting your account only removes your login access to the
+    <strong>DePaul Em School Yerravaram</strong> app. Your academic records (marks, attendance, fees)
+    are maintained by the school and are not deleted — please contact the school directly for
+    academic record removal.
+</div>
+
+<h2>What gets deleted</h2>
+<ul>
+    <li>Your mobile app login credentials and OTP session</li>
+    <li>All active login sessions and tokens</li>
+    <li>Your parent account profile stored in our system</li>
+    <li>Parent–child links associated with your account</li>
+    <li>Your device binding record</li>
+</ul>
+
+<h2>What is retained</h2>
+<ul>
+    <li>Academic records (marks, attendance) — maintained by DePaul Em School Yerravaram</li>
+    <li>Fee payment receipts — retained for financial compliance (7 years)</li>
+</ul>
+
+<div class="card">
+    <form id="deletionForm">
+        <label for="identifier">Registered mobile number</label>
+        <input type="tel" id="identifier" placeholder="e.g. 9876500000" required />
+
+        <label for="name">Full name</label>
+        <input type="text" id="name" placeholder="Your full name" required />
+
+        <label for="childName">Child's name</label>
+        <input type="text" id="childName" placeholder="Student's name" required />
+
+        <label for="email">Your email address (for confirmation)</label>
+        <input type="email" id="email" placeholder="your@email.com" required />
+
+        <label for="reason">Reason for deletion (optional)</label>
+        <textarea id="reason" placeholder="Let us know why you are deleting your account..."></textarea>
+
+        <button type="submit">Submit Deletion Request</button>
+    </form>
+
+    <div class="success" id="successMsg">
+        &#10003; <strong>Request submitted successfully.</strong><br/>
+        We will process your account deletion within 7 business days and send a confirmation to your email.
+    </div>
+</div>
+
+<p>
+    You can also email your deletion request directly to:
+    <a href="mailto:support@edu-care.in">support@edu-care.in</a><br/>
+    Include your registered mobile number, child's name, and the school name
+    <strong>DePaul Em School Yerravaram</strong>.
+</p>
+
+<p style="color:#888; font-size:13px; margin-top:40px;">
+    <a href="https://edu-care.in/depaul/privacy-policy.html">Privacy Policy</a> &nbsp;|&nbsp;
+    &copy; 2026 Sesh Rao &nbsp;|&nbsp; DePaul Em School Yerravaram
+</p>
+
+<script>
+    document.getElementById('deletionForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        document.getElementById('deletionForm').style.display = 'none';
+        document.getElementById('successMsg').style.display = 'block';
+
+        var identifier = document.getElementById('identifier').value;
+        var name       = document.getElementById('name').value;
+        var childName  = document.getElementById('childName').value;
+        var email      = document.getElementById('email').value;
+        var reason     = document.getElementById('reason').value;
+
+        var subject = encodeURIComponent('Account Deletion Request — DePaul Em School Yerravaram');
+        var body    = encodeURIComponent(
+            'App: DePaul Em School Yerravaram\n' +
+            'Mobile: '      + identifier + '\n' +
+            'Parent Name: ' + name       + '\n' +
+            'Child Name: '  + childName  + '\n' +
+            'Email: '       + email      + '\n' +
+            'Reason: '      + reason
+        );
+        window.location.href = 'mailto:support@edu-care.in?subject=' + subject + '&body=' + body;
+    });
+</script>
+
+</body>
+</html>

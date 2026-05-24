@@ -12,7 +12,7 @@ class FeeRepository(private val api: ApiService) {
             val resp = api.getOutstanding(feeTypeCategory)
             val body = resp.bodyOrError()
             if (!body.success || body.data == null) error(body.message ?: "Failed to load fees")
-            body.data
+            body.data.years
         }
     }
 

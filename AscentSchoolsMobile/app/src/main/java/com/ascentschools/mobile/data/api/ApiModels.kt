@@ -225,15 +225,22 @@ data class SchoolEventDto(
 )
 
 // ── Fee ───────────────────────────────────────────────────────────────────────
-// Matches CrossYearFeeSummaryDto / FeeLineItemDto on backend (mobile/fees/outstanding)
+// Wrapper for GET /mobile/fees/outstanding — API returns object, years list lives inside
+data class CrossYearFeeSummaryDto(
+    val years: List<MobileFeeSummaryDto> = emptyList()
+)
 
+// One row per academic year. Field names match server's YearFeeSummaryDto (camelCase).
 data class MobileFeeSummaryDto(
-    val academicYearId    : Int?,
-    val academicYear      : String?,
-    val totalAmount       : Double,
-    val paidAmount        : Double,
-    val outstandingAmount : Double,
-    val lineItems         : List<MobileFeeLineItemDto>
+    val academicYearId                               : Int?,
+    val academicYear                                 : String?,
+    @com.google.gson.annotations.SerializedName("totalStructure")
+    val totalAmount                                  : Double = 0.0,
+    @com.google.gson.annotations.SerializedName("totalPaid")
+    val paidAmount                                   : Double = 0.0,
+    @com.google.gson.annotations.SerializedName("totalOutstanding")
+    val outstandingAmount                            : Double = 0.0,
+    val lineItems                                    : List<MobileFeeLineItemDto> = emptyList()
 )
 
 data class MobileFeeLineItemDto(
@@ -244,12 +251,15 @@ data class MobileFeeLineItemDto(
     val feePeriodId      : Int?,
     val busRouteId       : Int?,
     val hostelId         : Int?,
-    val amount           : Double,
-    val paidAmount       : Double,
-    val outstanding      : Double,
+    @com.google.gson.annotations.SerializedName("structureAmount")
+    val amount           : Double = 0.0,
+    val paidAmount       : Double = 0.0,
+    val outstanding      : Double = 0.0,
     val concessionAmount : Double = 0.0,
-    val isPaid           : Boolean
-)
+) {
+    // isPaid not returned by server — derived locally
+    val isPaid: Boolean get() = outstanding <= 0
+}
 
 // feeTypeCategory replaces paymentModeId — server resolves the online payment mode
 data class MobileCreateOrderRequest(
