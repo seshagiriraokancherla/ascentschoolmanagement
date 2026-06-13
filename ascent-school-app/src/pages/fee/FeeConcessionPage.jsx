@@ -179,17 +179,20 @@ export default function FeeConcessionPage() {
 
   useEffect(() => {
     Promise.all([
-      api.get('/school/master/academic-years'),
+      api.get('/school/master/academic-years?activeOnly=true'),
       api.get('/school/master/classes'),
       api.get('/school/master/fee-types'),
       api.get('/school/transport/routes'),
       api.get('/school/hostel'),
     ]).then(([yr, cl, ft, rt, ht]) => {
-      setYears(yr.data?.data    || [])
+      const years = yr.data?.data || []
+      setYears(years)
       setClasses(cl.data?.data  || [])
       setFeeTypes(ft.data?.data || [])
       setRoutes(rt.data?.data   || [])
       setHostels(ht.data?.data  || [])
+      const current = years.find(y => y.isCurrent)
+      if (current) setFilterYear(current.academicYearId)
     }).catch(() => {})
   }, [])
 

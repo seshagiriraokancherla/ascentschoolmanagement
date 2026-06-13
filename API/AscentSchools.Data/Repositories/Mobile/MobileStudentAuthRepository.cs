@@ -12,6 +12,18 @@ namespace AscentSchools.Data.Repositories.Mobile
 
         // ── Student lookup ────────────────────────────────────────────────
 
+        /// <summary>Returns the section name for a student (null if none assigned).</summary>
+        public string GetStudentSection(string tenantDbName, long studentId)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.QueryFirstOrDefault<string>(
+                    @"SELECT sec.section_name
+                      FROM students s
+                      LEFT JOIN sections sec ON sec.section_id = s.section_id
+                      WHERE s.student_id = @studentId",
+                    new { studentId });
+        }
+
         /// <summary>
         /// Finds all active students whose father_mobile matches the given number in this school.
         /// Returns only the latest academic-year row per student (handles multi-year model).

@@ -12,8 +12,8 @@ android {
         applicationId = "in.educare.mobile"   // overridden by each flavor
         minSdk        = 24
         targetSdk     = 35
-        versionCode   = 8
-        versionName   = "1.0"
+        versionCode   = 10
+        versionName   = "1.1"
     }
 
     // ── White-label school flavors ────────────────────────────────────────────
@@ -58,13 +58,31 @@ android {
             resValue("string", "app_name", "DePaul EM School")
         }
 
-
+        // ── Generic single (multi-school) app — used by ALL new schools ───────────
+        // SCHOOL_CODE is empty → the app asks the parent for a 4-digit school code at
+        // first launch (resolved at runtime). Generic launcher name + icon.
+        create("ascent") {
+            dimension     = "school"
+            applicationId = "in.educare.app"
+            buildConfigField("String", "SCHOOL_CODE", "\"\"")
+            resValue("string", "app_name", "Ascent Schools")
+        }
     }
 
     buildTypes {
+        debug {
+            // Local dev API (IIS Express binds to localhost only).
+            // Use `localhost` + run once per adb session:  adb reverse tcp:62845 tcp:62845
+            //   → device/emulator localhost:62845 forwards to the host's IIS Express.
+            // (10.0.2.2 fails because IIS Express refuses the forwarded non-localhost connection.)
+            // Physical device alternative: USB + the same `adb reverse` command works too.
+            // Trailing slash required by Retrofit; no "/api" suffix locally (prod proxy adds it).
+            buildConfigField("String", "API_BASE_URL", "\"http://localhost:62845/\"")
+        }
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            buildConfigField("String", "API_BASE_URL", "\"https://edu-care.in/api/\"")
         }
     }
 

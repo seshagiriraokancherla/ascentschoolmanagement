@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.ascentschools.mobile.AscentApp
 import com.ascentschools.mobile.BuildConfig
 import com.ascentschools.mobile.R
 import com.ascentschools.mobile.ui.theme.NavyBlue
@@ -49,7 +50,8 @@ private val FrostedWhite = Color(0xF5FFFFFF)   // 96 % white — sits over gradi
 fun SmsAuthScreen(
     viewModel      : SmsAuthViewModel,
     onParentSuccess: () -> Unit,
-    onTeacherSuccess: () -> Unit
+    onTeacherSuccess: () -> Unit,
+    onChangeSchool : (() -> Unit)? = null   // generic single-app build only
 ) {
     val state    by viewModel.state.collectAsState()
     val children by viewModel.children.collectAsState()
@@ -70,7 +72,17 @@ fun SmsAuthScreen(
     }
 
     var showTeacherSheet by remember { mutableStateOf(false) }
-    val appName = context.getString(R.string.app_name)
+
+    // Generic single app shows the selected school's branding (loaded from /branding);
+    // per-school flavors use the baked app_name + launcher icon.
+    val isGeneric   = BuildConfig.SCHOOL_CODE.isBlank()
+    val tokenStore  = remember { (context.applicationContext as AscentApp).tokenStore }
+    val bakedName   = context.getString(R.string.app_name)
+    val appName     = if (isGeneric) (tokenStore.brandingName?.takeIf { it.isNotBlank() } ?: bakedName) else bakedName
+    val logoModel: Any = if (isGeneric && !tokenStore.brandingLogoUrl.isNullOrBlank())
+                             tokenStore.brandingLogoUrl!!
+                         else
+                             context.packageManager.getApplicationIcon(context.packageName)
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHost) },
@@ -125,7 +137,7 @@ fun SmsAuthScreen(
                             .background(Color(0x30FFFFFF), CircleShape)
                     )
                     AsyncImage(
-                        model              = context.packageManager.getApplicationIcon(context.packageName),
+                        model              = logoModel,
                         contentDescription = appName,
                         modifier           = Modifier
                             .size(84.dp)
@@ -179,6 +191,16 @@ fun SmsAuthScreen(
                             style = MaterialTheme.typography.labelLarge,
                             color = Color.White.copy(alpha = 0.65f)
                         )
+                    }
+                    // Generic single app: let the parent re-pick their school
+                    if (isGeneric && onChangeSchool != null) {
+                        TextButton(onClick = onChangeSchool) {
+                            Text(
+                                "Change School",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = Color.White.copy(alpha = 0.65f)
+                            )
+                        }
                     }
                 }
 

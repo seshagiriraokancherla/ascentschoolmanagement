@@ -1,0 +1,4 @@
+Import (Download Receipts from Web)
+Export (Push Local Fee Receipts to Web)  --BulkImportReceiptsExample
+Update (Students Update from Local to Web)
+

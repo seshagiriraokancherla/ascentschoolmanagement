@@ -32,9 +32,11 @@ export default function DetainedStudentsReport() {
   const [loading,      setLoading]      = useState(false)
 
   useEffect(() => {
-    api.get('/school/master/academic-years').then(r => {
+    api.get('/school/master/academic-years?activeOnly=true').then(r => {
       const list = r.data?.data || []
       setYears(list)
+      const current = list.find(y => y.isCurrent)
+      if (current) setAcademicYearId(current.academicYearId)
     })
     api.get('/school/master/classes').then(r => setClasses(r.data?.data || []))
   }, [])

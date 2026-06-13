@@ -32,7 +32,12 @@ export default function ExamHallTicketReport() {
   const [ticketsPerPage, setTicketsPerPage] = useState(2)
 
   useEffect(() => {
-    api.get('/school/master/academic-years').then(r => setYears(r.data?.data || []))
+    api.get('/school/master/academic-years?activeOnly=true').then(r => {
+      const years = r.data?.data || []
+      setYears(years)
+      const current = years.find(y => y.isCurrent)
+      if (current) onYearChange(current.academicYearId)
+    })
     api.get('/school/master/classes').then(r => setClasses(r.data?.data || []))
   }, [])
 

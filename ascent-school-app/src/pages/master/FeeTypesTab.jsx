@@ -27,7 +27,7 @@ export default function FeeTypesTab() {
     try {
       const [dataRes, yearRes] = await Promise.all([
         api.get('/school/master/fee-types'),
-        api.get('/school/master/academic-years'),
+        api.get('/school/master/academic-years?activeOnly=true'),
       ])
       setRows(dataRes.data?.data || [])
       setAcademicYears(yearRes.data?.data || [])

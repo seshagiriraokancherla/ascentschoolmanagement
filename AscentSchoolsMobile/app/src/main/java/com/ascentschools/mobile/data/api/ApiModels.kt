@@ -9,6 +9,20 @@ data class ApiResponse<T>(
     val errors: Any?
 )
 
+// ── Single-app onboarding + branding ────────────────────────────────────────────
+
+// GET mobile/auth/school-by-code?code=1001
+data class SchoolByCodeDto(
+    val schoolCode: String?,   // subdomain — stored as X-School-Code
+    val name: String?          // school/group name shown for confirmation
+)
+
+// GET branding  (only the fields the app uses; Gson ignores the rest)
+data class BrandingDto(
+    val displayName: String?,
+    val logoPath: String?      // relative (/Uploads/...) — resolve with RetrofitClient.mediaBaseUrl
+)
+
 // ── Auth — Teacher ────────────────────────────────────────────────────────────
 
 data class TeacherLoginRequest(val username: String, val password: String)

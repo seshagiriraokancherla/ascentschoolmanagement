@@ -214,6 +214,7 @@ namespace AscentSchools.Data.Repositories.School
                       LEFT JOIN class_groups cg ON cg.class_group_id = c.class_group_id
                       LEFT JOIN fee_categories fc ON fc.fee_category_id = s.fee_category_id
                       WHERE s.student_unique_id = @studentUniqueId AND s.school_id = @schoolId
+                        AND ISNULL(ay.status, 'Active') = 'Active'
                       ORDER BY s.academic_year_id DESC",
                     new { studentUniqueId, schoolId }).ToList();
 
@@ -431,20 +432,21 @@ namespace AscentSchools.Data.Repositories.School
             switch ((category ?? "").ToLower())
             {
                 case "admission":
-                    return "LOWER(ISNULL(ft.description,'')) LIKE '%Regular Fee%'";
+                    return "LOWER(ISNULL(ft.description,'')) LIKE '%New Joining Fees%'";
                 case "transport":
                     return "LOWER(ISNULL(ft.description,'')) LIKE '%transport%' OR LOWER(ISNULL(ft.description,'')) LIKE '%bus%'";
                 case "hostel":
                     return "LOWER(ISNULL(ft.description,'')) LIKE '%hostel%'";
                 case "school":
-                    return "LOWER(ISNULL(ft.description,'')) LIKE '%General Fees%' OR LOWER(ISNULL(ft.description,'')) LIKE '%tuition%'";
+                    return "LOWER(ISNULL(ft.description,'')) LIKE '%regular fee%' OR LOWER(ISNULL(ft.description,'')) LIKE '%general fees%' OR LOWER(ISNULL(ft.description,'')) LIKE '%tuition%'";
                 default: // other = catch-all
-                    return @"LOWER(ISNULL(ft.description,'')) NOT LIKE '%Regular Fee%'
+                    return @"LOWER(ISNULL(ft.description,'')) NOT LIKE '%regular fee%'
                          AND LOWER(ISNULL(ft.description,'')) NOT LIKE '%transport%'
                          AND LOWER(ISNULL(ft.description,'')) NOT LIKE '%bus%'
                          AND LOWER(ISNULL(ft.description,'')) NOT LIKE '%hostel%'
-                         AND LOWER(ISNULL(ft.description,'')) NOT LIKE '%General Fees%'
-                         AND LOWER(ISNULL(ft.description,'')) NOT LIKE '%tuition%'";
+                         AND LOWER(ISNULL(ft.description,'')) NOT LIKE '%general fees%'
+                         AND LOWER(ISNULL(ft.description,'')) NOT LIKE '%tuition%'
+                         AND LOWER(ISNULL(ft.description,'')) NOT LIKE '%new joining fees%'";
             }
         }
 
@@ -509,13 +511,13 @@ namespace AscentSchools.Data.Repositories.School
                                 (receipt_no, student_id, student_unique_id, academic_year_id,
                                  payment_date, total_amount, payment_mode_id,
                                  cheque_no, cheque_date, bank_name, remarks,
-                                 status, school_id, created_by)
+                                 status, source, school_id, created_by)
                               VALUES
                                 (@receiptNo, @StudentId, @studentUniqueId, @AcademicYearId,
                                  ISNULL(@PaymentDate, CAST(GETDATE() AS DATE)),
                                  @total, @PaymentModeId,
                                  @ChequeNo, @ChequeDate, @BankName, @Remarks,
-                                 'Active', @schoolId, @createdBy);
+                                 'Active', 'webapp', @schoolId, @createdBy);
                               SELECT CAST(SCOPE_IDENTITY() AS INT)",
                             new
                             {
@@ -559,7 +561,7 @@ namespace AscentSchools.Data.Repositories.School
         public IEnumerable<FeeReceiptListDto> GetReceipts(
             string tenantDbName, int schoolId,
             string search, DateTime? dateFrom, DateTime? dateTo, string status,
-            DateTime? createdAfter = null)
+            DateTime? createdAfter = null, string source = null, DateTime? createdBefore = null)
         {
             var where = "r.school_id = @schoolId";
             if (!string.IsNullOrWhiteSpace(search))
@@ -567,7 +569,9 @@ namespace AscentSchools.Data.Repositories.School
             if (dateFrom.HasValue)   where += " AND r.payment_date >= @dateFrom";
             if (dateTo.HasValue)     where += " AND r.payment_date <= @dateTo";
             if (!string.IsNullOrWhiteSpace(status)) where += " AND r.status = @status";
-            if (createdAfter.HasValue) where += " AND r.created_at >= @createdAfter";
+            if (createdAfter.HasValue)  where += " AND r.created_at >= @createdAfter";
+            if (createdBefore.HasValue) where += " AND r.created_at <= @createdBefore";
+            if (!string.IsNullOrWhiteSpace(source)) where += " AND r.source = @source";
 
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 return conn.Query<FeeReceiptListDto>(
@@ -584,7 +588,7 @@ namespace AscentSchools.Data.Repositories.School
                        LEFT  JOIN payment_modes pm ON pm.payment_mode_id= r.payment_mode_id
                        WHERE {where}
                        ORDER BY r.receipt_id DESC",
-                    new { schoolId, search = $"%{search}%", dateFrom, dateTo, status, createdAfter });
+                    new { schoolId, search = $"%{search}%", dateFrom, dateTo, status, createdAfter, source, createdBefore });
         }
 
         public FeeReceiptDto GetReceiptById(string tenantDbName, int schoolId, int receiptId)
@@ -778,8 +782,9 @@ namespace AscentSchools.Data.Repositories.School
             {
                 var yearMap    = ToCI(conn.Query<FeeBulkLookup>("SELECT academic_year_id AS Id, academic_year AS Name FROM academic_years WHERE school_id=@schoolId", new { schoolId }));
                 var feeTypeMap = ToCI(conn.Query<FeeBulkLookup>("SELECT fee_type_id AS Id, fee_type_name AS Name FROM fee_types WHERE school_id=@schoolId", new { schoolId }));
-                var termMap    = ToCI(conn.Query<FeeBulkLookup>("SELECT term_id AS Id, term_name AS Name FROM terms WHERE school_id=@schoolId", new { schoolId }));
-                var periodMap  = ToCI(conn.Query<FeeBulkLookup>("SELECT fee_period_id AS Id, period_label AS Name FROM fee_periods WHERE school_id=@schoolId", new { schoolId }));
+                // Year-scoped: term/period names repeat across academic years, so key by name + academic_year_id.
+                var termMap    = ToCIByYear(conn.Query<FeeBulkLookup>("SELECT term_id AS Id, term_name AS Name, academic_year_id AS YearId FROM terms WHERE school_id=@schoolId", new { schoolId }));
+                var periodMap  = ToCIByYear(conn.Query<FeeBulkLookup>("SELECT fee_period_id AS Id, period_label AS Name, academic_year_id AS YearId FROM fee_periods WHERE school_id=@schoolId", new { schoolId }));
                 var routeMap   = ToCI(conn.Query<FeeBulkLookup>("SELECT route_id AS Id, route_name AS Name FROM bus_routes WHERE school_id=@schoolId", new { schoolId }));
                 var hostelMap  = ToCI(conn.Query<FeeBulkLookup>("SELECT hostel_id AS Id, hostel_name AS Name FROM hostels WHERE school_id=@schoolId", new { schoolId }));
                 var payModeMap = ToCI(conn.Query<FeeBulkLookup>("SELECT payment_mode_id AS Id, mode_name AS Name FROM payment_modes WHERE school_id=@schoolId", new { schoolId }));
@@ -879,8 +884,8 @@ namespace AscentSchools.Data.Repositories.School
                         var tn = (r.TermName ?? "").Trim();
                         if (!string.IsNullOrEmpty(tn))
                         {
-                            if (termMap.TryGetValue(tn, out int tid)) termId = tid;
-                            else if (periodMap.TryGetValue(tn, out int pid)) feePeriodId = pid;
+                            if (termMap.TryGetValue(YearKey(tn, yearId), out int tid)) termId = tid;
+                            else if (periodMap.TryGetValue(YearKey(tn, yearId), out int pid)) feePeriodId = pid;
                         }
 
                         items.Add(new BulkReceiptItemData
@@ -892,25 +897,51 @@ namespace AscentSchools.Data.Repositories.School
 
                     if (rowErrs.Count > 0) { result.Errors.AddRange(rowErrs); result.Failed += rows.Count; continue; }
 
-                    // Insert receipt in a transaction (receipt_no atomicity)
-                    var remarks  = LegacyRemarks(first);
+                    // Resolve receipt_no: use LegacyReceiptNo directly when provided; else auto-generate
+                    var legacyNo = (first.LegacyReceiptNo ?? "").Trim();
                     var feeCtgry = (first.FeeCategory ?? "School").Trim();
+                    string receiptNo;
+
+                    if (!string.IsNullOrEmpty(legacyNo))
+                    {
+                        // Dedup: skip if already imported (idempotent re-run)
+                        var alreadyExists = conn.QuerySingle<int>(
+                            "SELECT COUNT(*) FROM fee_receipts WHERE receipt_no = @legacyNo AND school_id = @schoolId",
+                            new { legacyNo, schoolId });
+                        if (alreadyExists > 0)
+                        {
+                            result.Skipped += rows.Count;
+                            continue;
+                        }
+                        receiptNo = legacyNo;
+                    }
+                    else
+                    {
+                        var prefix = GetReceiptPrefix(feeCtgry, meta.ClassGroupPrefix);
+                        var yr6    = FormatYr6(meta.AcademicYear);
+                        var maxSfx = conn.QuerySingle<int?>(
+                            @"SELECT MAX(TRY_CAST(RIGHT(receipt_no, 5) AS INT))
+                              FROM fee_receipts
+                              WHERE receipt_no LIKE @pattern AND school_id = @schoolId
+                                AND LEN(receipt_no) = @expectedLen",
+                            new { pattern = $"{prefix}{yr6}%", schoolId, expectedLen = prefix.Length + yr6.Length + 5 }) ?? 0;
+                        receiptNo = $"{prefix}{yr6}{(maxSfx + 1):D5}";
+                    }
+
+                    // Resolve status and cancel fields
+                    var statusRaw    = (first.Status ?? "").Trim().ToUpper();
+                    var receiptStatus = (statusRaw == "D" || statusRaw == "CANCELLED") ? "Cancelled" : "Active";
+                    var cancelReason  = receiptStatus == "Cancelled"
+                        ? (string.IsNullOrWhiteSpace(first.CancelReason) ? "Cancelled in legacy" : first.CancelReason.Trim())
+                        : (string)null;
+
+                    var remarks  = LegacyRemarks(first);
 
                     using (var tx = conn.BeginTransaction())
                     {
                         try
                         {
-                            var prefix    = GetReceiptPrefix(feeCtgry, meta.ClassGroupPrefix);
-                            var yr6       = FormatYr6(meta.AcademicYear);
-                            var maxSfx    = conn.QuerySingle<int?>(
-                                @"SELECT MAX(TRY_CAST(RIGHT(receipt_no, 5) AS INT))
-                                  FROM fee_receipts
-                                  WHERE receipt_no LIKE @pattern AND school_id = @schoolId
-                                    AND LEN(receipt_no) = @expectedLen",
-                                new { pattern = $"{prefix}{yr6}%", schoolId, expectedLen = prefix.Length + yr6.Length + 5 }, tx) ?? 0;
-                            var receiptNo = $"{prefix}{yr6}{(maxSfx + 1):D5}";
-                            var total     = items.Sum(i => i.Amount);
-
+                            var total    = items.Sum(i => i.Amount);
                             var chequeNo = string.IsNullOrWhiteSpace(first.ChequeNo) ? null : first.ChequeNo.Trim();
                             var bankName = string.IsNullOrWhiteSpace(first.BankName)  ? null : first.BankName.Trim();
 
@@ -918,15 +949,22 @@ namespace AscentSchools.Data.Repositories.School
                                 @"INSERT INTO fee_receipts
                                     (receipt_no, student_id, student_unique_id, academic_year_id,
                                      payment_date, total_amount, payment_mode_id,
-                                     cheque_no, bank_name, remarks, status, school_id, created_by)
+                                     cheque_no, bank_name, remarks,
+                                     status, cancel_reason, cancelled_by, cancelled_at,
+                                     source, school_id, created_by)
                                   VALUES
                                     (@receiptNo, @StudentId, @StudentUniqueId, @yearId,
                                      @payDate, @total, @payModeId,
-                                     @chequeNo, @bankName, @remarks, 'Active', @schoolId, @createdBy);
+                                     @chequeNo, @bankName, @remarks,
+                                     @receiptStatus, @cancelReason,
+                                     CASE WHEN @receiptStatus = 'Cancelled' THEN 'legacy' ELSE NULL END,
+                                     CASE WHEN @receiptStatus = 'Cancelled' THEN GETDATE() ELSE NULL END,
+                                     'legacy', @schoolId, @createdBy);
                                   SELECT CAST(SCOPE_IDENTITY() AS INT)",
                                 new { receiptNo, meta.StudentId, meta.StudentUniqueId, yearId,
                                       payDate, total, payModeId, chequeNo, bankName,
-                                      remarks, schoolId, createdBy }, tx);
+                                      remarks, receiptStatus, cancelReason,
+                                      schoolId, createdBy }, tx);
 
                             conn.Execute(
                                 @"INSERT INTO fee_receipt_items
@@ -950,7 +988,7 @@ namespace AscentSchools.Data.Repositories.School
                 }
             }
 
-            result.Failed = result.Total - result.Imported;
+            result.Failed = result.Total - result.Imported - result.Skipped;
             return result;
         }
 
@@ -960,6 +998,22 @@ namespace AscentSchools.Data.Repositories.School
             foreach (var i in src) if (!string.IsNullOrEmpty(i.Name) && !d.ContainsKey(i.Name)) d[i.Name] = i.Id;
             return d;
         }
+
+        // Year-scoped lookup — keyed "name|academicYearId". Used for fee types, terms and
+        // fee periods, whose names repeat across academic years (e.g. "Term 1" every year).
+        private static Dictionary<string, int> ToCIByYear(IEnumerable<FeeBulkLookup> src)
+        {
+            var d = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var i in src)
+            {
+                if (string.IsNullOrEmpty(i.Name)) continue;
+                var key = $"{i.Name}|{i.YearId ?? 0}";
+                if (!d.ContainsKey(key)) d[key] = i.Id;
+            }
+            return d;
+        }
+
+        private static string YearKey(string name, int yearId) => $"{(name ?? "").Trim()}|{yearId}";
 
         private static void BulkReceiptError(BulkImportResult result, List<BulkReceiptRow> rows, string reason)
         {
@@ -1004,8 +1058,9 @@ namespace AscentSchools.Data.Repositories.School
 
     internal class FeeBulkLookup
     {
-        public int    Id   { get; set; }
-        public string Name { get; set; }
+        public int    Id     { get; set; }
+        public string Name   { get; set; }
+        public int?   YearId { get; set; }   // set for year-scoped lookups (fee types, terms, fee periods)
     }
 
     internal class StudentYearRow

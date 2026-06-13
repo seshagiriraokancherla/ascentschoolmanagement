@@ -61,8 +61,13 @@ export default function FeePeriodsTab() {
   }
 
   useEffect(() => {
-    api.get('/school/master/academic-years')
-       .then((r) => setAcademicYears(r.data?.data || []))
+    api.get('/school/master/academic-years?activeOnly=true')
+       .then((r) => {
+         const years = r.data?.data || []
+         setAcademicYears(years)
+         const current = years.find(y => y.isCurrent)
+         if (current) onYearChange(current.academicYearId)
+       })
        .catch(() => {})
     load(null)
   }, [])

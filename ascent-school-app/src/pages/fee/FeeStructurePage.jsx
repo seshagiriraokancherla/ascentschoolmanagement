@@ -44,21 +44,36 @@ export default function FeeStructurePage() {
 
   useEffect(() => {
     Promise.all([
-      api.get('/school/master/academic-years'),
+      api.get('/school/master/academic-years?activeOnly=true'),
       api.get('/school/master/classes'),
       api.get('/school/master/fee-categories'),
       api.get('/school/master/fee-types'),
-      api.get('/school/master/terms'),
-    ]).then(([yr, cl, fc, ft, tm]) => {
-      setAcademicYears(yr.data?.data || [])
+    ]).then(([yr, cl, fc, ft]) => {
+      const years = yr.data?.data || []
+      setAcademicYears(years)
       setClasses(cl.data?.data || [])
       setFeeCategories(fc.data?.data || [])
       setFeeTypes(ft.data?.data || [])
-      setTerms(tm.data?.data || [])
+      const current = years.find(y => y.isCurrent)
+      if (current) {
+        setFilters(f => ({ ...f, academicYearId: current.academicYearId }))
+        loadTerms(current.academicYearId)
+        loadFeePeriods(current.academicYearId)
+      }
     }).catch(() => {})
   }, [])
 
-  // Load fee periods when academic year changes
+  // Load terms and fee periods when academic year changes
+  async function loadTerms(yearId) {
+    if (!yearId) { setTerms([]); return }
+    try {
+      const res = await api.get(`/school/master/terms?academicYearId=${yearId}`)
+      setTerms(res.data?.data || [])
+    } catch {
+      setTerms([])
+    }
+  }
+
   async function loadFeePeriods(yearId) {
     if (!yearId) { setFeePeriods([]); return }
     try {
@@ -71,6 +86,7 @@ export default function FeeStructurePage() {
 
   function onYearChange(val) {
     setFilters((f) => ({ ...f, academicYearId: val }))
+    loadTerms(val)
     loadFeePeriods(val)
     setLoaded(false)
     setAmountMap({})
@@ -345,7 +361,7 @@ export default function FeeStructurePage() {
             pagination={false}
             size="small"
             bordered
-            scroll={{ x: 'max-content' }}
+            scroll={{ x: 'max-content', y: 'calc(100vh - 320px)' }}
           />
           <div style={{ marginTop: 16, textAlign: 'right' }}>
             <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} loading={saving}>

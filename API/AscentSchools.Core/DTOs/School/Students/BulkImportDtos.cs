@@ -66,6 +66,10 @@ namespace AscentSchools.Core.DTOs.School.Students
     public class BulkStudentImportRequest
     {
         public List<StudentBulkRow> Rows { get; set; } = new List<StudentBulkRow>();
+        // When true: an existing (admission_no + academic_year) row is UPDATED (personal/contact
+        // fields only) instead of erroring. New students are still inserted. Default false keeps
+        // the strict insert-only behaviour used by the web-UI bulk import.
+        public bool Upsert { get; set; } = false;
     }
 
     // ── Fee structure bulk import ─────────────────────────────────────────────
@@ -106,8 +110,10 @@ namespace AscentSchools.Core.DTOs.School.Students
         public string PaymentMode     { get; set; }  // e.g. "Cash"
         public string ChequeNo        { get; set; }
         public string BankName        { get; set; }
-        public string LegacyReceiptNo { get; set; }  // stored in remarks
+        public string LegacyReceiptNo { get; set; }  // used as receipt_no directly when provided
         public string Remarks         { get; set; }
+        public string Status          { get; set; }  // 'A'/'Active' → Active; 'D'/'Cancelled' → Cancelled; blank → Active
+        public string CancelReason    { get; set; }  // populated when Status=D/Cancelled
     }
 
     public class BulkReceiptImportRequest
@@ -129,6 +135,8 @@ namespace AscentSchools.Core.DTOs.School.Students
     {
         public int              Total    { get; set; }
         public int              Imported { get; set; }
+        public int              Updated  { get; set; }  // existing rows updated (student upsert mode)
+        public int              Skipped  { get; set; }  // already-imported (dedup); idempotent re-run
         public int              Failed   { get; set; }
         public List<BulkRowError> Errors { get; set; } = new List<BulkRowError>();
     }

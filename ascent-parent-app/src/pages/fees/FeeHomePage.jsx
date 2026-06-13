@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Card, Tabs, Collapse, Table, Checkbox, Button, Tag, Typography,
-  Statistic, Row, Col, Empty, Spin, Alert, App as AntApp,
+  Statistic, Row, Col, Empty, Spin, Alert, Avatar, App as AntApp,
 } from 'antd'
-import { CreditCardOutlined, ReloadOutlined } from '@ant-design/icons'
+import { CreditCardOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import api from '../../api/axiosInstance'
+import { useAuthStore } from '../../store/authStore'
 
 const { Text } = Typography
 const fmt = (n) => `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
@@ -21,59 +22,111 @@ function itemKey(li) {
     .map((v) => v ?? 'n').join('_')
 }
 
-function YearSection({ year, paying, onPay }) {
+// Group key by term (or fee period for monthly structures).
+function termKey(li) {
+  return li.feePeriodId ? `P_${li.feePeriodId}` : `T_${li.termId ?? 0}`
+}
+
+// Collapse line items into one entry per term: summed amounts + the underlying
+// per-head line items (kept so payment can split the term total back into heads).
+function groupByTermFn(lineItems) {
+  const map = new Map()
+  for (const li of lineItems) {
+    const key = termKey(li)
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        label:           li.termName || li.periodLabel || '—',
+        structureAmount: 0,
+        concessionAmount: 0,
+        outstanding:     0,
+        items:           [],
+      })
+    }
+    const g = map.get(key)
+    g.structureAmount  += li.structureAmount  || 0
+    g.concessionAmount += li.concessionAmount || 0
+    g.outstanding      += li.outstanding      || 0
+    g.items.push(li)
+  }
+  return Array.from(map.values())
+}
+
+function YearSection({ year, paying, onPay, groupByTerm = false }) {
   const [yearSelected, setYearSelected] = useState(new Set())
 
-  const outstandingItems = year.lineItems.filter((li) => li.outstanding > 0)
-  const selectedItems    = outstandingItems.filter((li) => yearSelected.has(itemKey(li)))
-  const selectedTotal    = selectedItems.reduce((s, li) => s + li.outstanding, 0)
-  const allChecked       = outstandingItems.length > 0 && selectedItems.length === outstandingItems.length
-  const someChecked      = selectedItems.length > 0 && !allChecked
+  // Rows are either term groups (School) or raw line items (Transport/Hostel).
+  const rows    = groupByTerm ? groupByTermFn(year.lineItems) : year.lineItems
+  const rowKey  = groupByTerm ? (r) => r.key : itemKey
 
-  const toggle = (li, checked) => {
+  const outstandingRows = rows.filter((r) => r.outstanding > 0)
+  const selectedRows    = outstandingRows.filter((r) => yearSelected.has(rowKey(r)))
+  const selectedTotal   = selectedRows.reduce((s, r) => s + r.outstanding, 0)
+  const allChecked      = outstandingRows.length > 0 && selectedRows.length === outstandingRows.length
+  const someChecked     = selectedRows.length > 0 && !allChecked
+
+  const toggle = (r, checked) => {
     setYearSelected((prev) => {
       const s = new Set(prev)
-      if (checked) s.add(itemKey(li)); else s.delete(itemKey(li))
+      if (checked) s.add(rowKey(r)); else s.delete(rowKey(r))
       return s
     })
   }
 
   const toggleAll = () => {
     if (allChecked) setYearSelected(new Set())
-    else setYearSelected(new Set(outstandingItems.map(itemKey)))
+    else setYearSelected(new Set(outstandingRows.map(rowKey)))
   }
 
-  const cols = [
+  // Expand selected rows to the underlying per-head line items with outstanding > 0.
+  // For grouped (School) rows this splits the term total back into its fee heads;
+  // for ungrouped rows each row is already a single line item.
+  const expandToLineItems = () =>
+    selectedRows
+      .flatMap((r) => (groupByTerm ? r.items : [r]))
+      .filter((li) => li.outstanding > 0)
+
+  const handlePayClick = () =>
+    onPay(year, expandToLineItems(), selectedTotal, () => setYearSelected(new Set()))
+
+  const checkCol = {
+    title: () => outstandingRows.length > 0
+      ? <Checkbox indeterminate={someChecked} checked={allChecked} onChange={toggleAll} />
+      : null,
+    key: '_check', width: 48,
+    render: (_, r) => r.outstanding > 0
+      ? <Checkbox checked={yearSelected.has(rowKey(r))} onChange={(e) => toggle(r, e.target.checked)} />
+      : <Tag color="success" style={{ fontSize: 10 }}>Paid</Tag>,
+  }
+
+  const outstandingCol = {
+    title: 'Outstanding', key: 'due', align: 'right',
+    render: (_, r) => (
+      <Text strong style={{ color: r.outstanding > 0 ? '#cf1322' : '#52c41a' }}>
+        {fmt(r.outstanding)}
+      </Text>
+    ),
+  }
+
+  // Grouped (School): Term | Total | Outstanding. Term total only — no head breakdown.
+  const groupedCols = [
+    checkCol,
+    { title: 'Term / Period', key: 'term', render: (_, r) => r.label },
+    { title: 'Total', key: 'amt', align: 'right', render: (_, r) => fmt(r.structureAmount) },
+    outstandingCol,
+  ]
+
+  // Ungrouped (Transport/Hostel): full head-wise detail (unchanged).
+  const detailCols = [
+    checkCol,
+    { title: 'Fee / Route / Hostel', key: 'name', render: (_, li) => li.feeTypeName || '—' },
+    { title: 'Term / Period', key: 'term', render: (_, li) => li.termName || li.periodLabel || '—' },
+    { title: 'Total', key: 'amt', align: 'right', render: (_, li) => fmt(li.structureAmount) },
     {
-      title: () => outstandingItems.length > 0
-        ? <Checkbox indeterminate={someChecked} checked={allChecked} onChange={toggleAll} />
-        : null,
-      key: '_check', width: 48,
-      render: (_, li) => li.outstanding > 0
-        ? <Checkbox checked={yearSelected.has(itemKey(li))} onChange={(e) => toggle(li, e.target.checked)} />
-        : <Tag color="success" style={{ fontSize: 10 }}>Paid</Tag>,
-    },
-    {
-      title: 'Fee / Route / Hostel', key: 'name',
-      render: (_, li) => li.feeTypeName || '—',
-    },
-    {
-      title: 'Term / Period', key: 'term',
-      render: (_, li) => li.termName || li.periodLabel || '—',
-    },
-    { title: 'Total',       key: 'amt',  align: 'right', render: (_, li) => fmt(li.structureAmount) },
-    {
-      title: 'Concession',  key: 'conc', align: 'right',
+      title: 'Concession', key: 'conc', align: 'right',
       render: (_, li) => li.concessionAmount > 0 ? <Tag color="green">-{fmt(li.concessionAmount)}</Tag> : '—',
     },
-    {
-      title: 'Outstanding', key: 'due',  align: 'right',
-      render: (_, li) => (
-        <Text strong style={{ color: li.outstanding > 0 ? '#cf1322' : '#52c41a' }}>
-          {fmt(li.outstanding)}
-        </Text>
-      ),
-    },
+    outstandingCol,
   ]
 
   return (
@@ -83,11 +136,11 @@ function YearSection({ year, paying, onPay }) {
         <Col span={6}><Statistic title="Paid"        value={year.totalPaid}        prefix="₹" precision={2} valueStyle={{ color: '#52c41a' }} /></Col>
         <Col span={6}><Statistic title="Outstanding" value={year.totalOutstanding} prefix="₹" precision={2} valueStyle={{ color: year.totalOutstanding > 0 ? '#cf1322' : '#52c41a' }} /></Col>
         <Col span={6} style={{ display: 'flex', alignItems: 'flex-end' }}>
-          {selectedItems.length > 0 && (
+          {selectedRows.length > 0 && (
             <Button
               type="primary" icon={<CreditCardOutlined />}
               loading={paying} block
-              onClick={() => onPay(year, selectedItems, selectedTotal, () => setYearSelected(new Set()))}
+              onClick={handlePayClick}
             >
               Pay {fmt(selectedTotal)}
             </Button>
@@ -95,9 +148,9 @@ function YearSection({ year, paying, onPay }) {
         </Col>
       </Row>
       <Table
-        dataSource={year.lineItems} columns={cols} rowKey={itemKey}
+        dataSource={rows} columns={groupByTerm ? groupedCols : detailCols} rowKey={rowKey}
         size="small" pagination={false}
-        rowClassName={(li) => li.outstanding <= 0 ? 'paid-row' : ''}
+        rowClassName={(r) => r.outstanding <= 0 ? 'paid-row' : ''}
       />
     </div>
   )
@@ -146,7 +199,7 @@ function FeeTab({ category, paying, onPay: onPayOuter }) {
         }
       </div>
     ),
-    children: <YearSection year={year} paying={paying} onPay={onPay} />,
+    children: <YearSection year={year} paying={paying} onPay={onPay} groupByTerm={category === 'School'} />,
   }))
 
   return (
@@ -172,6 +225,7 @@ function FeeTab({ category, paying, onPay: onPayOuter }) {
 export default function FeeHomePage() {
   const navigate    = useNavigate()
   const { message } = AntApp.useApp()
+  const { child }   = useAuthStore()
   const [paying, setPaying] = useState(false)
 
   const handlePay = async (year, selectedItems, total, clearSelection, category) => {
@@ -233,6 +287,23 @@ export default function FeeHomePage() {
 
   return (
     <div>
+      {child && (
+        <Card bordered={false} style={{ marginBottom: 16 }} bodyStyle={{ padding: 16 }}>
+          <Row align="middle" gutter={12}>
+            <Col flex="none">
+              <Avatar size={48} icon={<UserOutlined />} style={{ background: '#1677ff' }} />
+            </Col>
+            <Col flex="auto">
+              <Text strong style={{ fontSize: 16, display: 'block' }}>{child.studentName || '—'}</Text>
+              <span>
+                {child.className && <Tag color="blue">{child.className}</Tag>}
+                {child.sectionName && <Tag color="geekblue">Section {child.sectionName}</Tag>}
+                {child.admissionNo && <Tag>Adm No: {child.admissionNo}</Tag>}
+              </span>
+            </Col>
+          </Row>
+        </Card>
+      )}
       <Card bordered={false}>
         <Tabs
           defaultActiveKey="School"

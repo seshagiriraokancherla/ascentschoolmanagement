@@ -2,6 +2,7 @@ using AscentSchools.Core.DTOs.School.Master;
 using AscentSchools.Data.ConnectionFactory;
 using Dapper;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace AscentSchools.Data.Repositories.School
 {
@@ -12,22 +13,38 @@ namespace AscentSchools.Data.Repositories.School
 
         // ── Academic Years ────────────────────────────────────────────────
 
-        public IEnumerable<AcademicYearDto> GetAcademicYears(string tenantDbName, int schoolId)
+        public IEnumerable<AcademicYearDto> GetAcademicYears(string tenantDbName, int schoolId, bool activeOnly = false)
         {
+            var sql = $@"SELECT academic_year_id AcademicYearId, academic_year AcademicYear,
+                                start_month StartMonth, end_month EndMonth, status Status,
+                                registration_fee_frequency RegistrationFeeFrequency,
+                                transport_fee_frequency TransportFeeFrequency,
+                                hostel_fee_frequency HostelFeeFrequency,
+                                boarding_type BoardingType,
+                                new_admissions_enabled NewAdmissionsEnabled,
+                                school_id SchoolId
+                         FROM academic_years
+                         WHERE school_id = @schoolId
+                         {(activeOnly ? "AND status = 'Active'" : "")}
+                         ORDER BY academic_year_id DESC";
+
             using (var conn = _db.GetTenantConnection(tenantDbName))
-                return conn.Query<AcademicYearDto>(
-                    @"SELECT academic_year_id AcademicYearId, academic_year AcademicYear,
-                             start_month StartMonth, end_month EndMonth, status Status,
-                             registration_fee_frequency RegistrationFeeFrequency,
-                             transport_fee_frequency TransportFeeFrequency,
-                             hostel_fee_frequency HostelFeeFrequency,
-                             boarding_type BoardingType,
-                             new_admissions_enabled NewAdmissionsEnabled,
-                             school_id SchoolId
-                      FROM academic_years
-                      WHERE school_id = @schoolId
-                      ORDER BY academic_year_id DESC",
-                    new { schoolId });
+            {
+                var years = conn.Query<AcademicYearDto>(sql, new { schoolId }).ToList();
+
+                // Mark the most recently created Active year as current
+                bool currentSet = false;
+                foreach (var y in years)
+                {
+                    if (!currentSet && string.Equals(y.Status, "Active", System.StringComparison.OrdinalIgnoreCase))
+                    {
+                        y.IsCurrent = true;
+                        currentSet = true;
+                    }
+                }
+
+                return years;
+            }
         }
 
         public int CreateAcademicYear(string tenantDbName, int schoolId, SaveAcademicYearRequest r)
@@ -255,7 +272,7 @@ namespace AscentSchools.Data.Repositories.School
 
         // ── Terms ─────────────────────────────────────────────────────────
 
-        public IEnumerable<TermDto> GetTerms(string tenantDbName, int schoolId)
+        public IEnumerable<TermDto> GetTerms(string tenantDbName, int schoolId, int? academicYearId = null)
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 return conn.Query<TermDto>(
@@ -264,8 +281,9 @@ namespace AscentSchools.Data.Repositories.School
                              academic_year_id AcademicYearId, status Status, school_id SchoolId
                       FROM terms
                       WHERE school_id = @schoolId
-                      ORDER BY academic_year_id, ISNULL(order_no, 9999)",
-                    new { schoolId });
+                        AND (@academicYearId IS NULL OR academic_year_id = @academicYearId)
+                      ORDER BY ISNULL(order_no, 9999)",
+                    new { schoolId, academicYearId });
         }
 
         public int CreateTerm(string tenantDbName, int schoolId, SaveTermRequest r)

@@ -1,13 +1,15 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Result, Button, Descriptions, Table, Typography, Card, Divider } from 'antd'
 import { CheckCircleOutlined, PrinterOutlined, ArrowLeftOutlined } from '@ant-design/icons'
+import { useBrandingStore } from '../../store/brandingStore'
 
-const { Text } = Typography
+const { Text, Title } = Typography
 const fmt = (n) => `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
 
 export default function PaymentSuccessPage() {
   const navigate  = useNavigate()
   const { state } = useLocation()
+  const { branding } = useBrandingStore()
   const receipt   = state?.receipt
 
   if (!receipt) {
@@ -34,6 +36,15 @@ export default function PaymentSuccessPage() {
 
   return (
     <div style={{ maxWidth: 700, margin: '0 auto' }} className="print-area">
+      {/* School header */}
+      <div style={{ textAlign: 'center', marginBottom: 8 }}>
+        {branding?.logoPath && (
+          <img src={branding.logoPath} alt="logo" style={{ height: 56, marginBottom: 8 }} />
+        )}
+        <Title level={3} style={{ margin: 0 }}>{branding?.displayName || 'School'}</Title>
+        <Text type="secondary">Fee Receipt</Text>
+      </div>
+
       <Result
         icon={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
         status="success"

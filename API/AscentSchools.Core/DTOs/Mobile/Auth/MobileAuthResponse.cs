@@ -6,6 +6,7 @@ namespace AscentSchools.Core.DTOs.Mobile.Auth
         public string TokenType   { get; set; }   // "student" or "parent"
         public string FullName    { get; set; }
         public string ClassName   { get; set; }
+        public string SectionName { get; set; }
         public string AdmissionNo { get; set; }
         public long   StudentId   { get; set; }
         public int    ParentId    { get; set; }

@@ -242,7 +242,12 @@ function BusFeeTab() {
 
   useEffect(() => {
     api.get('/school/transport/routes').then(r => setRoutes(r.data.data || []))
-    api.get('/school/master/academic-years').then(r => setAcademicYears(r.data.data || []))
+    api.get('/school/master/academic-years?activeOnly=true').then(r => {
+      const years = r.data?.data || []
+      setAcademicYears(years)
+      const current = years.find(y => y.isCurrent)
+      if (current) setSelectedYear(current.academicYearId)
+    })
   }, [])
 
   const loadStructure = async () => {
@@ -376,15 +381,18 @@ function StudentsTab() {
 
   useEffect(() => {
     Promise.all([
-      api.get('/school/master/academic-years'),
+      api.get('/school/master/academic-years?activeOnly=true'),
       api.get('/school/master/classes'),
       api.get('/school/transport/routes'),
       api.get('/school/transport/buses'),
     ]).then(([yr, cl, ro, bu]) => {
-      setYears(yr.data.data   || [])
+      const years = yr.data?.data || []
+      setYears(years)
       setClasses(cl.data.data || [])
       setRoutes(ro.data.data  || [])
       setBuses(bu.data.data   || [])
+      const current = years.find(y => y.isCurrent)
+      if (current) setYearFilter(current.academicYearId)
     })
   }, [])
 

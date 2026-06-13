@@ -1,0 +1,14 @@
+General = 100, 100, 917, 525, 
+MyClass = -97, 175, 846, 537, C
+Mst_Main = 0, 0, 847, 442, C, 208, 208, 1055, 650, C
+addrCntl = 0, 0, 0, 0, C, 78, 78, 925, 520, C
+lvButtons_H = 0, 0, 847, 442, C, 104, 104, 951, 546, C
+ACPRibbon = 104, 104, 1220, 473, C, 130, 130, 977, 572, C
+mod_lvButtons = 0, 0, 0, 0, C
+frmAscentSplash = 0, 0, 0, 0, C, 104, 104, 1052, 485, C
+frmLogin = -123, 148, 916, 532, , 78, 78, 972, 520, C
+GetComPorts = 0, 0, 0, 0, C
+modGetMACadr = 0, 0, 0, 0, C
+Tra_ImportReceipts = 234, 234, 1202, 706, , 156, 156, 1124, 628, C
+AscentAPI = 78, 78, 1046, 550, 
+AscentAPI_Examples = 52, 52, 1020, 524, 

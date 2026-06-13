@@ -12,6 +12,34 @@ class AuthRepository(
     private val tokenStore: TokenStore
 ) {
 
+    // ── Single-app onboarding + branding ───────────────────────────────────────
+
+    /** Resolve a 4-digit school code → school (subdomain + name) for the generic app. */
+    suspend fun getSchoolByCode(code: String): Result<SchoolByCodeDto> {
+        return runCatching {
+            val resp = api.getSchoolByCode(code.trim())
+            val body = resp.bodyOrError()
+            if (!body.success || body.data?.schoolCode == null) error(body.message ?: "Invalid school code")
+            body.data
+        }
+    }
+
+    /** Load branding for the current school code; caches name + absolute logo URL. */
+    suspend fun loadBranding(): Result<BrandingDto> {
+        return runCatching {
+            val resp = api.getBranding()
+            val body = resp.bodyOrError()
+            if (!body.success || body.data == null) error(body.message ?: "Failed to load branding")
+            tokenStore.brandingName    = body.data.displayName
+            tokenStore.brandingLogoUrl = body.data.logoPath?.let { resolveMedia(it) }
+            body.data
+        }
+    }
+
+    private fun resolveMedia(path: String): String =
+        if (path.startsWith("http", ignoreCase = true)) path
+        else RetrofitClient.mediaBaseUrl + path.trimStart('/')
+
     // ── Teacher login ─────────────────────────────────────────────────────────
 
     suspend fun loginTeacher(username: String, password: String): Result<TeacherAuthResponse> {

@@ -37,6 +37,24 @@ namespace AscentSchools.API.Controllers.Mobile
         }
 
         // ================================================================
+        // SINGLE-APP ONBOARDING — resolve 4-digit login code → school
+        // ================================================================
+
+        // GET mobile/auth/school-by-code?code=1001
+        [HttpGet, Route("school-by-code"), AllowAnonymous]
+        public HttpResponseMessage SchoolByCode(string code)
+        {
+            if (string.IsNullOrWhiteSpace(code))
+                return Fail(HttpStatusCode.BadRequest, "School code is required.");
+
+            var school = _groups.GetByLoginCode(code.Trim());
+            if (school == null)
+                return Fail(HttpStatusCode.NotFound, "Invalid school code.");
+
+            return Request.CreateResponse(HttpStatusCode.OK, ApiResponse<SchoolByCodeDto>.Ok(school));
+        }
+
+        // ================================================================
         // STUDENT AUTH
         // ================================================================
 
@@ -488,12 +506,16 @@ namespace AscentSchools.API.Controllers.Mobile
                 AdmissionNo = link.AdmissionNo,
             });
 
+            // Section isn't stored on the link (master DB) — look it up from the tenant DB.
+            var sectionName = _studentAuth.GetStudentSection(link.DbName, link.StudentId);
+
             return Request.CreateResponse(HttpStatusCode.OK, ApiResponse<MobileAuthResponse>.Ok(new MobileAuthResponse
             {
                 AccessToken = accessToken,
                 TokenType   = "parent",
                 FullName    = link.StudentName,
                 ClassName   = link.ClassName,
+                SectionName = sectionName,
                 AdmissionNo = link.AdmissionNo,
                 StudentId   = link.StudentId,
                 ParentId    = mobile.ParentId,

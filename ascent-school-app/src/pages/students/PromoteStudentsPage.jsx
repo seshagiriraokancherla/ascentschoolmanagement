@@ -32,7 +32,12 @@ export default function PromoteStudentsPage() {
   const [promoting, setPromoting] = useState(false)
 
   useEffect(() => {
-    api.get('/school/master/academic-years').then((r) => setAcademicYears(r.data?.data || []))
+    api.get('/school/master/academic-years?activeOnly=true').then((r) => {
+      const years = r.data?.data || []
+      setAcademicYears(years)
+      const current = years.find(y => y.isCurrent)
+      if (current) setFromYearId(current.academicYearId)
+    })
     api.get('/school/master/classes').then((r) => setClasses(r.data?.data || []))
   }, [])
 

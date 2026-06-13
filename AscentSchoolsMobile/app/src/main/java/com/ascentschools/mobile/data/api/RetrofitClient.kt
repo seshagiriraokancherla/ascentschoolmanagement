@@ -88,8 +88,12 @@ class PersistentCookieJar(prefs: SharedPreferences) : CookieJar {
 
 object RetrofitClient {
 
-    private const val BASE_URL = "https://edu-care.in/api/"
-    //private const val BASE_URL = "http://192.168.0.102:62845/"
+    // Per-build-type: debug → local dev API, release → production (see app/build.gradle.kts).
+    private val BASE_URL = BuildConfig.API_BASE_URL
+
+    /** Site root (BASE_URL without the trailing "api/") — used to resolve relative
+     *  media paths such as branding logos (/Uploads/...). */
+    val mediaBaseUrl: String = BASE_URL.removeSuffix("api/")
 
     private var _tokenStore: TokenStore? = null
     private var _cookieJar: PersistentCookieJar? = null
@@ -114,8 +118,14 @@ object RetrofitClient {
                 val original = chain.request()
                 val builder  = original.newBuilder()
                 store.accessToken?.let { builder.header("Authorization", "Bearer $it") }
-                // School code is baked in per build flavor — never changes at runtime
-                builder.header("X-School-Code", BuildConfig.SCHOOL_CODE)
+                // Per-school flavors bake SCHOOL_CODE; the generic single app leaves it empty
+                // and resolves the school at runtime (stored in TokenStore.schoolCode).
+                // Send both X-School-Code (auth/data) and X-Subdomain (branding endpoint).
+                val code = BuildConfig.SCHOOL_CODE.ifBlank { store.schoolCode ?: "" }
+                if (code.isNotBlank()) {
+                    builder.header("X-School-Code", code)
+                    builder.header("X-Subdomain",   code)
+                }
                 chain.proceed(builder.build())
             }
             .addInterceptor(loggingInterceptor)

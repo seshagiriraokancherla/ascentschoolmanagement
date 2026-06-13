@@ -149,7 +149,12 @@ function FeeStructureTab({ hostels }) {
   const [saving,     setSaving]     = useState(false)
 
   useEffect(() => {
-    api.get('/school/master/academic-years').then((r) => setYears(r.data?.data || [])).catch(() => {})
+    api.get('/school/master/academic-years?activeOnly=true').then((r) => {
+      const years = r.data?.data || []
+      setYears(years)
+      const current = years.find(y => y.isCurrent)
+      if (current) setSelYear(current.academicYearId)
+    }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -321,11 +326,14 @@ function StudentAssignmentTab({ hostels }) {
 
   useEffect(() => {
     Promise.all([
-      api.get('/school/master/academic-years'),
+      api.get('/school/master/academic-years?activeOnly=true'),
       api.get('/school/master/classes'),
     ]).then(([yr, cl]) => {
-      setYears(yr.data?.data  || [])
+      const years = yr.data?.data || []
+      setYears(years)
       setClasses(cl.data?.data || [])
+      const current = years.find(y => y.isCurrent)
+      if (current) setSelYear(current.academicYearId)
     }).catch(() => {})
   }, [])
 

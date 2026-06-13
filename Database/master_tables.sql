@@ -16,6 +16,7 @@ CREATE TABLE school_groups (
     group_name      VARCHAR(100)    NOT NULL,
     subdomain       VARCHAR(50)     NOT NULL,   -- e.g. "srividya" → srividya.edu-care.in
     db_name         VARCHAR(100)    NULL,        -- e.g. "ascent_group_1" — set manually after DB creation
+    login_code      VARCHAR(10)     NULL,        -- 4-digit code parents enter in the single (multi-school) app; set via control app
     description     VARCHAR(200)    NULL,
     status          VARCHAR(10)     NOT NULL DEFAULT 'Active',
     created_by      VARCHAR(25)     NULL,
@@ -23,6 +24,11 @@ CREATE TABLE school_groups (
     CONSTRAINT PK_school_groups    PRIMARY KEY (group_id),
     CONSTRAINT UQ_school_groups_subdomain UNIQUE (subdomain)
 );
+GO
+
+-- Unique login_code among groups that have one (NULLs allowed)
+CREATE UNIQUE INDEX UQ_school_groups_login_code
+    ON school_groups (login_code) WHERE login_code IS NOT NULL;
 GO
 
 

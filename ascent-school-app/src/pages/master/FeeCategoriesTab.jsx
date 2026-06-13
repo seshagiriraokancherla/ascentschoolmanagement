@@ -27,7 +27,7 @@ export default function FeeCategoriesTab() {
     try {
       const [catRes, yearRes] = await Promise.all([
         api.get('/school/master/fee-categories'),
-        api.get('/school/master/academic-years'),
+        api.get('/school/master/academic-years?activeOnly=true'),
       ])
       setRows(catRes.data?.data || [])
       setAcademicYears(yearRes.data?.data || [])

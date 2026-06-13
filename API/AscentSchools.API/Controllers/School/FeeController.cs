@@ -100,17 +100,19 @@ namespace AscentSchools.API.Controllers.School
 
         // ── Receipts ──────────────────────────────────────────────────────
 
-        // GET school/fees/receipts?search=&dateFrom=&dateTo=&status=&createdAfter=
+        // GET school/fees/receipts?search=&dateFrom=&dateTo=&status=&createdAfter=&createdBefore=&source=
         [HttpGet, Route("receipts")]
         public HttpResponseMessage GetReceipts(
-            string    search       = null,
-            DateTime? dateFrom     = null,
-            DateTime? dateTo       = null,
-            string    status       = null,
-            DateTime? createdAfter = null)
+            string    search        = null,
+            DateTime? dateFrom      = null,
+            DateTime? dateTo        = null,
+            string    status        = null,
+            DateTime? createdAfter  = null,
+            string    source        = null,
+            DateTime? createdBefore = null)
         {
             var receipts = _repo.GetReceipts(
-                Tenant.TenantDbName, Tenant.SchoolId, search, dateFrom, dateTo, status, createdAfter);
+                Tenant.TenantDbName, Tenant.SchoolId, search, dateFrom, dateTo, status, createdAfter, source, createdBefore);
             return Ok(receipts);
         }
 

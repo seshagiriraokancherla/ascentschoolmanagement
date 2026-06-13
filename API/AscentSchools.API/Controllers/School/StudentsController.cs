@@ -20,7 +20,7 @@ namespace AscentSchools.API.Controllers.School
             _repo = new StudentRepository(new TenantConnectionFactory());
         }
 
-        // GET school/students?search=&classId=&sectionId=&academicYearId=&status=&bloodGroup=&joinType=&busRouteId=&hostelId=
+        // GET school/students?search=&classId=&sectionId=&academicYearId=&status=&bloodGroup=&joinType=&busRouteId=&hostelId=&latestOnly=
         [HttpGet, Route("")]
         public HttpResponseMessage GetStudents(
             string search         = null,
@@ -31,11 +31,13 @@ namespace AscentSchools.API.Controllers.School
             string bloodGroup     = null,
             string joinType       = null,
             int?   busRouteId     = null,
-            int?   hostelId       = null)
+            int?   hostelId       = null,
+            bool   latestOnly     = false)
         {
             var students = _repo.GetAll(
                 Tenant.TenantDbName, Tenant.SchoolId,
-                search, classId, sectionId, academicYearId, status, bloodGroup, joinType, busRouteId, hostelId);
+                search, classId, sectionId, academicYearId, status, bloodGroup, joinType,
+                busRouteId, hostelId, latestOnly);
             return Ok(students);
         }
 

@@ -27,7 +27,7 @@ export default function TermsTab() {
     try {
       const [dataRes, yearRes] = await Promise.all([
         api.get('/school/master/terms'),
-        api.get('/school/master/academic-years'),
+        api.get('/school/master/academic-years?activeOnly=true'),
       ])
       setRows(dataRes.data?.data || [])
       setAcademicYears(yearRes.data?.data || [])

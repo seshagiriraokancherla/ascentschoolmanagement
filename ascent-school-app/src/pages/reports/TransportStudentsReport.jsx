@@ -33,7 +33,12 @@ export default function TransportStudentsReport() {
   const [loaded,      setLoaded]      = useState(false)
 
   useEffect(() => {
-    api.get('/school/master/academic-years').then(r => setAcademicYears(r.data?.data || []))
+    api.get('/school/master/academic-years?activeOnly=true').then(r => {
+      const years = r.data?.data || []
+      setAcademicYears(years)
+      const current = years.find(y => y.isCurrent)
+      if (current) setYearId(current.academicYearId)
+    })
     api.get('/school/transport/routes').then(r => setRoutes(r.data?.data || []))
   }, [])
 

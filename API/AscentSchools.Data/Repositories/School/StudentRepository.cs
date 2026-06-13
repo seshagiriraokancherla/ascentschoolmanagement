@@ -16,7 +16,8 @@ namespace AscentSchools.Data.Repositories.School
         public IEnumerable<StudentListDto> GetAll(
             string tenantDbName, int schoolId,
             string search, int? classId, int? sectionId, int? academicYearId, string status,
-            string bloodGroup = null, string joinType = null, int? busRouteId = null, int? hostelId = null)
+            string bloodGroup = null, string joinType = null, int? busRouteId = null,
+            int? hostelId = null, bool latestOnly = false)
         {
             var where = new StringBuilder("s.school_id = @schoolId");
             if (!string.IsNullOrWhiteSpace(search))
@@ -38,8 +39,8 @@ namespace AscentSchools.Data.Repositories.School
             if (hostelId.HasValue)
                 where.Append(" AND s.hostel_id = @hostelId");
 
-            var sql = $@"
-                SELECT s.student_id StudentId, s.student_unique_id StudentUniqueId,
+            const string cols = @"
+                       s.student_id StudentId, s.student_unique_id StudentUniqueId,
                        s.admission_no AdmissionNo,
                        s.student_name StudentName, c.class_name ClassName,
                        sec.section_name SectionName,
@@ -52,12 +53,38 @@ namespace AscentSchools.Data.Repositories.School
                        s.blocked_reason BlockedReason,
                        ISNULL(s.is_detained, 0) IsDetained,
                        s.detained_reason DetainedReason,
-                       s.join_type JoinType
-                FROM students s
-                LEFT JOIN classes  c   ON c.class_id   = s.class_id
-                LEFT JOIN sections sec ON sec.section_id = s.section_id
-                WHERE {where}
-                ORDER BY s.student_name";
+                       s.join_type JoinType";
+
+            string sql;
+            if (latestOnly)
+            {
+                // Return only the latest academic year row per student (by admission_no)
+                sql = $@"
+                    SELECT {cols}
+                    FROM (
+                        SELECT s.*,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY s.admission_no, s.school_id
+                                   ORDER BY s.academic_year_id DESC
+                               ) rn
+                        FROM students s
+                        WHERE {where}
+                    ) s
+                    LEFT JOIN classes  c   ON c.class_id    = s.class_id
+                    LEFT JOIN sections sec ON sec.section_id = s.section_id
+                    WHERE s.rn = 1
+                    ORDER BY s.student_name";
+            }
+            else
+            {
+                sql = $@"
+                    SELECT {cols}
+                    FROM students s
+                    LEFT JOIN classes  c   ON c.class_id    = s.class_id
+                    LEFT JOIN sections sec ON sec.section_id = s.section_id
+                    WHERE {where}
+                    ORDER BY s.student_name";
+            }
 
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 return conn.Query<StudentListDto>(sql, new
@@ -495,11 +522,16 @@ namespace AscentSchools.Data.Repositories.School
                     { AddError(result, row, row.AdmissionNo, "Duplicate AdmissionNo in file"); continue; }
 
                     // ── Duplicate in DB ───────────────────────────────────────
-                    var exists = conn.ExecuteScalar<int>(
-                        "SELECT COUNT(1) FROM students WHERE admission_no = @admNo AND school_id = @schoolId",
-                        new { admNo = row.AdmissionNo.Trim(), schoolId });
-                    if (exists > 0)
-                    { AddError(result, row, row.AdmissionNo, "AdmissionNo already exists"); continue; }
+                    // Non-upsert: any existing admission_no (any year) is an error.
+                    // Upsert: handled after lookups, matching on admission_no + academic_year.
+                    if (!request.Upsert)
+                    {
+                        var exists = conn.ExecuteScalar<int>(
+                            "SELECT COUNT(1) FROM students WHERE admission_no = @admNo AND school_id = @schoolId",
+                            new { admNo = row.AdmissionNo.Trim(), schoolId });
+                        if (exists > 0)
+                        { AddError(result, row, row.AdmissionNo, "AdmissionNo already exists"); continue; }
+                    }
 
                     // ── Resolve lookups ───────────────────────────────────────
                     int? academicYearId = null;
@@ -550,6 +582,54 @@ namespace AscentSchools.Data.Repositories.School
 
                     var status = string.IsNullOrWhiteSpace(row.Status) ? "Active" : row.Status.Trim();
 
+                    // ── Upsert: update existing (admission_no + academic_year) row ──
+                    // Personal/contact fields only — year-specific fields (class, section,
+                    // roll, fee category, status) are left untouched (managed elsewhere).
+                    if (request.Upsert)
+                    {
+                        var existingId = conn.ExecuteScalar<long?>(
+                            @"SELECT TOP 1 student_id FROM students
+                              WHERE admission_no = @admNo AND academic_year_id = @yearId AND school_id = @schoolId",
+                            new { admNo = row.AdmissionNo.Trim(), yearId = academicYearId, schoolId });
+
+                        if (existingId.HasValue)
+                        {
+                            conn.Execute(@"
+                                UPDATE students SET
+                                    student_name  = @studentName,
+                                    gender        = @gender,
+                                    date_of_birth = @dob,
+                                    father_name   = @fatherName,
+                                    mother_name   = @motherName,
+                                    father_mobile = @fatherMobile,
+                                    mother_mobile = @motherMobile,
+                                    aadhar_no     = @aadharNo,
+                                    caste         = @caste,
+                                    caste_code    = @casteCode,
+                                    religion      = @religion,
+                                    mother_tongue = @motherTongue
+                                WHERE student_id = @existingId AND school_id = @schoolId",
+                                new {
+                                    studentName  = row.StudentName.Trim(),
+                                    gender       = row.Gender,
+                                    dob,
+                                    fatherName   = row.FatherName,
+                                    motherName   = row.MotherName,
+                                    fatherMobile = row.FatherMobile,
+                                    motherMobile = row.MotherMobile,
+                                    aadharNo     = row.AadharNo,
+                                    caste        = row.Caste,
+                                    casteCode    = row.CasteCode,
+                                    religion     = row.Religion,
+                                    motherTongue = row.MotherTongue,
+                                    existingId   = existingId.Value,
+                                    schoolId
+                                });
+                            result.Updated++;
+                            continue;
+                        }
+                    }
+
                     // ── Insert ────────────────────────────────────────────────
                     conn.Execute(@"
                         INSERT INTO students
@@ -561,7 +641,12 @@ namespace AscentSchools.Data.Repositories.School
                              aadhar_no, caste, caste_code, religion,
                              joining_class, mother_tongue, status)
                         VALUES
-                            ((SELECT ISNULL(MAX(student_unique_id), 0) + 1 FROM students WHERE school_id = @schoolId),
+                            (ISNULL(
+                                 (SELECT TOP 1 su.student_unique_id FROM students su
+                                  WHERE su.admission_no = @admissionNo AND su.school_id = @schoolId
+                                    AND su.student_unique_id IS NOT NULL
+                                  ORDER BY su.academic_year_id DESC),
+                                 (SELECT ISNULL(MAX(student_unique_id), 0) + 1 FROM students WHERE school_id = @schoolId)),
                              @schoolId, @admissionNo, @studentName, @gender, @dob,
                              @academicYearId, @classId, @sectionId, @rollNo,
                              @feeCategoryId, @fatherName, @motherName,
@@ -596,7 +681,7 @@ namespace AscentSchools.Data.Repositories.School
                 }
             }
 
-            result.Failed = result.Total - result.Imported;
+            result.Failed = result.Total - result.Imported - result.Updated;
             return result;
         }
 

@@ -47,7 +47,9 @@ export default function AppLayout() {
               <Typography.Text style={{ color: headerText, display: 'block', lineHeight: 1.2 }}>
                 {child?.studentName}
               </Typography.Text>
-              <Tag color="blue" style={{ marginTop: 2, fontSize: 11 }}>{child?.className}</Tag>
+              <Tag color="blue" style={{ marginTop: 2, fontSize: 11 }}>
+                {child?.className}{child?.sectionName ? ` - ${child.sectionName}` : ''}
+              </Tag>
             </div>
           </div>
         </Dropdown>

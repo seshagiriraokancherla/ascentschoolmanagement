@@ -1,20 +1,33 @@
 package com.ascentschools.mobile.ui.home
 
 import android.os.Build
+import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import com.ascentschools.mobile.data.api.ChildDto
 import com.ascentschools.mobile.data.api.MobileFeeLineItemDto
 import com.ascentschools.mobile.data.local.TokenStore
+import com.ascentschools.mobile.data.repository.AuthRepository
 import com.ascentschools.mobile.data.repository.StudentRepository
+import kotlinx.coroutines.launch
 import com.ascentschools.mobile.ui.announcements.AnnouncementsScreen
 import com.ascentschools.mobile.ui.announcements.AnnouncementsViewModel
 import com.ascentschools.mobile.ui.attendance.AttendanceScreen
@@ -50,10 +63,26 @@ fun HomeScreen(
     repo              : StudentRepository,
     feeVm             : FeeViewModel,
     tokenStore        : TokenStore,
+    authRepo          : AuthRepository,
     onInitiatePayment : (items: List<MobileFeeLineItemDto>, academicYearId: Int, feeTypeCategory: String) -> Unit,
+    onChildSwitched   : () -> Unit,
     onLogout          : () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
+
+    val scope   = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    // Child switching (overflow menu). Children loaded once; menu item only shown
+    // when the parent has more than one linked child.
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showSwitch   by remember { mutableStateOf(false) }
+    var switching    by remember { mutableStateOf(false) }
+    var children     by remember { mutableStateOf<List<ChildDto>>(emptyList()) }
+
+    LaunchedEffect(Unit) {
+        authRepo.getChildren().onSuccess { children = it }
+    }
 
     val profileVm       = remember { ProfileViewModel(repo) }
     val attendanceVm    = remember { AttendanceViewModel(repo) }
@@ -77,8 +106,25 @@ fun HomeScreen(
                     actionIconContentColor = Color.White
                 ),
                 actions = {
-                    IconButton(onClick = onLogout) {
-                        Icon(Icons.Default.Logout, contentDescription = "Logout")
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Menu")
+                    }
+                    DropdownMenu(
+                        expanded         = menuExpanded,
+                        onDismissRequest = { menuExpanded = false }
+                    ) {
+                        if (children.size > 1) {
+                            DropdownMenuItem(
+                                text        = { Text("Switch Child") },
+                                leadingIcon = { Icon(Icons.Default.SwapHoriz, contentDescription = null) },
+                                onClick     = { menuExpanded = false; showSwitch = true }
+                            )
+                        }
+                        DropdownMenuItem(
+                            text        = { Text("Logout") },
+                            leadingIcon = { Icon(Icons.Default.Logout, contentDescription = null) },
+                            onClick     = { menuExpanded = false; onLogout() }
+                        )
                     }
                 }
             )
@@ -125,5 +171,75 @@ fun HomeScreen(
                 6 -> EventsScreen(viewModel = eventsVm)
             }
         }
+    }
+
+    // ── Switch Child dialog ─────────────────────────────────────────────────
+    if (showSwitch) {
+        AlertDialog(
+            onDismissRequest = { if (!switching) showSwitch = false },
+            title = { Text("Switch Child") },
+            text  = {
+                Column {
+                    children.forEach { child ->
+                        val isCurrent = child.studentId == tokenStore.studentId
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .clickable(enabled = !switching && !isCurrent) {
+                                    switching = true
+                                    scope.launch {
+                                        authRepo.selectChild(child.linkId)
+                                            .onSuccess {
+                                                switching  = false
+                                                showSwitch = false
+                                                onChildSwitched()
+                                            }
+                                            .onFailure {
+                                                switching = false
+                                                Toast.makeText(
+                                                    context,
+                                                    it.message ?: "Failed to switch child",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                    }
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(child.studentName, style = MaterialTheme.typography.titleSmall)
+                                    Text(
+                                        "${child.className} · ${child.admissionNo}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                if (isCurrent) {
+                                    Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = "Current",
+                                        tint = NavyBlue
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    if (switching) {
+                        Spacer(Modifier.height(12.dp))
+                        CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showSwitch = false }, enabled = !switching) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }

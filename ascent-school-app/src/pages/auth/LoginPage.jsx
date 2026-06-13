@@ -65,7 +65,7 @@ export default function LoginPage() {
         {/* School logo */}
         {branding.logoPath && (
           <div style={{ textAlign: 'center', marginBottom: 16 }}>
-            <img src={branding.logoPath} alt="logo" style={{ maxHeight: 64, maxWidth: 220, objectFit: 'contain' }} />
+            <img src={branding.logoPath} alt="logo" style={{ maxHeight: 64, maxWidth: 220, objectFit: 'contain' }} onError={(e) => { e.target.style.display = 'none' }} />
           </div>
         )}
 

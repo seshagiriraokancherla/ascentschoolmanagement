@@ -5,6 +5,14 @@ import retrofit2.http.*
 
 interface ApiService {
 
+    // ── Single-app onboarding + branding ───────────────────────────────────────
+
+    @GET("mobile/auth/school-by-code")
+    suspend fun getSchoolByCode(@Query("code") code: String): Response<ApiResponse<SchoolByCodeDto>>
+
+    @GET("branding")
+    suspend fun getBranding(): Response<ApiResponse<BrandingDto>>
+
     // ── Teacher Auth ──────────────────────────────────────────────────────────
 
     @POST("mobile/auth/teacher/login")

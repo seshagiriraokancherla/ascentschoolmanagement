@@ -36,6 +36,7 @@ export default function SchoolGroupDetailPage() {
       dbName:      group.dbName,
       dbUsername:  group.dbUsername,
       dbPassword:  group.dbPassword,
+      loginCode:   group.loginCode,
     })
     setEditOpen(true)
   }
@@ -96,6 +97,9 @@ export default function SchoolGroupDetailPage() {
           <Descriptions.Item label="DB Password">
             {group.dbPassword ? '••••••••' : '—'}
           </Descriptions.Item>
+          <Descriptions.Item label="App Login Code">
+            <Typography.Text code>{group.loginCode || '—'}</Typography.Text>
+          </Descriptions.Item>
           {group.description && (
             <Descriptions.Item label="Description">{group.description}</Descriptions.Item>
           )}
@@ -147,6 +151,19 @@ export default function SchoolGroupDetailPage() {
               <Input.Password placeholder="fastwebhost SQL password" />
             </Form.Item>
           </div>
+
+          <Divider style={{ margin: '16px 0 8px' }} />
+          <Typography.Text strong style={{ display: 'block', marginBottom: 12 }}>
+            Single-App Login
+          </Typography.Text>
+          <Form.Item
+            name="loginCode"
+            label="App Login Code"
+            tooltip="4-digit code parents enter in the shared (multi-school) mobile app, e.g. 1001"
+            rules={[{ pattern: /^\d{4}$/, message: 'Enter a 4-digit number (e.g. 1001).' }]}
+          >
+            <Input placeholder="1001" maxLength={4} style={{ width: 160 }} />
+          </Form.Item>
         </Form>
       </Modal>
     </div>

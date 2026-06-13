@@ -23,6 +23,8 @@ import com.ascentschools.mobile.ui.auth.SmsAuthViewModel
 import com.ascentschools.mobile.ui.fee.FeeViewModel
 import com.ascentschools.mobile.ui.fee.PaymentState
 import com.ascentschools.mobile.ui.home.HomeScreen
+import com.ascentschools.mobile.ui.school.SchoolCodeScreen
+import com.ascentschools.mobile.ui.school.SchoolCodeViewModel
 import com.ascentschools.mobile.ui.teacher.TeacherAttendanceScreen
 import com.ascentschools.mobile.ui.teacher.TeacherHomeScreen
 import com.ascentschools.mobile.ui.teacher.TeacherHomeworkScreen
@@ -71,6 +73,13 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                 // show the home screen, then fail on every API call until the user notices.
                 var isCheckingSession by remember { mutableStateOf(tokenStore.isLoggedIn) }
 
+                // Generic single app (SCHOOL_CODE empty): the parent must pick a school
+                // (4-digit code) before anything else. Baked flavors skip this entirely.
+                val isGenericApp = BuildConfig.SCHOOL_CODE.isBlank()
+                var needsSchool by remember {
+                    mutableStateOf(isGenericApp && tokenStore.schoolCode.isNullOrBlank())
+                }
+
                 // On cold start: silently refresh the stored session so the access token
                 // is valid before any screen tries to make API calls.
                 // The refresh cookie is now persisted by PersistentCookieJar, so this
@@ -95,6 +104,9 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
+                } else if (needsSchool) {
+                    val schoolVm = remember { SchoolCodeViewModel(authRepo, tokenStore) }
+                    SchoolCodeScreen(viewModel = schoolVm, onResolved = { needsSchool = false })
                 } else if (isLoggedIn && userType == "teacher") {
                     val teacherVm = remember { TeacherViewModel(teacherRepo) }
                     var teacherScreen by remember { mutableStateOf<TeacherScreen>(TeacherScreen.Home) }
@@ -134,34 +146,42 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                     }
 
                 } else if (isLoggedIn) {
-                    // Parent home
-                    val feeVm = remember {
-                        FeeViewModel(feeRepo).also { feeViewModel = it }
-                    }
+                    // Parent home. childEpoch is bumped on a child switch so the whole
+                    // subtree (feeVm + all tab ViewModels) is recreated and reloads data
+                    // for the newly-selected child. The token is already updated by then.
+                    var childEpoch by remember { mutableIntStateOf(0) }
 
-                    HomeScreen(
-                        repo       = studentRepo,
-                        feeVm      = feeVm,
-                        tokenStore = tokenStore,
-                        onInitiatePayment = { items, academicYearId, feeTypeCategory ->
-                            feeVm.initiatePayment(items, academicYearId, feeTypeCategory)
-                        },
-                        onLogout = {
-                            CoroutineScope(Dispatchers.IO).launch {
-                                runCatching { authRepo.logoutParent() }
-                            }
-                            tokenStore.clear()
-                            feeViewModel = null
-                            isLoggedIn = false
-                            userType   = ""
+                    key(childEpoch) {
+                        val feeVm = remember {
+                            FeeViewModel(feeRepo).also { feeViewModel = it }
                         }
-                    )
 
-                    // Watch for OrderReady state → open Razorpay checkout
-                    LaunchedEffect(feeVm) {
-                        feeVm.paymentState.collect { state ->
-                            if (state is PaymentState.OrderReady) {
-                                openRazorpayCheckout(state.order)
+                        HomeScreen(
+                            repo       = studentRepo,
+                            feeVm      = feeVm,
+                            tokenStore = tokenStore,
+                            authRepo   = authRepo,
+                            onInitiatePayment = { items, academicYearId, feeTypeCategory ->
+                                feeVm.initiatePayment(items, academicYearId, feeTypeCategory)
+                            },
+                            onChildSwitched = { childEpoch++ },
+                            onLogout = {
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    runCatching { authRepo.logoutParent() }
+                                }
+                                tokenStore.clear()
+                                feeViewModel = null
+                                isLoggedIn = false
+                                userType   = ""
+                            }
+                        )
+
+                        // Watch for OrderReady state → open Razorpay checkout
+                        LaunchedEffect(feeVm) {
+                            feeVm.paymentState.collect { state ->
+                                if (state is PaymentState.OrderReady) {
+                                    openRazorpayCheckout(state.order)
+                                }
                             }
                         }
                     }
@@ -171,7 +191,10 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                     SmsAuthScreen(
                         viewModel        = authVm,
                         onParentSuccess  = { isLoggedIn = true; userType = tokenStore.userType },
-                        onTeacherSuccess = { isLoggedIn = true; userType = "teacher" }
+                        onTeacherSuccess = { isLoggedIn = true; userType = "teacher" },
+                        onChangeSchool   = if (isGenericApp) {
+                            { tokenStore.clearSchool(); needsSchool = true }
+                        } else null
                     )
                 }
             }

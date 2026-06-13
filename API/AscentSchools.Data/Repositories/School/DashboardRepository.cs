@@ -15,9 +15,15 @@ namespace AscentSchools.Data.Repositories.School
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
             {
-                // ── 1. Total active students ──────────────────────────────────
+                // ── 1. Total active students — current academic year only ─────
                 var totalStudents = conn.QuerySingle<int>(
-                    "SELECT COUNT(*) FROM students WHERE school_id = @schoolId AND status = 'Active'",
+                    @"SELECT COUNT(*) FROM students
+                      WHERE school_id = @schoolId AND status = 'Active'
+                        AND academic_year_id = (
+                            SELECT TOP 1 academic_year_id
+                            FROM academic_years
+                            WHERE school_id = @schoolId AND status = 'Active'
+                            ORDER BY academic_year_id DESC)",
                     new { schoolId });
 
                 // ── 2. Today's attendance ─────────────────────────────────────

@@ -13,6 +13,7 @@ namespace AscentSchools.Core.DTOs.School.Master
         public string BoardingType              { get; set; }
         public string NewAdmissionsEnabled      { get; set; }
         public int    SchoolId                  { get; set; }
+        public bool   IsCurrent                 { get; set; }
     }
 
     public class SaveAcademicYearRequest

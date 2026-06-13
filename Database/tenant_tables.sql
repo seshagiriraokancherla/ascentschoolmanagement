@@ -692,6 +692,7 @@ CREATE TABLE fee_receipts (
     cancelled_at        DATETIME        NULL,
     cancel_reason       VARCHAR(100)    NULL,
     remarks             VARCHAR(100)    NULL,
+    source              VARCHAR(10)     NULL,   -- 'legacy' (VB6 EOD sync) | 'webapp' (school web app / parent portal)
     school_id           INT             NOT NULL,
     created_by          VARCHAR(25)     NULL,
     created_at          DATETIME        NOT NULL DEFAULT GETDATE(),

@@ -56,6 +56,24 @@ class TokenStore(context: Context) {
         get()      = prefs.getString(KEY_CLASS_NAME, null)
         set(value) = prefs.edit().putString(KEY_CLASS_NAME, value).apply()
 
+    /**
+     * Runtime-selected school code (subdomain, used as X-School-Code) for the generic
+     * single-app build. Empty for baked per-school flavors. Survives logout (one-time
+     * selection); cleared only via clearSchool() ("Change School").
+     */
+    var schoolCode: String?
+        get()      = prefs.getString(KEY_SCHOOL_CODE, null)
+        set(value) = prefs.edit().putString(KEY_SCHOOL_CODE, value).apply()
+
+    /** Cached branding for the selected school so the login screen isn't blank on cold start. */
+    var brandingName: String?
+        get()      = prefs.getString(KEY_BRANDING_NAME, null)
+        set(value) = prefs.edit().putString(KEY_BRANDING_NAME, value).apply()
+
+    var brandingLogoUrl: String?
+        get()      = prefs.getString(KEY_BRANDING_LOGO, null)
+        set(value) = prefs.edit().putString(KEY_BRANDING_LOGO, value).apply()
+
     /** Stable device identifier — auto-generated on first launch, never cleared on logout. */
     val deviceId: String
         get() {
@@ -70,20 +88,41 @@ class TokenStore(context: Context) {
     val isLoggedIn: Boolean
         get() = accessToken != null
 
+    /** Logout — preserves deviceId AND the selected school + branding (one-time school pick). */
     fun clear() {
-        val savedDeviceId = deviceId   // preserve across logout/reinstall
+        val savedDeviceId = deviceId
+        val savedSchool   = schoolCode
+        val savedName     = brandingName
+        val savedLogo     = brandingLogoUrl
         prefs.edit().clear().apply()
-        prefs.edit().putString(KEY_DEVICE_ID, savedDeviceId).apply()
+        prefs.edit()
+            .putString(KEY_DEVICE_ID, savedDeviceId)
+            .putString(KEY_SCHOOL_CODE, savedSchool)
+            .putString(KEY_BRANDING_NAME, savedName)
+            .putString(KEY_BRANDING_LOGO, savedLogo)
+            .apply()
+    }
+
+    /** Change School — clears the selected school + cached branding (keeps deviceId). */
+    fun clearSchool() {
+        prefs.edit()
+            .remove(KEY_SCHOOL_CODE)
+            .remove(KEY_BRANDING_NAME)
+            .remove(KEY_BRANDING_LOGO)
+            .apply()
     }
 
     companion object {
-        private const val KEY_ACCESS_TOKEN = "access_token"
-        private const val KEY_TOKEN_TYPE   = "token_type"
-        private const val KEY_USER_TYPE    = "user_type"
-        private const val KEY_STUDENT_NAME = "student_name"
-        private const val KEY_STUDENT_ID   = "student_id"
-        private const val KEY_ADMISSION_NO = "admission_no"
-        private const val KEY_CLASS_NAME   = "class_name"
-        private const val KEY_DEVICE_ID    = "device_id"
+        private const val KEY_ACCESS_TOKEN  = "access_token"
+        private const val KEY_TOKEN_TYPE    = "token_type"
+        private const val KEY_USER_TYPE     = "user_type"
+        private const val KEY_STUDENT_NAME  = "student_name"
+        private const val KEY_STUDENT_ID    = "student_id"
+        private const val KEY_ADMISSION_NO  = "admission_no"
+        private const val KEY_CLASS_NAME    = "class_name"
+        private const val KEY_DEVICE_ID     = "device_id"
+        private const val KEY_SCHOOL_CODE   = "school_code"
+        private const val KEY_BRANDING_NAME = "branding_name"
+        private const val KEY_BRANDING_LOGO = "branding_logo"
     }
 }

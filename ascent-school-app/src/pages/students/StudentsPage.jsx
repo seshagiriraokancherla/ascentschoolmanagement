@@ -78,15 +78,20 @@ export default function StudentsPage() {
   }
 
   useEffect(() => {
-    load({ search, classId, sectionId, academicYearId, status })
-
-    api.get('/school/master/classes')
-       .then((r) => setClasses(r.data?.data || []))
-       .catch(() => {})
-
-    api.get('/school/master/academic-years')
-       .then((r) => setAcademicYears(r.data?.data || []))
-       .catch(() => {})
+    Promise.all([
+      api.get('/school/master/academic-years?activeOnly=true'),
+      api.get('/school/master/classes'),
+    ]).then(([yr, cl]) => {
+      const years = yr.data?.data || []
+      setAcademicYears(years)
+      setClasses(cl.data?.data || [])
+      const current = years.find(y => y.isCurrent)
+      const curYearId = current?.academicYearId ?? null
+      if (curYearId) setAcademicYearId(curYearId)
+      load({ search, classId, sectionId, academicYearId: curYearId, status })
+    }).catch(() => {
+      load({ search, classId, sectionId, academicYearId: null, status })
+    })
   }, [])
 
   const handleSearch = () => load({ search, classId, sectionId, academicYearId, status })
@@ -194,7 +199,7 @@ export default function StudentsPage() {
 
   const classOptions        = [{ value: null, label: 'All Classes' },   ...classes.map((c) => ({ value: c.classId,        label: c.className }))]
   const sectionOptions      = [{ value: null, label: 'All Sections' },  ...sections.map((s) => ({ value: s.sectionId,     label: s.sectionName }))]
-  const academicYearOptions = [{ value: null, label: 'All Years' },     ...academicYears.map((y) => ({ value: y.academicYearId, label: y.academicYear }))]
+  const academicYearOptions = academicYears.map((y) => ({ value: y.academicYearId, label: y.academicYear }))
 
   const columns = [
     {

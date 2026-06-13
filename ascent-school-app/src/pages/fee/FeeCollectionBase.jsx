@@ -133,7 +133,7 @@ export default function FeeCollectionBase({ title, feeTypeCategory, joinTypeFilt
     if (!searchVal.trim()) return
     setSearching(true)
     try {
-      const params = new URLSearchParams({ search: searchVal })
+      const params = new URLSearchParams({ search: searchVal, latestOnly: 'true' })
       if (joinTypeFilter) params.set('joinType', joinTypeFilter)
       const res = await api.get(`/school/students?${params}`)
       setStudents(res.data?.data || [])

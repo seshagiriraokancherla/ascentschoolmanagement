@@ -10,6 +10,7 @@ namespace AscentSchools.Core.DTOs.Control.SchoolGroups
         public string   DbName      { get; set; }
         public string   DbUsername  { get; set; }
         public string   DbPassword  { get; set; }
+        public string   LoginCode   { get; set; }   // 4-digit code parents enter in the single (multi-school) app
         public string   Description { get; set; }
         public string   Status      { get; set; }
         public DateTime CreatedAt   { get; set; }

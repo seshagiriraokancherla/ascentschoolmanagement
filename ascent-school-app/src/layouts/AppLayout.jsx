@@ -16,6 +16,11 @@ const { Header, Sider, Content, Footer } = Layout
 
 const NAV_ITEMS = [
   {
+    key:   '/',
+    icon:  <HomeOutlined />,
+    label: 'Dashboard',
+  },
+  {
     key:      'students',
     icon:     <SolutionOutlined />,
     label:    'Students',
@@ -160,7 +165,7 @@ export default function AppLayout() {
         }}
       >
         {branding.logoPath && (
-          <img src={branding.logoPath} alt="logo" style={{ height: 36, objectFit: 'contain' }} />
+          <img src={branding.logoPath} alt="logo" style={{ height: 36, objectFit: 'contain' }} onError={(e) => { e.target.style.display = 'none' }} />
         )}
         <Typography.Text strong style={{ color: headerText, fontSize: 16, flex: 1 }}>
           {branding.displayName}

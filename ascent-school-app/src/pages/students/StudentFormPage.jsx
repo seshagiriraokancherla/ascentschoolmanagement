@@ -55,13 +55,18 @@ export default function StudentFormPage() {
   // Load lookups
   useEffect(() => {
     Promise.all([
-      api.get('/school/master/academic-years'),
+      api.get('/school/master/academic-years?activeOnly=true'),
       api.get('/school/master/classes'),
       api.get('/school/master/fee-categories'),
     ]).then(([yr, cl, fc]) => {
-      setAcademicYears(yr.data?.data || [])
+      const years = yr.data?.data || []
+      setAcademicYears(years)
       setClasses(cl.data?.data || [])
       setFeeCategories(fc.data?.data || [])
+      if (!isEdit) {
+        const current = years.find(y => y.isCurrent)
+        if (current) form.setFieldValue('academicYearId', current.academicYearId)
+      }
     }).catch(() => {})
 
     // Bus routes and buses are needed only for transport tab

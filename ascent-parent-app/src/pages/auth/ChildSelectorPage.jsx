@@ -31,8 +31,9 @@ export default function ChildSelectorPage() {
       const data = r.data?.data
       setChild(data.accessToken, {
         studentId:   data.studentId,
-        studentName: data.studentName,
+        studentName: data.fullName,   // response field is fullName (camelCase serialization)
         className:   data.className,
+        sectionName: data.sectionName,
         admissionNo: data.admissionNo,
       })
       navigate('/fees', { replace: true })

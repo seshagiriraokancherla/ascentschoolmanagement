@@ -19,8 +19,8 @@ namespace AscentSchools.API.Controllers.School
         // ── Academic Years ────────────────────────────────────────────────
 
         [HttpGet, Route("academic-years")]
-        public HttpResponseMessage GetAcademicYears()
-            => Ok(_repo.GetAcademicYears(Tenant.TenantDbName, Tenant.SchoolId));
+        public HttpResponseMessage GetAcademicYears([FromUri] bool activeOnly = false)
+            => Ok(_repo.GetAcademicYears(Tenant.TenantDbName, Tenant.SchoolId, activeOnly));
 
         [HttpPost, Route("academic-years")]
         public HttpResponseMessage CreateAcademicYear([FromBody] SaveAcademicYearRequest request)
@@ -139,8 +139,8 @@ namespace AscentSchools.API.Controllers.School
         // ── Terms ─────────────────────────────────────────────────────────
 
         [HttpGet, Route("terms")]
-        public HttpResponseMessage GetTerms()
-            => Ok(_repo.GetTerms(Tenant.TenantDbName, Tenant.SchoolId));
+        public HttpResponseMessage GetTerms([FromUri] int? academicYearId = null)
+            => Ok(_repo.GetTerms(Tenant.TenantDbName, Tenant.SchoolId, academicYearId));
 
         [HttpPost, Route("terms")]
         public HttpResponseMessage CreateTerm([FromBody] SaveTermRequest request)

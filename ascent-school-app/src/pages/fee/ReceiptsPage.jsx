@@ -3,10 +3,11 @@ import {
   Card, Table, Button, Input, Select, DatePicker, Tag, Drawer,
   Descriptions, Row, Col, Divider, Typography, Space, Modal, Form, App as AntApp,
 } from 'antd'
-import { SearchOutlined, EyeOutlined, StopOutlined, DownloadOutlined } from '@ant-design/icons'
+import { SearchOutlined, EyeOutlined, StopOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons'
 import Papa from 'papaparse'
 import dayjs from 'dayjs'
 import api from '../../api/axiosInstance'
+import { useBrandingStore } from '../../store/brandingStore'
 
 const { Text, Title } = Typography
 const { RangePicker } = DatePicker
@@ -18,10 +19,12 @@ const STATUS_OPTIONS = [
 ]
 
 export default function ReceiptsPage() {
-  const { message } = AntApp.useApp()
+  const { message }  = AntApp.useApp()
+  const { branding } = useBrandingStore()
 
   const [receipts,  setReceipts]  = useState([])
   const [loading,   setLoading]   = useState(false)
+  const [printReceipt, setPrintReceipt] = useState(null)
   const [search,       setSearch]       = useState('')
   const [dateRange,    setDateRange]    = useState(null)
   const [status,       setStatus]       = useState('')
@@ -67,6 +70,23 @@ export default function ReceiptsPage() {
     } finally {
       setLoadingDetail(false)
     }
+  }
+
+  // Render the receipt in the hidden print area, then open the browser print dialog.
+  const handlePrint = async (receiptId, existing) => {
+    let rec = existing
+    if (!rec) {
+      try {
+        const res = await api.get(`/school/fees/receipts/${receiptId}`)
+        rec = res.data?.data
+      } catch {
+        message.error('Failed to load receipt for printing.')
+        return
+      }
+    }
+    setPrintReceipt(rec)
+    // Let React paint the print area before invoking print.
+    setTimeout(() => window.print(), 150)
   }
 
   const openCancelModal = (receiptId) => {
@@ -146,6 +166,9 @@ export default function ReceiptsPage() {
         <Space size="small">
           <Button size="small" icon={<EyeOutlined />} onClick={() => viewReceipt(record.receiptId)}>
             View
+          </Button>
+          <Button size="small" icon={<PrinterOutlined />} onClick={() => handlePrint(record.receiptId)}>
+            Print
           </Button>
           {record.status === 'Active' && (
             <Button
@@ -228,15 +251,26 @@ export default function ReceiptsPage() {
         width={520}
         loading={loadingDetail}
         extra={
-          detailReceipt?.status === 'Active' && (
-            <Button
-              danger
-              icon={<StopOutlined />}
-              size="small"
-              onClick={() => openCancelModal(detailReceipt.receiptId)}
-            >
-              Cancel Receipt
-            </Button>
+          detailReceipt && (
+            <Space>
+              <Button
+                icon={<PrinterOutlined />}
+                size="small"
+                onClick={() => handlePrint(detailReceipt.receiptId, detailReceipt)}
+              >
+                Print
+              </Button>
+              {detailReceipt.status === 'Active' && (
+                <Button
+                  danger
+                  icon={<StopOutlined />}
+                  size="small"
+                  onClick={() => openCancelModal(detailReceipt.receiptId)}
+                >
+                  Cancel Receipt
+                </Button>
+              )}
+            </Space>
           )
         }
       >
@@ -323,6 +357,112 @@ export default function ReceiptsPage() {
           </Form.Item>
         </Form>
       </Modal>
+
+      {/* Hidden print area — visible only on print */}
+      <ReceiptPrintArea receipt={printReceipt} branding={branding} />
+      <style>{`
+        .receipt-print-area { display: none; }
+        @media print {
+          body * { visibility: hidden; }
+          .receipt-print-area { display: block; }
+          .receipt-print-area, .receipt-print-area * { visibility: visible; }
+          .receipt-print-area { position: absolute; left: 0; top: 0; width: 100%; }
+        }
+      `}</style>
     </>
+  )
+}
+
+const printCellHead = { border: '1px solid #000', padding: '5px 8px', textAlign: 'left', background: '#f0f0f0' }
+const printCell     = { border: '1px solid #000', padding: '5px 8px' }
+
+function ReceiptPrintArea({ receipt, branding }) {
+  if (!receipt) return null
+  const fmt = (n) => `₹${Number(n || 0).toFixed(2)}`
+
+  return (
+    <div className="receipt-print-area">
+      <div style={{ padding: 24, fontFamily: 'Arial, sans-serif', color: '#000' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, borderBottom: '2px solid #000', paddingBottom: 8 }}>
+          {branding?.logoPath && <img src={branding.logoPath} alt="logo" style={{ height: 56 }} />}
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 20, fontWeight: 'bold' }}>{branding?.displayName || 'School'}</div>
+            <div style={{ fontSize: 13 }}>Fee Receipt</div>
+          </div>
+          <div style={{ textAlign: 'right', fontSize: 12 }}>
+            <div><strong>Receipt No:</strong> {receipt.receiptNo}</div>
+            <div><strong>Date:</strong> {dayjs(receipt.paymentDate).format('DD-MM-YYYY')}</div>
+            {receipt.status === 'Cancelled' && (
+              <div style={{ color: 'red', fontWeight: 'bold' }}>CANCELLED</div>
+            )}
+          </div>
+        </div>
+
+        {/* Student / payment details */}
+        <table style={{ width: '100%', fontSize: 13, margin: '12px 0' }}>
+          <tbody>
+            <tr>
+              <td style={{ padding: '2px 0' }}><strong>Student:</strong> {receipt.studentName}</td>
+              <td style={{ padding: '2px 0' }}><strong>Admission No:</strong> {receipt.admissionNo}</td>
+            </tr>
+            <tr>
+              <td style={{ padding: '2px 0' }}><strong>Class:</strong> {receipt.className || '—'}</td>
+              <td style={{ padding: '2px 0' }}><strong>Academic Year:</strong> {receipt.academicYear || '—'}</td>
+            </tr>
+            <tr>
+              <td style={{ padding: '2px 0' }}><strong>Father Name:</strong> {receipt.fatherName || '—'}</td>
+              <td style={{ padding: '2px 0' }}><strong>Payment Mode:</strong> {receipt.paymentModeName || '—'}</td>
+            </tr>
+            {(receipt.chequeNo || receipt.bankName) && (
+              <tr>
+                <td style={{ padding: '2px 0' }}>{receipt.chequeNo && <><strong>Reference No:</strong> {receipt.chequeNo}</>}</td>
+                <td style={{ padding: '2px 0' }}>{receipt.bankName && <><strong>Bank:</strong> {receipt.bankName}</>}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+
+        {/* Items */}
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr>
+              <th style={printCellHead}>Fee Type</th>
+              <th style={printCellHead}>Term</th>
+              <th style={{ ...printCellHead, textAlign: 'right' }}>Amount</th>
+              <th style={{ ...printCellHead, textAlign: 'right' }}>Concession</th>
+              <th style={{ ...printCellHead, textAlign: 'right' }}>Net</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(receipt.items || []).map((it, i) => (
+              <tr key={i}>
+                <td style={printCell}>{it.feeTypeName || it.routeName || it.hostelName || '—'}</td>
+                <td style={printCell}>{it.termName || '—'}</td>
+                <td style={{ ...printCell, textAlign: 'right' }}>{fmt(it.amount)}</td>
+                <td style={{ ...printCell, textAlign: 'right' }}>{it.concessionAmount > 0 ? fmt(it.concessionAmount) : '—'}</td>
+                <td style={{ ...printCell, textAlign: 'right' }}>{fmt(it.netAmount)}</td>
+              </tr>
+            ))}
+            <tr>
+              <td style={{ ...printCell, textAlign: 'right', fontWeight: 'bold' }} colSpan={4}>Total</td>
+              <td style={{ ...printCell, textAlign: 'right', fontWeight: 'bold' }}>{fmt(receipt.totalAmount)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        {receipt.status === 'Cancelled' && receipt.cancelReason && (
+          <div style={{ marginTop: 12, color: 'red', fontSize: 12 }}>
+            <strong>Cancel Reason:</strong> {receipt.cancelReason}
+          </div>
+        )}
+
+        {/* Footer */}
+        <div style={{ marginTop: 28, display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+          <div>{branding?.receiptFooterText || ''}</div>
+          <div>Collected by: {receipt.createdBy || '—'}</div>
+        </div>
+      </div>
+    </div>
   )
 }

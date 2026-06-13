@@ -73,10 +73,11 @@ function SendTab() {
 
   // Load lookups on mount
   useEffect(() => {
-    api.get('/school/master/academic-years').then(r => {
+    api.get('/school/master/academic-years?activeOnly=true').then(r => {
       const list = r.data?.data || []
       setYears(list)
-      if (list.length > 0) setYearId(list[0].academicYearId)
+      const current = list.find(y => y.isCurrent)
+      if (current) setYearId(current.academicYearId)
     })
     api.get('/school/master/classes').then(r => setClasses(r.data?.data || []))
   }, [])

@@ -28,7 +28,18 @@ async function request(method, path, body) {
     body:        body != null ? JSON.stringify(body) : undefined,
   })
 
-  if (res.status === 401 && path !== '/mobile/auth/parent/refresh') {
+  // Pre-authentication endpoints (no token exists yet) must surface the real
+  // backend message rather than triggering the refresh-retry "Session expired" path.
+  const NO_RETRY_PATHS = [
+    '/mobile/auth/parent/request-otp',
+    '/mobile/auth/parent/verify-otp',
+    '/mobile/auth/parent/refresh',
+    '/mobile/auth/parent/login',
+    '/mobile/auth/parent/register',
+  ]
+  const skipRetry = NO_RETRY_PATHS.includes(path)
+
+  if (res.status === 401 && !skipRetry) {
     const rr = await fetch(`${API_BASE}/mobile/auth/parent/refresh`, {
       method:      'POST',
       credentials: 'include',

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-only manifest. Merged into debug builds only, so release stays secure.
+  Allows plain http:// to the local dev API (Android blocks cleartext by default
+  on API 28+). Release builds use https and never get this flag.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:usesCleartextTraffic="true" />
+</manifest>

@@ -16,6 +16,7 @@ namespace AscentSchools.Data.Repositories.Control
                 return conn.Query<SchoolGroupDto>(
                     @"SELECT group_id GroupId, group_name GroupName, subdomain Subdomain,
                              db_name DbName, db_username DbUsername, db_password DbPassword,
+                             login_code LoginCode,
                              description Description, status Status, created_at CreatedAt
                       FROM school_groups ORDER BY group_id");
         }
@@ -26,9 +27,22 @@ namespace AscentSchools.Data.Repositories.Control
                 return conn.QueryFirstOrDefault<SchoolGroupDto>(
                     @"SELECT group_id GroupId, group_name GroupName, subdomain Subdomain,
                              db_name DbName, db_username DbUsername, db_password DbPassword,
+                             login_code LoginCode,
                              description Description, status Status, created_at CreatedAt
                       FROM school_groups WHERE group_id = @groupId",
                     new { groupId });
+        }
+
+        /// <summary>Resolves a 4-digit login code (single-app onboarding) → subdomain + name.
+        /// Returns null if not found or group inactive.</summary>
+        public SchoolByCodeDto GetByLoginCode(string loginCode)
+        {
+            using (var conn = _db.GetMasterConnection())
+                return conn.QueryFirstOrDefault<SchoolByCodeDto>(
+                    @"SELECT subdomain SchoolCode, group_name Name
+                      FROM school_groups
+                      WHERE login_code = @loginCode AND status = 'Active'",
+                    new { loginCode });
         }
 
         public bool SubdomainExists(string subdomain)
@@ -85,10 +99,12 @@ namespace AscentSchools.Data.Repositories.Control
                 conn.Execute(
                     @"UPDATE school_groups
                       SET group_name = @GroupName, description = @Description, status = @Status,
-                          db_name = @DbName, db_username = @DbUsername, db_password = @DbPassword
+                          db_name = @DbName, db_username = @DbUsername, db_password = @DbPassword,
+                          login_code = @LoginCode
                       WHERE group_id = @groupId",
                     new { request.GroupName, request.Description, request.Status,
-                          request.DbName, request.DbUsername, request.DbPassword, groupId });
+                          request.DbName, request.DbUsername, request.DbPassword,
+                          request.LoginCode, groupId });
         }
     }
 
@@ -97,5 +113,12 @@ namespace AscentSchools.Data.Repositories.Control
     {
         public int    GroupId { get; set; }
         public string DbName  { get; set; }
+    }
+
+    /// <summary>Single-app onboarding: 4-digit code → school resolution.</summary>
+    public class SchoolByCodeDto
+    {
+        public string SchoolCode { get; set; }   // subdomain (used as X-School-Code)
+        public string Name       { get; set; }   // group name shown for confirmation
     }
 }
