@@ -8,7 +8,8 @@ namespace AscentSchools.Core.DTOs.School.Attendance
         public long   StudentId   { get; set; }
         public string StudentName { get; set; }
         public string AdmissionNo { get; set; }
-        public string Status      { get; set; }  // Present / Absent / Late / Holiday — null if not yet marked
+        public string SectionName { get; set; }  // useful for class-level views (section not filtered)
+        public string Status      { get; set; }  // Present / Absent / Late / HalfDay / Holiday — null if not yet marked
         public string Remarks     { get; set; }
     }
 
@@ -43,6 +44,7 @@ namespace AscentSchools.Core.DTOs.School.Attendance
         public int    PresentDays  { get; set; }
         public int    AbsentDays   { get; set; }
         public int    LateDays     { get; set; }
+        public int    HalfDayDays  { get; set; }
         public int    TotalMarked  { get; set; }
     }
 }

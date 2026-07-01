@@ -175,7 +175,7 @@ namespace AscentSchools.API.Controllers.Mobile
             }
 
             var response = Request.CreateResponse(HttpStatusCode.OK, ApiResponse.Ok("Logged out."));
-            ClearCookie(response, "studentRefreshToken", "/mobile/auth/student");
+            ClearCookie(response, "studentRefreshToken", "/");
             return response;
         }
 
@@ -325,7 +325,7 @@ namespace AscentSchools.API.Controllers.Mobile
             }
 
             var response = Request.CreateResponse(HttpStatusCode.OK, ApiResponse.Ok("Logged out."));
-            ClearCookie(response, "parentRefreshToken", "/mobile/auth/parent");
+            ClearCookie(response, "parentRefreshToken", "/");
             return response;
         }
 
@@ -641,7 +641,7 @@ namespace AscentSchools.API.Controllers.Mobile
                 StudentId   = student.StudentId,
             }));
 
-            SetCookie(response, "studentRefreshToken", rawRefresh, "/mobile/auth/student");
+            SetCookie(response, "studentRefreshToken", rawRefresh, "/");
             return response;
         }
 
@@ -670,7 +670,7 @@ namespace AscentSchools.API.Controllers.Mobile
                 ParentId    = parentId,
             }));
 
-            SetCookie(response, "parentRefreshToken", rawRefresh, "/mobile/auth/parent");
+            SetCookie(response, "parentRefreshToken", rawRefresh, "/");
             return response;
         }
 

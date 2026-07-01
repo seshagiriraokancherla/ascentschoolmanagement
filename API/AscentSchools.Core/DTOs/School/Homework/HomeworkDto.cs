@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace AscentSchools.Core.DTOs.School.Homework
 {
@@ -31,5 +32,21 @@ namespace AscentSchools.Core.DTOs.School.Homework
         public DateTime AssignedDate  { get; set; }
         public DateTime DueDate       { get; set; }
         public string   AttachmentUrl { get; set; }
+    }
+
+    /// <summary>Multi-subject daily homework entry (one row saved per filled subject).
+    /// Re-saving the same Class+Section+Date replaces that day's existing rows.</summary>
+    public class BatchHomeworkRequest
+    {
+        public int?     ClassId      { get; set; }
+        public int?     SectionId    { get; set; }
+        public DateTime AssignedDate { get; set; }
+        public List<BatchHomeworkItem> Items { get; set; }
+    }
+
+    public class BatchHomeworkItem
+    {
+        public int?    SubjectId   { get; set; }
+        public string  Description { get; set; }
     }
 }

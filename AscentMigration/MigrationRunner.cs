@@ -125,14 +125,19 @@ namespace AscentMigration
             {
                 "fee_receipt_items",
                 "fee_receipts",
+                "exam_master",
+                "exam_types",
+                "grade_types",
                 "students",
                 "sections",
                 "bus_fee_structures",
                 "fee_structures",
+                "fee_periods",
                 "buses",
                 "bus_routes",
                 "terms",
                 "fee_types",
+                "subjects",
                 "classes",
                 "fee_categories",
                 "class_groups",
@@ -191,7 +196,12 @@ namespace AscentMigration
                 new FeeCategoriesMigrator(_config),  // depends on academic_years
                 new ClassesMigrator(_config),        // depends on class_groups + fee_categories
                 new FeeTypesMigrator(_config),       // depends on academic_years
+                new SubjectsMigrator(_config),       // depends on academic_years (lookup by year string)
+                new ExamTypesMigrator(_config),      // depends on academic_years (SAS_ExamNam → exam_types)
+                new GradeTypesMigrator(_config),     // depends on subjects (SAS_MarksGrade → grade_types)
+                new ExamMasterMigrator(_config),     // depends on exam_types, classes, academic_years, subjects, grade_types
                 new TermsMigrator(_config),          // depends on academic_years (lookup by year string)
+                new FeePeriodsMigrator(_config),     // depends on academic_years (Monthly rows from SAS_TermMonthData)
                 new FeeStructuresMigrator(_config),  // depends on academic_years, classes, fee_categories, fee_types, terms
                 new BusRoutesMigrator(_config),          // no FK deps on migrated tables
                 new BusesMigrator(_config),              // no FK deps on migrated tables

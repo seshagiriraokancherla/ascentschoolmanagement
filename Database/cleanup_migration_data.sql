@@ -31,9 +31,22 @@ BEGIN TRANSACTION
     DELETE FROM fee_receipts        WHERE school_id = @SchoolId;
     PRINT 'fee_receipts        : ' + CAST(@@ROWCOUNT AS VARCHAR) + ' rows';
 
+    DELETE FROM exam_master         WHERE school_id = @SchoolId;
+    PRINT 'exam_master         : ' + CAST(@@ROWCOUNT AS VARCHAR) + ' rows';
+
+    DELETE FROM exam_types          WHERE school_id = @SchoolId;
+    PRINT 'exam_types          : ' + CAST(@@ROWCOUNT AS VARCHAR) + ' rows';
+
+    DELETE FROM grade_types         WHERE school_id = @SchoolId;
+    PRINT 'grade_types         : ' + CAST(@@ROWCOUNT AS VARCHAR) + ' rows';
+
     DELETE FROM students            WHERE school_id = @SchoolId;
     PRINT 'students            : ' + CAST(@@ROWCOUNT AS VARCHAR) + ' rows';
+    DELETE FROM homework            WHERE school_id = @SchoolId;
+    PRINT 'homework            : ' + CAST(@@ROWCOUNT AS VARCHAR) + ' rows';
 
+    DELETE FROM subjects            WHERE school_id = @SchoolId;
+    PRINT 'subjects            : ' + CAST(@@ROWCOUNT AS VARCHAR) + ' rows';
     DELETE FROM sections            WHERE school_id = @SchoolId;
     PRINT 'sections            : ' + CAST(@@ROWCOUNT AS VARCHAR) + ' rows';
 
@@ -42,6 +55,9 @@ BEGIN TRANSACTION
 
     DELETE FROM fee_structures      WHERE school_id = @SchoolId;
     PRINT 'fee_structures      : ' + CAST(@@ROWCOUNT AS VARCHAR) + ' rows';
+
+    DELETE FROM fee_periods         WHERE school_id = @SchoolId;
+    PRINT 'fee_periods         : ' + CAST(@@ROWCOUNT AS VARCHAR) + ' rows';
 
     DELETE FROM buses               WHERE school_id = @SchoolId;
     PRINT 'buses               : ' + CAST(@@ROWCOUNT AS VARCHAR) + ' rows';

@@ -1,0 +1,15 @@
+# SPA fallback (Apache) — serve index.html for any path that isn't a real
+# file or directory, so client-side routes (e.g. /students, /fees/receipts)
+# work on a browser refresh / deep link instead of returning a 404.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Leave real files and directories alone (assets, index.html, etc.)
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Everything else → index.html (React Router takes over from there)
+  RewriteRule ^ index.html [L]
+</IfModule>

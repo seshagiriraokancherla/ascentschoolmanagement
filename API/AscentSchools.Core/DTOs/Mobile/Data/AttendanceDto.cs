@@ -9,13 +9,14 @@ namespace AscentSchools.Core.DTOs.Mobile.Data
         public int   PresentDays { get; set; }
         public int   AbsentDays  { get; set; }
         public int   LateDays    { get; set; }
+        public int   HalfDayDays { get; set; }
         public IEnumerable<AttendanceRecordDto> Records { get; set; }
     }
 
     public class AttendanceRecordDto
     {
         public DateTime Date    { get; set; }
-        public string   Status  { get; set; }   // Present / Absent / Late / Holiday
+        public string   Status  { get; set; }   // Present / Absent / Late / HalfDay / Holiday
         public string   Remarks { get; set; }
     }
 }

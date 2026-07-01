@@ -26,6 +26,8 @@ namespace AscentSchools.Core.DTOs.School.Sms
     {
         public long    StudentId         { get; set; }
         public string  StudentName       { get; set; }
+        public string  AdmissionNo       { get; set; }  // for {admissionNo} placeholder
+        public string  ClassName         { get; set; }  // for {class} placeholder
         public string  Mobile            { get; set; }
         public decimal OutstandingAmount { get; set; }  // for FeeDue
     }
@@ -68,5 +70,65 @@ namespace AscentSchools.Core.DTOs.School.Sms
         public string  Status       { get; set; }
         public string  ErrorMessage { get; set; }
         public string  SentBy       { get; set; }
+    }
+
+    // ── Per-school SMS gateway configuration (SMS Center) ──────────────────
+
+    /// <summary>Gateway account returned to the settings page.
+    /// ApiKey is intentionally omitted — only HasApiKey is exposed.</summary>
+    public class SmsConfigDto
+    {
+        public int    ConfigId  { get; set; }
+        public string Provider  { get; set; }
+        public string ApiUrl    { get; set; }
+        public string Username  { get; set; }
+        public string SenderId  { get; set; }
+        public bool   HasApiKey { get; set; }   // true if api_key stored; value not returned
+        public bool   IsEnabled { get; set; }
+        public string UpdatedAt { get; set; }
+        public List<SmsTemplateDto> Templates { get; set; }
+    }
+
+    public class UpdateSmsConfigRequest
+    {
+        public string Provider  { get; set; }
+        public string ApiUrl    { get; set; }
+        public string Username  { get; set; }
+        public string ApiKey    { get; set; }   // blank/null = keep existing
+        public string SenderId  { get; set; }
+        public bool   IsEnabled { get; set; }
+    }
+
+    public class SmsTemplateDto
+    {
+        public int    TemplateRowId { get; set; }
+        public string TemplateKey   { get; set; }
+        public string Title         { get; set; }
+        public string TemplateId    { get; set; }   // DLT template id
+        public string MessageText   { get; set; }
+        public string Placeholders  { get; set; }
+        public bool   IsActive      { get; set; }
+    }
+
+    public class SaveSmsTemplateRequest
+    {
+        public string TemplateKey  { get; set; }
+        public string Title        { get; set; }
+        public string TemplateId   { get; set; }
+        public string MessageText  { get; set; }
+        public string Placeholders { get; set; }
+        public bool   IsActive     { get; set; }
+    }
+
+    /// <summary>Internal — gateway account WITH the api_key, for the send path only.
+    /// Never serialized to a GET response.</summary>
+    public class SmsAccount
+    {
+        public string Provider  { get; set; }
+        public string ApiUrl    { get; set; }
+        public string Username  { get; set; }
+        public string ApiKey    { get; set; }
+        public string SenderId  { get; set; }
+        public bool   IsEnabled { get; set; }
     }
 }

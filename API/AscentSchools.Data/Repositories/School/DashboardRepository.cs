@@ -27,20 +27,28 @@ namespace AscentSchools.Data.Repositories.School
                     new { schoolId });
 
                 // ── 2. Today's attendance ─────────────────────────────────────
+                // Scope to current-year students so stray marks on prior-year student rows
+                // (e.g. from the old all-years attendance grid) don't inflate the counts.
                 var todayAtt = conn.QueryFirstOrDefault<AttendanceRow>(
                     @"SELECT
-                          SUM(CASE WHEN status = 'Present'  THEN 1 ELSE 0 END) TodayPresent,
-                          SUM(CASE WHEN status = 'Absent'   THEN 1 ELSE 0 END) TodayAbsent,
-                          SUM(CASE WHEN status = 'Late'     THEN 1 ELSE 0 END) TodayLate,
+                          SUM(CASE WHEN sa.status = 'Present'  THEN 1 ELSE 0 END) TodayPresent,
+                          SUM(CASE WHEN sa.status = 'Absent'   THEN 1 ELSE 0 END) TodayAbsent,
+                          SUM(CASE WHEN sa.status = 'Late'     THEN 1 ELSE 0 END) TodayLate,
+                          SUM(CASE WHEN sa.status = 'HalfDay'  THEN 1 ELSE 0 END) TodayHalfDay,
                           COUNT(*) TotalMarked
-                      FROM student_attendance
-                      WHERE school_id = @schoolId
-                        AND attendance_date = CAST(GETDATE() AS DATE)",
+                      FROM student_attendance sa
+                      JOIN students s ON s.student_id = sa.student_id AND s.school_id = sa.school_id
+                      WHERE sa.school_id = @schoolId
+                        AND sa.attendance_date = CAST(GETDATE() AS DATE)
+                        AND s.academic_year_id = (
+                            SELECT TOP 1 academic_year_id FROM academic_years
+                            WHERE school_id = @schoolId AND status = 'Active'
+                            ORDER BY academic_year_id DESC)",
                     new { schoolId }) ?? new AttendanceRow();
 
                 var attMarked = todayAtt.TotalMarked > 0;
                 var attPct    = attMarked
-                    ? Math.Round((decimal)(todayAtt.TodayPresent + todayAtt.TodayLate) / todayAtt.TotalMarked * 100, 1)
+                    ? Math.Round((decimal)(todayAtt.TodayPresent + todayAtt.TodayLate + 0.5m * todayAtt.TodayHalfDay) / todayAtt.TotalMarked * 100, 1)
                     : 0m;
 
                 // ── 3. Fee collection — today + this month ────────────────────
@@ -115,6 +123,7 @@ namespace AscentSchools.Data.Repositories.School
                     TodayPresent             = todayAtt.TodayPresent,
                     TodayAbsent              = todayAtt.TodayAbsent,
                     TodayLate                = todayAtt.TodayLate,
+                    TodayHalfDay             = todayAtt.TodayHalfDay,
                     TodayTotalMarked         = todayAtt.TotalMarked,
                     AttendancePct            = attPct,
                     TodayCollection          = feeToday,
@@ -133,6 +142,7 @@ namespace AscentSchools.Data.Repositories.School
             public int TodayPresent { get; set; }
             public int TodayAbsent  { get; set; }
             public int TodayLate    { get; set; }
+            public int TodayHalfDay { get; set; }
             public int TotalMarked  { get; set; }
         }
 

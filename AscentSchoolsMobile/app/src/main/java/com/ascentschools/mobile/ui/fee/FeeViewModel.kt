@@ -73,8 +73,11 @@ class FeeViewModel(private val repo: FeeRepository) : ViewModel() {
                 feePeriodId      = li.feePeriodId,
                 busRouteId       = li.busRouteId,
                 hostelId         = li.hostelId,
-                amount           = li.outstanding.coerceAtLeast(0.0),
-                concessionAmount = 0.0  // outstanding already nets out concessions
+                // outstanding already nets out the concession; send gross + concession so the
+                // server records net_amount = outstanding (correct paid total) while the
+                // receipt still shows the concession line.
+                amount           = li.outstanding.coerceAtLeast(0.0) + (li.concessionAmount),
+                concessionAmount = li.concessionAmount
             )
         }
         val request = MobileCreateOrderRequest(
@@ -116,5 +119,15 @@ class FeeViewModel(private val repo: FeeRepository) : ViewModel() {
 
     fun resetPaymentState() {
         _paymentState.value = PaymentState.Idle
+    }
+
+    /** Fetches a receipt's detail (for in-app print / save-as-PDF) and calls back. */
+    fun fetchReceipt(id: Int, onReady: (ReceiptDetailDto) -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            repo.getReceiptDetail(id).fold(
+                onSuccess = { onReady(it) },
+                onFailure = { onError(it.message ?: "Failed to load receipt") }
+            )
+        }
     }
 }

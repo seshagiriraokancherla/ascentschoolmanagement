@@ -110,6 +110,7 @@ namespace AscentSchools.Core.DTOs.School.Students
         public string PaymentMode     { get; set; }  // e.g. "Cash"
         public string ChequeNo        { get; set; }
         public string BankName        { get; set; }
+        public string StudentUniqueId { get; set; }  // legacy RefNo (= SAS_StudentMaster.StuUnqID); authoritative student_unique_id
         public string LegacyReceiptNo { get; set; }  // used as receipt_no directly when provided
         public string Remarks         { get; set; }
         public string Status          { get; set; }  // 'A'/'Active' → Active; 'D'/'Cancelled' → Cancelled; blank → Active

@@ -16,6 +16,7 @@ namespace AscentSyncTool.Models
         public string PaymentDate     { get; set; }   // yyyy-MM-dd
         public string PaymentMode     { get; set; }
         public string ChequeNo        { get; set; }
+        public string StudentUniqueId { get; set; }   // = FeeReciptID's RefNo → student_unique_id
         public string Remarks         { get; set; }
         public string Status          { get; set; }   // A / D
         public string CancelReason    { get; set; }
@@ -95,6 +96,7 @@ namespace AscentSyncTool.Models
     {
         public int      ReceiptId       { get; set; }
         public string   ReceiptNo       { get; set; }
+        public int?     StudentUniqueId { get; set; }   // → legacy RefNo
         public string   StudentName     { get; set; }
         public string   AdmissionNo     { get; set; }
         public string   ClassName       { get; set; }

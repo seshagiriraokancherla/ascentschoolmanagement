@@ -24,7 +24,7 @@ namespace AscentSchools.Data.Repositories.Mobile
                         s.admission_no   AdmissionNo,
                         s.student_name   FullName,
                         c.class_name     ClassName,
-                        s.section        Section,
+                        sec.section_name SectionName,
                         CONVERT(VARCHAR(10), s.date_of_birth, 120) DateOfBirth,
                         s.gender         Gender,
                         s.blood_group    BloodGroup,
@@ -39,8 +39,9 @@ namespace AscentSchools.Data.Repositories.Mobile
                         s.photo_path     PhotoPath,
                         ay.academic_year AcademicYear
                       FROM students s
-                      LEFT JOIN classes        c  ON c.class_id         = s.class_id
-                      LEFT JOIN academic_years ay ON ay.academic_year_id = s.academic_year_id
+                      LEFT JOIN classes        c   ON c.class_id          = s.class_id
+                      LEFT JOIN sections       sec ON sec.section_id       = s.section_id
+                      LEFT JOIN academic_years ay  ON ay.academic_year_id  = s.academic_year_id
                       WHERE s.student_id = @studentId",
                     new { studentId });
         }
@@ -66,6 +67,7 @@ namespace AscentSchools.Data.Repositories.Mobile
                     PresentDays = records.Count(r => r.Status == "Present"),
                     AbsentDays  = records.Count(r => r.Status == "Absent"),
                     LateDays    = records.Count(r => r.Status == "Late"),
+                    HalfDayDays = records.Count(r => r.Status == "HalfDay"),
                     Records     = records
                 };
             }

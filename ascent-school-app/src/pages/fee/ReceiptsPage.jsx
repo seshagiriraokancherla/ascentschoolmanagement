@@ -29,6 +29,8 @@ export default function ReceiptsPage() {
   const [dateRange,    setDateRange]    = useState(null)
   const [status,       setStatus]       = useState('')
   const [createdAfter, setCreatedAfter] = useState(null)
+  const [page,         setPage]         = useState(1)
+  const [pageSize,     setPageSize]     = useState(20)
 
   // Receipt detail drawer
   const [drawerOpen,  setDrawerOpen]  = useState(false)
@@ -132,6 +134,7 @@ export default function ReceiptsPage() {
   }
 
   const columns = [
+    { title: 'S.No', key: 'serialNo', width: 60, render: (_, __, index) => (page - 1) * pageSize + index + 1 },
     { title: 'Receipt No',  dataIndex: 'receiptNo',       key: 'receiptNo',       width: 110 },
     { title: 'Student',     dataIndex: 'studentName',     key: 'studentName' },
     { title: 'Adm No',      dataIndex: 'admissionNo',     key: 'admissionNo',     width: 100 },
@@ -239,7 +242,12 @@ export default function ReceiptsPage() {
           columns={columns}
           loading={loading}
           size="small"
-          pagination={{ pageSize: 20, showTotal: (t) => `${t} receipts` }}
+          pagination={{
+            current: page,
+            pageSize,
+            showTotal: (t) => `${t} receipts`,
+            onChange: (p, ps) => { setPage(p); setPageSize(ps) },
+          }}
         />
       </Card>
 

@@ -30,7 +30,8 @@ namespace AscentSyncTool.Mappers
                 PaidAmount      = (r.FeeAmt ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture),
                 PaymentDate     = r.FeeDat?.ToString("yyyy-MM-dd"),
                 PaymentMode     = Trim(r.PymntTyp),
-                ChequeNo        = Trim(r.RefNo),
+                StudentUniqueId = Trim(r.RefNo),   // legacy RefNo holds SAS_StudentMaster.StuUnqID → student_unique_id
+                ChequeNo        = null,            // RefNo is the unique id, not a cheque no
                 Remarks         = Trim(r.RemarksDet),
                 Status          = Trim(r.FeeReceiptStat),
                 CancelReason    = Trim(r.DeletResn),
@@ -95,7 +96,7 @@ namespace AscentSyncTool.Mappers
                 PaymentTyp     = item.TermName,
                 FeeAmt         = item.NetAmount,
                 PymntTyp       = d.PaymentModeName,
-                RefNo          = d.ChequeNo,
+                RefNo          = d.StudentUniqueId?.ToString(),  // legacy RefNo = student_unique_id
                 RemarksDet     = d.Remarks,
                 FeeReceiptStat = string.Equals(d.Status, "Cancelled", StringComparison.OrdinalIgnoreCase) ? "D" : "A",
             };

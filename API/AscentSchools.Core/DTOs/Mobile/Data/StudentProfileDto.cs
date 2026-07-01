@@ -6,7 +6,7 @@ namespace AscentSchools.Core.DTOs.Mobile.Data
         public string AdmissionNo   { get; set; }
         public string FullName      { get; set; }
         public string ClassName     { get; set; }
-        public string Section       { get; set; }
+        public string SectionName   { get; set; }
         public string DateOfBirth   { get; set; }
         public string Gender        { get; set; }
         public string BloodGroup    { get; set; }

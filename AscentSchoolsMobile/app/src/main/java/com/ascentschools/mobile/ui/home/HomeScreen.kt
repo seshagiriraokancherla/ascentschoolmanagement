@@ -30,6 +30,7 @@ import com.ascentschools.mobile.data.repository.StudentRepository
 import kotlinx.coroutines.launch
 import com.ascentschools.mobile.ui.announcements.AnnouncementsScreen
 import com.ascentschools.mobile.ui.announcements.AnnouncementsViewModel
+import com.ascentschools.mobile.ui.components.PullToRefresh
 import com.ascentschools.mobile.ui.attendance.AttendanceScreen
 import com.ascentschools.mobile.ui.attendance.AttendanceViewModel
 import com.ascentschools.mobile.ui.events.EventsScreen
@@ -66,6 +67,7 @@ fun HomeScreen(
     authRepo          : AuthRepository,
     onInitiatePayment : (items: List<MobileFeeLineItemDto>, academicYearId: Int, feeTypeCategory: String) -> Unit,
     onChildSwitched   : () -> Unit,
+    onChangeSchool    : (() -> Unit)? = null,   // generic single-app build only
     onLogout          : () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -106,6 +108,14 @@ fun HomeScreen(
                     actionIconContentColor = Color.White
                 ),
                 actions = {
+                    IconButton(onClick = {
+                        // Global refresh — reload every tab's data.
+                        profileVm.load(); attendanceVm.load(); marksVm.load()
+                        homeworkVm.load(); announcementsVm.load(); eventsVm.load()
+                        feeVm.loadFees()
+                    }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    }
                     IconButton(onClick = { menuExpanded = true }) {
                         Icon(Icons.Default.MoreVert, contentDescription = "Menu")
                     }
@@ -118,6 +128,13 @@ fun HomeScreen(
                                 text        = { Text("Switch Child") },
                                 leadingIcon = { Icon(Icons.Default.SwapHoriz, contentDescription = null) },
                                 onClick     = { menuExpanded = false; showSwitch = true }
+                            )
+                        }
+                        if (onChangeSchool != null) {
+                            DropdownMenuItem(
+                                text        = { Text("Change School") },
+                                leadingIcon = { Icon(Icons.Default.School, contentDescription = null) },
+                                onClick     = { menuExpanded = false; onChangeSchool() }
                             )
                         }
                         DropdownMenuItem(
@@ -162,13 +179,13 @@ fun HomeScreen(
             modifier = Modifier.padding(innerPadding)
         ) { tab ->
             when (tab) {
-                0 -> ProfileScreen(viewModel = profileVm)
-                1 -> AttendanceScreen(viewModel = attendanceVm)
-                2 -> MarksScreen(viewModel = marksVm)
-                3 -> FeeScreen(viewModel = feeVm, onInitiatePayment = onInitiatePayment)
-                4 -> HomeworkScreen(viewModel = homeworkVm)
-                5 -> AnnouncementsScreen(viewModel = announcementsVm)
-                6 -> EventsScreen(viewModel = eventsVm)
+                0 -> PullToRefresh(onRefresh = { profileVm.load() })       { ProfileScreen(viewModel = profileVm) }
+                1 -> PullToRefresh(onRefresh = { attendanceVm.load() })    { AttendanceScreen(viewModel = attendanceVm) }
+                2 -> PullToRefresh(onRefresh = { marksVm.load() })         { MarksScreen(viewModel = marksVm) }
+                3 -> PullToRefresh(onRefresh = { feeVm.loadFees() })       { FeeScreen(viewModel = feeVm, onInitiatePayment = onInitiatePayment) }
+                4 -> PullToRefresh(onRefresh = { homeworkVm.load() })      { HomeworkScreen(viewModel = homeworkVm) }
+                5 -> PullToRefresh(onRefresh = { announcementsVm.load() }) { AnnouncementsScreen(viewModel = announcementsVm) }
+                6 -> PullToRefresh(onRefresh = { eventsVm.load() })        { EventsScreen(viewModel = eventsVm) }
             }
         }
     }

@@ -114,7 +114,7 @@ namespace AscentSchools.API.Controllers.Mobile
             }
 
             var response = Request.CreateResponse(HttpStatusCode.OK, ApiResponse.Ok("Logged out."));
-            ClearCookie(response, "teacherRefreshToken", "/mobile/auth/teacher");
+            ClearCookie(response, "teacherRefreshToken", "/");
             return response;
         }
 
@@ -143,7 +143,7 @@ namespace AscentSchools.API.Controllers.Mobile
                     SchoolId    = schoolId,
                 }));
 
-            SetCookie(response, "teacherRefreshToken", rawRefresh, "/mobile/auth/teacher");
+            SetCookie(response, "teacherRefreshToken", rawRefresh, "/");
             return response;
         }
 

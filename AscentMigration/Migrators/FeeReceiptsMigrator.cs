@@ -162,6 +162,12 @@ namespace AscentMigration.Migrators
                             Log($"Warning: receipt '{receiptNo}' — student admission_no='{admNo}' academic_year_id={academicYearId} not found — student_id set to NULL");
                     }
 
+                    // Legacy RefNo carries the student's unique id (SAS_StudentMaster.StuUnqID) — authoritative.
+                    // Use it for student_unique_id even when the admission_no+year lookup misses (e.g. that
+                    // year's student row wasn't migrated), so cross-year fee linkage stays intact.
+                    if (!string.IsNullOrWhiteSpace(first.RefNo) && int.TryParse(first.RefNo.Trim(), out var refUnique))
+                        studentUniqueId = refUnique;
+
                     // --- payment_mode_id ---
                     int? paymentModeId = null;
                     var pymntTyp = first.PymntTyp?.Trim();
@@ -207,7 +213,7 @@ namespace AscentMigration.Migrators
                                             PaymentDate     = first.FeeDat,
                                             TotalAmount     = totalAmount,
                                             PaymentModeId   = paymentModeId,
-                                            ChequeNo        = string.IsNullOrWhiteSpace(first.RefNo) ? null : first.RefNo.Trim(),
+                                            ChequeNo        = (string)null,  // legacy RefNo is the student unique id, not a cheque no
                                             Status          = status,
                                             SchoolId        = Config.SchoolId,
                                             CreatedBy       = "migration",

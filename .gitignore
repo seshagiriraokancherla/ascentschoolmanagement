@@ -17,6 +17,9 @@
 **/publish/
 **/wwwroot/dist/
 
+# Deploy secrets (FTP credentials) — never commit
+deploy/deploy.config.json
+
 # NuGet
 *.nupkg
 .nuget/
@@ -75,3 +78,6 @@ nul
 
 # VS Code
 .vscode/
+# Android signing (local only)
+keystore.properties
+**/keystore.properties

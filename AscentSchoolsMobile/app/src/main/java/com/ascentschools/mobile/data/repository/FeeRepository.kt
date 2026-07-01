@@ -37,6 +37,15 @@ class FeeRepository(private val api: ApiService) {
         }
     }
 
+    suspend fun getReceiptDetail(id: Int): Result<ReceiptDetailDto> {
+        return runCatching {
+            val resp = api.getReceiptDetail(id)
+            val body = resp.bodyOrError()
+            if (!body.success || body.data == null) error(body.message ?: "Failed to load receipt")
+            body.data
+        }
+    }
+
     private fun <T> Response<T>.bodyOrError(): T {
         if (isSuccessful) return body() ?: error("Empty response body")
         val errJson = errorBody()?.string()

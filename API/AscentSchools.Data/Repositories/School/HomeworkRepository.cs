@@ -1,7 +1,10 @@
 using AscentSchools.Core.DTOs.School.Homework;
 using AscentSchools.Data.ConnectionFactory;
 using Dapper;
+using System;
 using System.Collections.Generic;
+using System.Data;
+using System.Linq;
 
 namespace AscentSchools.Data.Repositories.School
 {
@@ -42,6 +45,64 @@ namespace AscentSchools.Data.Repositories.School
                     new { req.Title, req.Description, req.SubjectId, req.ClassId, req.SectionId, req.AssignedDate, req.DueDate, req.AttachmentUrl, schoolId, createdBy });
         }
 
+        /// <summary>Saves one homework row per filled subject for a Class+Section+Date.
+        /// Re-saving the same Class+Section+Date first soft-cancels that day's existing
+        /// Active rows, then inserts the new set — so the page acts as create-or-edit.</summary>
+        public int CreateBatchHomework(string tenantDbName, int schoolId, string createdBy, BatchHomeworkRequest req)
+        {
+            var items = (req.Items ?? new List<BatchHomeworkItem>())
+                .Where(i => i.SubjectId.HasValue && !string.IsNullOrWhiteSpace(i.Description))
+                .ToList();
+
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+            {
+                if (conn.State != ConnectionState.Open) conn.Open();
+                using (var tx = conn.BeginTransaction())
+                {
+                    // Subject names (for the row title) resolved in one query.
+                    var subjectIds = items.Select(i => i.SubjectId.Value).Distinct().ToList();
+                    var names = conn.Query<SubjectNameRow>(
+                        "SELECT subject_id SubjectId, subject_name SubjectName FROM subjects WHERE subject_id IN @ids",
+                        new { ids = subjectIds }, tx)
+                        .ToDictionary(r => r.SubjectId, r => r.SubjectName);
+
+                    // Overwrite-on-resave: cancel the day's existing Active rows for this class+section.
+                    conn.Execute(
+                        @"UPDATE homework
+                          SET status = 'Cancelled', updated_by = @createdBy, updated_at = GETDATE()
+                          WHERE school_id = @schoolId
+                            AND status = 'Active'
+                            AND assigned_date = @assignedDate
+                            AND ISNULL(class_id, 0)   = ISNULL(@classId, 0)
+                            AND ISNULL(section_id, 0) = ISNULL(@sectionId, 0)",
+                        new { schoolId, createdBy, req.AssignedDate, req.ClassId, req.SectionId }, tx);
+
+                    foreach (var item in items)
+                    {
+                        var subjectName = names.TryGetValue(item.SubjectId.Value, out var n) ? n : null;
+                        conn.Execute(
+                            @"INSERT INTO homework (title, description, subject_id, class_id, section_id, assigned_date, due_date, school_id, created_by)
+                              VALUES (@title, @description, @subjectId, @classId, @sectionId, @assignedDate, @dueDate, @schoolId, @createdBy)",
+                            new
+                            {
+                                title        = string.IsNullOrWhiteSpace(subjectName) ? "Homework" : subjectName + " Homework",
+                                description  = item.Description,
+                                subjectId    = item.SubjectId,
+                                req.ClassId,
+                                req.SectionId,
+                                req.AssignedDate,
+                                dueDate      = req.AssignedDate,   // legacy form: H.W. date = due date
+                                schoolId,
+                                createdBy,
+                            }, tx);
+                    }
+
+                    tx.Commit();
+                }
+            }
+            return items.Count;
+        }
+
         public void UpdateHomework(string tenantDbName, int schoolId, int id, string updatedBy, SaveHomeworkRequest req)
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
@@ -63,6 +124,12 @@ namespace AscentSchools.Data.Repositories.School
                     @"UPDATE homework SET status = 'Cancelled', updated_by = @updatedBy, updated_at = GETDATE()
                       WHERE homework_id = @id AND school_id = @schoolId",
                     new { updatedBy, id, schoolId });
+        }
+
+        private class SubjectNameRow
+        {
+            public int    SubjectId   { get; set; }
+            public string SubjectName { get; set; }
         }
     }
 }

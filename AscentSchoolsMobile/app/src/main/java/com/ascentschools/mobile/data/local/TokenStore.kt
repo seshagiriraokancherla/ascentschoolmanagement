@@ -48,6 +48,12 @@ class TokenStore(context: Context) {
         get()      = prefs.getLong(KEY_STUDENT_ID, 0L)
         set(value) = prefs.edit().putLong(KEY_STUDENT_ID, value).apply()
 
+    /** parent_children.link_id of the selected child — used to re-establish child
+     *  context after a token refresh (refresh returns a parent token without it). */
+    var childLinkId: Int
+        get()      = prefs.getInt(KEY_CHILD_LINK_ID, 0)
+        set(value) = prefs.edit().putInt(KEY_CHILD_LINK_ID, value).apply()
+
     var admissionNo: String?
         get()      = prefs.getString(KEY_ADMISSION_NO, null)
         set(value) = prefs.edit().putString(KEY_ADMISSION_NO, value).apply()
@@ -118,6 +124,7 @@ class TokenStore(context: Context) {
         private const val KEY_USER_TYPE     = "user_type"
         private const val KEY_STUDENT_NAME  = "student_name"
         private const val KEY_STUDENT_ID    = "student_id"
+        private const val KEY_CHILD_LINK_ID = "child_link_id"
         private const val KEY_ADMISSION_NO  = "admission_no"
         private const val KEY_CLASS_NAME    = "class_name"
         private const val KEY_DEVICE_ID     = "device_id"

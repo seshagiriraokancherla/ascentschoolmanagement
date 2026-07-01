@@ -8,7 +8,7 @@ import dayjs from 'dayjs'
 
 const { Text } = Typography
 
-const STATUS_COLOR = { P: '#52c41a', A: '#ff4d4f', L: '#fa8c16' }
+const STATUS_COLOR = { P: '#52c41a', A: '#ff4d4f', L: '#fa8c16', H: '#1677ff' }
 
 export default function AttendanceSheetReport() {
   const { message } = AntApp.useApp()
@@ -63,6 +63,7 @@ export default function AttendanceSheetReport() {
   const days = sheet ? Array.from({ length: sheet.daysInMonth }, (_, i) => i + 1) : []
 
   const tableColumns = sheet ? [
+    { title: 'S.No', key: 'serialNo', fixed: 'left', width: 50, align: 'center', render: (_, __, index) => index + 1 },
     { title: 'Adm No',  dataIndex: 'admissionNo', fixed: 'left', width: 90 },
     { title: 'Name',    dataIndex: 'studentName', fixed: 'left', width: 160 },
     ...days.map(d => ({
@@ -78,6 +79,7 @@ export default function AttendanceSheetReport() {
     { title: 'P', dataIndex: 'present', width: 36, align: 'center', render: v => <Text style={{ color: STATUS_COLOR.P }}>{v}</Text> },
     { title: 'A', dataIndex: 'absent',  width: 36, align: 'center', render: v => <Text style={{ color: STATUS_COLOR.A }}>{v}</Text> },
     { title: 'L', dataIndex: 'late',    width: 36, align: 'center', render: v => <Text style={{ color: STATUS_COLOR.L }}>{v}</Text> },
+    { title: 'HD', dataIndex: 'halfDay', width: 40, align: 'center', render: v => <Text style={{ color: STATUS_COLOR.H }}>{v}</Text> },
   ] : []
 
   // ── Export helpers ─────────────────────────────────────────────────────────
@@ -93,10 +95,11 @@ export default function AttendanceSheetReport() {
       row.present,
       row.absent,
       row.late,
+      row.halfDay || 0,
     ])
 
   const exportColumns = sheet
-    ? ['Adm No', 'Name', ...days.map(String), 'P', 'A', 'L']
+    ? ['Adm No', 'Name', ...days.map(String), 'P', 'A', 'L', 'HD']
     : []
 
   const handlePdf = () => {
@@ -182,6 +185,7 @@ export default function AttendanceSheetReport() {
               <Text style={{ color: STATUS_COLOR.P, fontSize: 12 }}>P = Present</Text>
               <Text style={{ color: STATUS_COLOR.A, fontSize: 12, marginLeft: 8 }}>A = Absent</Text>
               <Text style={{ color: STATUS_COLOR.L, fontSize: 12, marginLeft: 8 }}>L = Late</Text>
+              <Text style={{ color: STATUS_COLOR.H, fontSize: 12, marginLeft: 8 }}>H = Half Day</Text>
             </span>
             <Text type="secondary" style={{ float: 'right', fontSize: 12 }}>
               {sheet.rows?.length || 0} students

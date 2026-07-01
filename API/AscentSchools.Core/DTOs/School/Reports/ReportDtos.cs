@@ -81,7 +81,8 @@ namespace AscentSchools.Core.DTOs.School.Reports
         public int    Present     { get; set; }
         public int    Absent      { get; set; }
         public int    Late        { get; set; }
-        // Key = day-of-month (1–31), Value = "P" | "A" | "L" | ""
+        public int    HalfDay     { get; set; }
+        // Key = day-of-month (1–31), Value = "P" | "A" | "L" | "H" | ""
         public System.Collections.Generic.Dictionary<int, string> Days { get; set; }
     }
 
@@ -94,6 +95,7 @@ namespace AscentSchools.Core.DTOs.School.Reports
         public int    Present        { get; set; }
         public int    Absent         { get; set; }
         public int    Late           { get; set; }
+        public int    HalfDay        { get; set; }
     }
 
     public class MonthlyAttendanceSheetDto
@@ -113,6 +115,7 @@ namespace AscentSchools.Core.DTOs.School.Reports
         public int    TotalPresent { get; set; }
         public int    TotalAbsent  { get; set; }
         public int    TotalLate    { get; set; }
+        public int    TotalHalfDay { get; set; }
         // Key = "YYYY-MM"
         public System.Collections.Generic.Dictionary<string, MonthCounts> MonthData { get; set; }
     }
@@ -122,6 +125,7 @@ namespace AscentSchools.Core.DTOs.School.Reports
         public int Present { get; set; }
         public int Absent  { get; set; }
         public int Late    { get; set; }
+        public int HalfDay { get; set; }
     }
 
     public class FailedStudentsDto
@@ -246,7 +250,8 @@ namespace AscentSchools.Core.DTOs.School.Reports
         public int    Present     { get; set; }
         public int    Absent      { get; set; }
         public int    Late        { get; set; }
-        // Key = "YYYY-MM-DD", Value = "P" | "A" | "L"
+        public int    HalfDay     { get; set; }
+        // Key = "YYYY-MM-DD", Value = "P" | "A" | "L" | "H"
         public System.Collections.Generic.Dictionary<string, string> DateData { get; set; }
     }
 }

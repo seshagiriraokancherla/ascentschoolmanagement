@@ -31,10 +31,15 @@ namespace AscentMigration.Migrators
                 var acadYears = await dest.QueryAsync<AcademicYearLookup>(
                     "SELECT academic_year_id, academic_year FROM academic_years WHERE school_id = @SchoolId",
                     new { Config.SchoolId });
-                var yearMap = acadYears.ToDictionary(
-                    y => y.academic_year?.Trim() ?? "",
-                    y => y.academic_year_id,
-                    StringComparer.OrdinalIgnoreCase);
+                // Tolerant of duplicate academic_year rows in dest (e.g. re-runs without
+                // cleanup) — ToDictionary throws on dup keys; keep the first id and warn.
+                var yearMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                foreach (var y in acadYears)
+                {
+                    var key = y.academic_year?.Trim() ?? "";
+                    if (!yearMap.ContainsKey(key)) yearMap[key] = y.academic_year_id;
+                    else Log($"Warning: duplicate academic_year '{key}' in dest — keeping first (id={yearMap[key]})");
+                }
 
                 // 3. Handle Truncate vs Skip
                 var mode = Config.GetTableMode(Name);

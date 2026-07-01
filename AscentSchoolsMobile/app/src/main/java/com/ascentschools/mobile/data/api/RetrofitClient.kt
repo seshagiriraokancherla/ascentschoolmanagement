@@ -5,11 +5,17 @@ import android.content.SharedPreferences
 import com.ascentschools.mobile.BuildConfig
 import com.ascentschools.mobile.data.local.TokenStore
 import com.google.gson.Gson
+import com.google.gson.JsonObject
 import com.google.gson.reflect.TypeToken
+import okhttp3.Authenticator
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -109,11 +115,92 @@ object RetrofitClient {
         level = HttpLoggingInterceptor.Level.NONE
     }
 
+    // ── In-session token refresh (401 -> refresh -> retry) ────────────────────
+    // Keeps the app logged in for the full 7-day sliding refresh window: when the
+    // access token expires mid-session, OkHttp calls this Authenticator on the 401,
+    // it silently refreshes using the persisted cookie and retries the request.
+    private val refreshLock = Any()
+
+    // Separate client with NO authenticator (avoids recursion) but the SAME cookie jar
+    // so the HttpOnly refresh-token cookie is sent.
+    private val refreshClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .cookieJar(requireNotNull(_cookieJar))
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build()
+    }
+
+    private fun responseCount(response: Response): Int {
+        var r: Response? = response.priorResponse
+        var n = 1
+        while (r != null) { n++; r = r.priorResponse }
+        return n
+    }
+
+    private fun applySchoolHeaders(b: Request.Builder, store: TokenStore) {
+        val code = BuildConfig.SCHOOL_CODE.ifBlank { store.schoolCode ?: "" }
+        if (code.isNotBlank()) { b.header("X-School-Code", code); b.header("X-Subdomain", code) }
+    }
+
+    private fun parseAccessToken(bodyStr: String?): String? =
+        bodyStr?.let { Gson().fromJson(it, JsonObject::class.java).getAsJsonObject("data")?.get("accessToken")?.asString }
+
+    /** Calls the parent/teacher refresh endpoint with the persisted cookie; returns the
+     *  new access token, or null if refresh failed. For a parent, also re-selects the
+     *  last child so child-context endpoints keep working (refresh alone returns a
+     *  parent token with no child context). */
+    private fun refreshAccessToken(store: TokenStore): String? {
+        val endpoint = if (store.userType == "teacher") "mobile/auth/teacher/refresh"
+                       else "mobile/auth/parent/refresh"
+        return runCatching {
+            val refreshReq = Request.Builder().url(BASE_URL + endpoint)
+                .post(ByteArray(0).toRequestBody(null)).also { applySchoolHeaders(it, store) }.build()
+            var token = refreshClient.newCall(refreshReq).execute().use { resp ->
+                if (!resp.isSuccessful) return null
+                parseAccessToken(resp.body?.string())
+            } ?: return null
+
+            // Parent: re-establish child context with the refreshed token.
+            if (store.userType != "teacher" && store.childLinkId > 0) {
+                runCatching {
+                    val selReq = Request.Builder().url(BASE_URL + "mobile/auth/parent/select-child")
+                        .post(("{\"linkId\":" + store.childLinkId + "}")
+                            .toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull()))
+                        .header("Authorization", "Bearer $token")
+                        .also { applySchoolHeaders(it, store) }.build()
+                    refreshClient.newCall(selReq).execute().use { resp ->
+                        if (resp.isSuccessful) parseAccessToken(resp.body?.string())?.let { token = it }
+                    }
+                }
+            }
+            token
+        }.getOrNull()
+    }
+
+    private val tokenAuthenticator = Authenticator { _, response ->
+        val store = _tokenStore ?: return@Authenticator null
+        // Never refresh the auth calls themselves; cap retries to avoid loops.
+        if (response.request.url.encodedPath.contains("/auth/")) return@Authenticator null
+        if (responseCount(response) >= 2) return@Authenticator null
+
+        synchronized(refreshLock) {
+            val failedToken = response.request.header("Authorization")?.removePrefix("Bearer ")
+            val current     = store.accessToken
+            // Another request may have already refreshed the token while we waited.
+            val token = if (current != null && current != failedToken) current
+                        else refreshAccessToken(store)?.also { store.accessToken = it }
+            if (token == null) return@Authenticator null
+            response.request.newBuilder().header("Authorization", "Bearer $token").build()
+        }
+    }
+
     private val okHttpClient: OkHttpClient by lazy {
         val store     = requireNotNull(_tokenStore) { "Call RetrofitClient.init() first" }
         val cookieJar = requireNotNull(_cookieJar)  { "Call RetrofitClient.init() first" }
         OkHttpClient.Builder()
             .cookieJar(cookieJar)
+            .authenticator(tokenAuthenticator)
             .addInterceptor { chain ->
                 val original = chain.request()
                 val builder  = original.newBuilder()
@@ -126,6 +213,9 @@ object RetrofitClient {
                     builder.header("X-School-Code", code)
                     builder.header("X-Subdomain",   code)
                 }
+                // Identifies the Android app to the server (e.g. receipt "Collected by").
+                // The parent web portal sends no such header and defaults to "Parent Portal".
+                builder.header("X-Client-App", "mobile")
                 chain.proceed(builder.build())
             }
             .addInterceptor(loggingInterceptor)

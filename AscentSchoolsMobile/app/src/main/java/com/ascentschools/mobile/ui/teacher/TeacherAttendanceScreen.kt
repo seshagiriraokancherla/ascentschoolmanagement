@@ -78,6 +78,7 @@ fun TeacherAttendanceScreen(
     val presentCount = students.count { it.status == AttendanceStatus.Present }
     val absentCount  = students.count { it.status == AttendanceStatus.Absent  }
     val lateCount    = students.count { it.status == AttendanceStatus.Late    }
+    val halfDayCount = students.count { it.status == AttendanceStatus.HalfDay }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHost) },
@@ -153,10 +154,11 @@ fun TeacherAttendanceScreen(
                             SummaryChip("$presentCount P", Color(0xFF52C41A))
                             SummaryChip("$absentCount A", Color(0xFFFF4D4F))
                             if (lateCount > 0) SummaryChip("$lateCount L", Color(0xFFFA8C16))
+                            if (halfDayCount > 0) SummaryChip("$halfDayCount HD", Color(0xFF1677FF))
                         }
                         TextButton(
                             onClick = { viewModel.markAllPresent() },
-                            enabled = absentCount > 0 || lateCount > 0
+                            enabled = absentCount > 0 || lateCount > 0 || halfDayCount > 0
                         ) {
                             Text("All Present", fontSize = 12.sp)
                         }
@@ -231,6 +233,7 @@ fun TeacherAttendanceScreen(
                     Triple(AttendanceStatus.Present, "Present",  Color(0xFF52C41A)),
                     Triple(AttendanceStatus.Absent,  "Absent",   Color(0xFFFF4D4F)),
                     Triple(AttendanceStatus.Late,    "Late",     Color(0xFFFA8C16)),
+                    Triple(AttendanceStatus.HalfDay, "Half Day", Color(0xFF1677FF)),
                 ).forEach { (status, label, color) ->
                     val isSelected = sheetStudent.status == status
                     OutlinedButton(
@@ -266,12 +269,16 @@ private fun StudentRow(
         AttendanceStatus.Present -> Color(0xFF52C41A)
         AttendanceStatus.Absent  -> Color(0xFFFF4D4F)
         AttendanceStatus.Late    -> Color(0xFFFA8C16)
+        AttendanceStatus.HalfDay -> Color(0xFF1677FF)
     }
     val statusIcon = when (student.status) {
         AttendanceStatus.Present -> Icons.Default.Check
         AttendanceStatus.Absent  -> Icons.Default.Close
         AttendanceStatus.Late    -> Icons.Default.Schedule
+        AttendanceStatus.HalfDay -> Icons.Default.Schedule
     }
+    val statusLabel = if (student.status == AttendanceStatus.HalfDay) "HALF DAY"
+                      else student.status.name.uppercase()
 
     Row(
         modifier = Modifier
@@ -303,7 +310,7 @@ private fun StudentRow(
         // Status badge (only for non-present)
         if (student.status != AttendanceStatus.Present) {
             Text(
-                text     = student.status.name.uppercase(),
+                text     = statusLabel,
                 color    = statusColor,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,

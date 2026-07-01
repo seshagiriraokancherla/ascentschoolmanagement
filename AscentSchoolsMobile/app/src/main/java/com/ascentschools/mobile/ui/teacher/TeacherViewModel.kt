@@ -9,7 +9,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
-enum class AttendanceStatus { Present, Absent, Late }
+enum class AttendanceStatus { Present, Absent, Late, HalfDay }
 
 data class StudentAttendanceState(
     val studentId   : Long,
@@ -103,6 +103,7 @@ class TeacherViewModel(private val repo: TeacherRepository) : ViewModel() {
                             status = when (s.status?.lowercase()) {
                                 "absent"  -> AttendanceStatus.Absent
                                 "late"    -> AttendanceStatus.Late
+                                "halfday" -> AttendanceStatus.HalfDay
                                 else      -> AttendanceStatus.Present
                             }
                         )
@@ -116,10 +117,12 @@ class TeacherViewModel(private val repo: TeacherRepository) : ViewModel() {
     fun toggleStudentStatus(studentId: Long) {
         _attendanceStudents.value = _attendanceStudents.value.map { s ->
             if (s.studentId == studentId) {
+                // Quick tap toggles Present <-> Absent; Late/HalfDay are set via long-press sheet.
                 s.copy(status = when (s.status) {
                     AttendanceStatus.Present -> AttendanceStatus.Absent
                     AttendanceStatus.Absent  -> AttendanceStatus.Present
                     AttendanceStatus.Late    -> AttendanceStatus.Present
+                    AttendanceStatus.HalfDay -> AttendanceStatus.Present
                 })
             } else s
         }
@@ -148,7 +151,7 @@ class TeacherViewModel(private val repo: TeacherRepository) : ViewModel() {
                 entries   = students.map { s ->
                     TeacherAttendanceEntry(
                         studentId = s.studentId,
-                        status    = s.status.name  // "Present" / "Absent" / "Late"
+                        status    = s.status.name  // "Present" / "Absent" / "Late" / "HalfDay"
                     )
                 }
             )

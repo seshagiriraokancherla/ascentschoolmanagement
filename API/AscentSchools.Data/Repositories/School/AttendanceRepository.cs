@@ -15,23 +15,40 @@ namespace AscentSchools.Data.Repositories.School
         // ── Get attendance grid for a class on a date ─────────────────────────
         // Returns all active students in the class with their status for that date (null if not yet marked).
 
-        public AttendanceGridDto GetAttendanceGrid(string tenantDbName, int schoolId, int classId, int sectionId, string date)
+        // sectionId is optional: null → whole class across all sections (used by the
+        // class-level Delete Attendance view). When provided, scopes to that section.
+        public AttendanceGridDto GetAttendanceGrid(string tenantDbName, int schoolId, int classId, int? sectionId, string date)
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
             {
-                var className = conn.QueryFirstOrDefault<string>(
-                    @"SELECT c.class_name + ' - ' + sec.section_name
-                      FROM classes c
-                      JOIN sections sec ON sec.section_id = @sectionId
-                      WHERE c.class_id = @classId AND c.school_id = @schoolId",
-                    new { classId, sectionId, schoolId }) ?? "";
+                var className = sectionId.HasValue
+                    ? conn.QueryFirstOrDefault<string>(
+                        @"SELECT c.class_name + ' - ' + sec.section_name
+                          FROM classes c
+                          JOIN sections sec ON sec.section_id = @sectionId
+                          WHERE c.class_id = @classId AND c.school_id = @schoolId",
+                        new { classId, sectionId, schoolId }) ?? ""
+                    : conn.QueryFirstOrDefault<string>(
+                        @"SELECT c.class_name
+                          FROM classes c
+                          WHERE c.class_id = @classId AND c.school_id = @schoolId",
+                        new { classId, schoolId }) ?? "";
 
+                // Scope to the current academic year. Without this, the multi-year student
+                // model (one Active row per student per year, classes/sections shared across
+                // years) returns prior-year/promoted students too → wrong roster.
                 var students = conn.Query<StudentRow>(
-                    @"SELECT s.student_id StudentId, s.student_name StudentName, s.admission_no AdmissionNo
+                    @"SELECT s.student_id StudentId, s.student_name StudentName, s.admission_no AdmissionNo,
+                             ISNULL(sec.section_name, '-') SectionName
                       FROM students s
-                      WHERE s.class_id = @classId AND s.section_id = @sectionId
+                      LEFT JOIN sections sec ON sec.section_id = s.section_id
+                      WHERE s.class_id = @classId AND (@sectionId IS NULL OR s.section_id = @sectionId)
                         AND s.school_id = @schoolId AND s.status = 'Active'
-                      ORDER BY s.student_name",
+                        AND s.academic_year_id = (
+                            SELECT TOP 1 academic_year_id FROM academic_years
+                            WHERE school_id = @schoolId AND status = 'Active'
+                            ORDER BY academic_year_id DESC)
+                      ORDER BY sec.section_name, s.student_name",
                     new { classId, sectionId, schoolId }).ToList();
 
                 var existing = conn.Query<AttendanceRow>(
@@ -40,7 +57,12 @@ namespace AscentSchools.Data.Repositories.School
                       WHERE school_id = @schoolId AND attendance_date = @date
                         AND student_id IN (
                             SELECT student_id FROM students
-                            WHERE class_id = @classId AND section_id = @sectionId AND school_id = @schoolId
+                            WHERE class_id = @classId AND (@sectionId IS NULL OR section_id = @sectionId)
+                              AND school_id = @schoolId
+                              AND academic_year_id = (
+                                  SELECT TOP 1 academic_year_id FROM academic_years
+                                  WHERE school_id = @schoolId AND status = 'Active'
+                                  ORDER BY academic_year_id DESC)
                         )",
                     new { schoolId, date, classId, sectionId })
                     .ToDictionary(a => a.StudentId);
@@ -53,6 +75,7 @@ namespace AscentSchools.Data.Repositories.School
                         StudentId   = s.StudentId,
                         StudentName = s.StudentName,
                         AdmissionNo = s.AdmissionNo,
+                        SectionName = s.SectionName,
                         Status      = att?.Status,
                         Remarks     = att?.Remarks,
                     };
@@ -103,6 +126,32 @@ namespace AscentSchools.Data.Repositories.School
             }
         }
 
+        // ── Delete attendance for a class+section on a date ───────────────────
+        // Hard-deletes the rows for current-academic-year students of that class+section
+        // (same scoping the mark grid uses, so prior-year stray rows aren't touched).
+        // Returns the number of rows deleted.
+
+        // sectionId is optional: null → delete for the whole class (every section).
+        public int DeleteAttendance(string tenantDbName, int schoolId, int classId, int? sectionId, string date)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+            {
+                return conn.Execute(
+                    @"DELETE FROM student_attendance
+                      WHERE school_id = @schoolId AND attendance_date = @date
+                        AND student_id IN (
+                            SELECT student_id FROM students
+                            WHERE class_id = @classId AND (@sectionId IS NULL OR section_id = @sectionId)
+                              AND school_id = @schoolId
+                              AND academic_year_id = (
+                                  SELECT TOP 1 academic_year_id FROM academic_years
+                                  WHERE school_id = @schoolId AND status = 'Active'
+                                  ORDER BY academic_year_id DESC)
+                        )",
+                    new { schoolId, date, classId, sectionId });
+            }
+        }
+
         // ── Monthly summary (for reports / dashboard) ─────────────────────────
 
         public IEnumerable<AttendanceMonthlySummaryDto> GetMonthlySummary(
@@ -114,6 +163,7 @@ namespace AscentSchools.Data.Repositories.School
                              SUM(CASE WHEN a.status = 'Present'  THEN 1 ELSE 0 END) PresentDays,
                              SUM(CASE WHEN a.status = 'Absent'   THEN 1 ELSE 0 END) AbsentDays,
                              SUM(CASE WHEN a.status = 'Late'     THEN 1 ELSE 0 END) LateDays,
+                             SUM(CASE WHEN a.status = 'HalfDay'  THEN 1 ELSE 0 END) HalfDayDays,
                              COUNT(a.attendance_id) TotalMarked
                       FROM students s
                       LEFT JOIN student_attendance a
@@ -125,6 +175,10 @@ namespace AscentSchools.Data.Repositories.School
                         AND s.section_id = @sectionId
                         AND s.school_id  = @schoolId
                         AND s.status     = 'Active'
+                        AND s.academic_year_id = (
+                            SELECT TOP 1 academic_year_id FROM academic_years
+                            WHERE school_id = @schoolId AND status = 'Active'
+                            ORDER BY academic_year_id DESC)
                       GROUP BY s.student_id, s.student_name, s.admission_no
                       ORDER BY s.student_name",
                     new { schoolId, classId, sectionId, month, year });
@@ -137,6 +191,7 @@ namespace AscentSchools.Data.Repositories.School
             public long   StudentId   { get; set; }
             public string StudentName { get; set; }
             public string AdmissionNo { get; set; }
+            public string SectionName { get; set; }
         }
 
         private class AttendanceRow

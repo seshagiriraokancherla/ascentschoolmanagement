@@ -207,7 +207,7 @@ namespace AscentSchools.API.Controllers.School
             {
                 HttpOnly = true,
                 Secure   = false,   // set true in production (HTTPS)
-                Path     = "/school/auth",
+                Path     = "/",   // must cover the /api/... prefix so the cookie reaches /school/auth/refresh
                 Expires  = DateTimeOffset.UtcNow.AddDays(7)
             };
             response.Headers.AddCookies(new[] { cookie });
@@ -218,7 +218,7 @@ namespace AscentSchools.API.Controllers.School
             var cookie = new CookieHeaderValue("schoolRefreshToken", "")
             {
                 HttpOnly = true,
-                Path     = "/school/auth",
+                Path     = "/",   // must cover the /api/... prefix so the cookie reaches /school/auth/refresh
                 Expires  = DateTimeOffset.UtcNow.AddDays(-1)
             };
             response.Headers.AddCookies(new[] { cookie });

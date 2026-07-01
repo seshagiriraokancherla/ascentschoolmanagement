@@ -13,6 +13,14 @@ interface ApiService {
     @GET("branding")
     suspend fun getBranding(): Response<ApiResponse<BrandingDto>>
 
+    // ── App update gate (force / soft update) ──────────────────────────────────
+    @GET("mobile/app/config")
+    suspend fun getAppConfig(
+        @Query("applicationId") applicationId: String,
+        @Query("platform")      platform:      String,
+        @Query("versionCode")   versionCode:   Int
+    ): Response<ApiResponse<AppVersionStatusDto>>
+
     // ── Teacher Auth ──────────────────────────────────────────────────────────
 
     @POST("mobile/auth/teacher/login")
@@ -116,4 +124,9 @@ interface ApiService {
         @Path("gatewayOrderId") gatewayOrderId: Int,
         @Body request: MobileVerifyRequest
     ): Response<ApiResponse<MobilePaymentResultDto>>
+
+    @GET("mobile/fees/receipts/{id}")
+    suspend fun getReceiptDetail(
+        @Path("id") id: Int
+    ): Response<ApiResponse<ReceiptDetailDto>>
 }

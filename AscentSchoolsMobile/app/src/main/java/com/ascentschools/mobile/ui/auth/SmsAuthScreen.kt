@@ -33,6 +33,7 @@ import com.ascentschools.mobile.BuildConfig
 import com.ascentschools.mobile.R
 import com.ascentschools.mobile.ui.theme.NavyBlue
 import com.ascentschools.mobile.ui.theme.NavyBlueLight
+import com.ascentschools.mobile.ui.update.openPlayStore
 
 // ── Gradient used on the login background ────────────────────────────────────
 
@@ -207,10 +208,19 @@ fun SmsAuthScreen(
                 Spacer(Modifier.height(24.dp))
 
                 Text(
-                    text  = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.35f)
+                    text  = "Version ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White.copy(alpha = 0.7f)
                 )
+
+                // Manual update: opens this app's Play Store listing.
+                TextButton(onClick = { openPlayStore(context, null) }) {
+                    Text(
+                        "Update App",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color.White
+                    )
+                }
 
                 Spacer(Modifier.height(16.dp))
             }

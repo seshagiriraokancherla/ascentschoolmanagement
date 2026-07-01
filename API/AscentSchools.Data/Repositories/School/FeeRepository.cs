@@ -284,7 +284,30 @@ namespace AscentSchools.Data.Repositories.School
                                             AND ISNULL(fc.term_id, 0)       = ISNULL(fs.term_id, 0)
                                             AND ISNULL(fc.fee_period_id, 0) = ISNULL(fs.fee_period_id, 0)
                                             AND fc.status      = 'Active'
-                                      ), 0) ConcessionAmount
+                                      ), 0) ConcessionAmount,
+                                      (
+                                          SELECT MAX(ri.receipt_id)
+                                          FROM fee_receipt_items ri
+                                          INNER JOIN fee_receipts r ON r.receipt_id = ri.receipt_id
+                                          WHERE ri.fee_type_id              = fs.fee_type_id
+                                            AND ISNULL(ri.term_id, 0)       = ISNULL(fs.term_id, 0)
+                                            AND ISNULL(ri.fee_period_id, 0) = ISNULL(fs.fee_period_id, 0)
+                                            AND r.student_id  = @studentId
+                                            AND r.status      = 'Active'
+                                            AND ri.school_id  = @schoolId
+                                      ) ReceiptId,
+                                      (
+                                          SELECT TOP 1 r.created_by
+                                          FROM fee_receipt_items ri
+                                          INNER JOIN fee_receipts r ON r.receipt_id = ri.receipt_id
+                                          WHERE ri.fee_type_id              = fs.fee_type_id
+                                            AND ISNULL(ri.term_id, 0)       = ISNULL(fs.term_id, 0)
+                                            AND ISNULL(ri.fee_period_id, 0) = ISNULL(fs.fee_period_id, 0)
+                                            AND r.student_id  = @studentId
+                                            AND r.status      = 'Active'
+                                            AND ri.school_id  = @schoolId
+                                          ORDER BY ri.receipt_id DESC
+                                      ) CreatedBy
                                FROM fee_structures fs
                                INNER JOIN fee_types ft ON ft.fee_type_id = fs.fee_type_id
                                LEFT  JOIN terms     t  ON t.term_id        = fs.term_id
@@ -362,7 +385,28 @@ namespace AscentSchools.Data.Repositories.School
                                AND fc.school_id    = @schoolId
                                AND ISNULL(fc.term_id, 0) = bfs.term_id
                                AND fc.status       = 'Active'
-                         ), 0) ConcessionAmount
+                         ), 0) ConcessionAmount,
+                         (
+                             SELECT MAX(fri.receipt_id)
+                             FROM fee_receipt_items fri
+                             INNER JOIN fee_receipts fr ON fr.receipt_id = fri.receipt_id
+                             WHERE fri.bus_route_id = bfs.route_id
+                               AND fri.term_id      = bfs.term_id
+                               AND fr.student_id    = @studentId
+                               AND fr.status        = 'Active'
+                               AND fri.school_id    = @schoolId
+                         ) ReceiptId,
+                         (
+                             SELECT TOP 1 fr.created_by
+                             FROM fee_receipt_items fri
+                             INNER JOIN fee_receipts fr ON fr.receipt_id = fri.receipt_id
+                             WHERE fri.bus_route_id = bfs.route_id
+                               AND fri.term_id      = bfs.term_id
+                               AND fr.student_id    = @studentId
+                               AND fr.status        = 'Active'
+                               AND fri.school_id    = @schoolId
+                             ORDER BY fri.receipt_id DESC
+                         ) CreatedBy
                   FROM bus_fee_structures bfs
                   INNER JOIN terms      t  ON t.term_id   = bfs.term_id
                   INNER JOIN bus_routes br ON br.route_id = bfs.route_id
@@ -409,7 +453,30 @@ namespace AscentSchools.Data.Repositories.School
                                AND ISNULL(fc.term_id, 0)       = ISNULL(hfs.term_id, 0)
                                AND ISNULL(fc.fee_period_id, 0) = ISNULL(hfs.fee_period_id, 0)
                                AND fc.status     = 'Active'
-                         ), 0) ConcessionAmount
+                         ), 0) ConcessionAmount,
+                         (
+                             SELECT MAX(fri.receipt_id)
+                             FROM fee_receipt_items fri
+                             INNER JOIN fee_receipts fr ON fr.receipt_id = fri.receipt_id
+                             WHERE fri.hostel_id = hfs.hostel_id
+                               AND ISNULL(fri.term_id, 0)       = ISNULL(hfs.term_id, 0)
+                               AND ISNULL(fri.fee_period_id, 0) = ISNULL(hfs.fee_period_id, 0)
+                               AND fr.student_id  = @studentId
+                               AND fr.status      = 'Active'
+                               AND fri.school_id  = @schoolId
+                         ) ReceiptId,
+                         (
+                             SELECT TOP 1 fr.created_by
+                             FROM fee_receipt_items fri
+                             INNER JOIN fee_receipts fr ON fr.receipt_id = fri.receipt_id
+                             WHERE fri.hostel_id = hfs.hostel_id
+                               AND ISNULL(fri.term_id, 0)       = ISNULL(hfs.term_id, 0)
+                               AND ISNULL(fri.fee_period_id, 0) = ISNULL(hfs.fee_period_id, 0)
+                               AND fr.student_id  = @studentId
+                               AND fr.status      = 'Active'
+                               AND fri.school_id  = @schoolId
+                             ORDER BY fri.receipt_id DESC
+                         ) CreatedBy
                   FROM hostel_fee_structures hfs
                   INNER JOIN hostels     h  ON h.hostel_id  = hfs.hostel_id
                   LEFT  JOIN terms       t  ON t.term_id    = hfs.term_id
@@ -591,13 +658,25 @@ namespace AscentSchools.Data.Repositories.School
                     new { schoolId, search = $"%{search}%", dateFrom, dateTo, status, createdAfter, source, createdBefore });
         }
 
+        /// <summary>Ownership guard for the mobile receipt-print endpoint: true if the
+        /// receipt belongs to the given student_unique_id (stable across promotions).</summary>
+        public bool ReceiptBelongsToUniqueId(string tenantDbName, int schoolId, int receiptId, int studentUniqueId)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.ExecuteScalar<int>(
+                    @"SELECT COUNT(1) FROM fee_receipts
+                      WHERE receipt_id = @receiptId AND school_id = @schoolId
+                        AND student_unique_id = @studentUniqueId",
+                    new { receiptId, schoolId, studentUniqueId }) > 0;
+        }
+
         public FeeReceiptDto GetReceiptById(string tenantDbName, int schoolId, int receiptId)
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
             {
                 var receipt = conn.QueryFirstOrDefault<FeeReceiptDto>(
                     @"SELECT r.receipt_id ReceiptId, r.receipt_no ReceiptNo,
-                             r.student_id StudentId,
+                             r.student_id StudentId, r.student_unique_id StudentUniqueId,
                              s.student_name StudentName, s.admission_no AdmissionNo,
                              s.father_name FatherName,
                              c.class_name ClassName,
@@ -945,6 +1024,12 @@ namespace AscentSchools.Data.Repositories.School
                             var chequeNo = string.IsNullOrWhiteSpace(first.ChequeNo) ? null : first.ChequeNo.Trim();
                             var bankName = string.IsNullOrWhiteSpace(first.BankName)  ? null : first.BankName.Trim();
 
+                            // Legacy RefNo carries the student's unique id (SAS_StudentMaster.StuUnqID) — use it as the
+                            // authoritative student_unique_id; fall back to the admission_no+year lookup when absent.
+                            int? rowUniqueId = (!string.IsNullOrWhiteSpace(first.StudentUniqueId)
+                                                && int.TryParse(first.StudentUniqueId.Trim(), out int ru)) ? (int?)ru : null;
+                            var studentUniqueId = rowUniqueId ?? meta.StudentUniqueId;
+
                             var rid = conn.QuerySingle<int>(
                                 @"INSERT INTO fee_receipts
                                     (receipt_no, student_id, student_unique_id, academic_year_id,
@@ -961,7 +1046,7 @@ namespace AscentSchools.Data.Repositories.School
                                      CASE WHEN @receiptStatus = 'Cancelled' THEN GETDATE() ELSE NULL END,
                                      'legacy', @schoolId, @createdBy);
                                   SELECT CAST(SCOPE_IDENTITY() AS INT)",
-                                new { receiptNo, meta.StudentId, meta.StudentUniqueId, yearId,
+                                new { receiptNo, meta.StudentId, StudentUniqueId = studentUniqueId, yearId,
                                       payDate, total, payModeId, chequeNo, bankName,
                                       remarks, receiptStatus, cancelReason,
                                       schoolId, createdBy }, tx);

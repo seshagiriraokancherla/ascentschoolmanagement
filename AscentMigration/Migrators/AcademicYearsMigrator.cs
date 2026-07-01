@@ -124,7 +124,7 @@ namespace AscentMigration.Migrators
             {
                 case "A": return "Active";
                 case "D": return "Inactive";
-                default:  return "Inactive";
+                default:  return "Active";
             }
         }
     }

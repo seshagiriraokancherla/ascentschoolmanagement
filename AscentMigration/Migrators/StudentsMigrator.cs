@@ -22,7 +22,7 @@ namespace AscentMigration.Migrators
             using (var dest = OpenDest())
             {
                 // 1. Load all legacy rows
-                var rows = (await src.QueryAsync<LegacyStudent>("SELECT * FROM SAS_StudentMaster")).AsList();
+                var rows = (await src.QueryAsync<LegacyStudent>("SELECT * FROM SAS_StudentMaster where stuacdyear='2026-2027'")).AsList();
                 result.Total = rows.Count;
                 Log($"Found {result.Total} rows in SAS_StudentMaster");
 
@@ -394,6 +394,7 @@ namespace AscentMigration.Migrators
             {
                 case "A": return "Active";
                 case "D": return "Inactive";
+                case "TC": return "TC";
                 case "R": return "R";
                 default:  return null;
             }

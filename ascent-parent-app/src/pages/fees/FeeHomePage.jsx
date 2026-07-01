@@ -3,7 +3,7 @@ import {
   Card, Tabs, Collapse, Table, Checkbox, Button, Tag, Typography,
   Statistic, Row, Col, Empty, Spin, Alert, Avatar, App as AntApp,
 } from 'antd'
-import { CreditCardOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons'
+import { CreditCardOutlined, ReloadOutlined, UserOutlined, PrinterOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import api from '../../api/axiosInstance'
 import { useAuthStore } from '../../store/authStore'
@@ -40,6 +40,8 @@ function groupByTermFn(lineItems) {
         structureAmount: 0,
         concessionAmount: 0,
         outstanding:     0,
+        receiptId:       null,
+        createdBy:       null,
         items:           [],
       })
     }
@@ -47,6 +49,8 @@ function groupByTermFn(lineItems) {
     g.structureAmount  += li.structureAmount  || 0
     g.concessionAmount += li.concessionAmount || 0
     g.outstanding      += li.outstanding      || 0
+    // Carry the receipt that paid this term (from the first paid head) for reprint.
+    if (li.receiptId && g.receiptId == null) { g.receiptId = li.receiptId; g.createdBy = li.createdBy }
     g.items.push(li)
   }
   return Array.from(map.values())
@@ -54,6 +58,24 @@ function groupByTermFn(lineItems) {
 
 function YearSection({ year, paying, onPay, groupByTerm = false }) {
   const [yearSelected, setYearSelected] = useState(new Set())
+  const [printingId, setPrintingId]     = useState(null)
+  const navigate    = useNavigate()
+  const { message } = AntApp.useApp()
+
+  // Reprint a paid row's receipt: fetch detail → reuse the success page (it renders + prints).
+  const handlePrint = async (receiptId) => {
+    setPrintingId(receiptId)
+    try {
+      const r = await api.get(`/mobile/fees/receipts/${receiptId}`)
+      const receipt = r.data?.data
+      if (receipt) navigate('/fees/success', { state: { receipt, reprint: true } })
+      else message.error('Receipt not found.')
+    } catch (e) {
+      message.error(e.message || 'Failed to load receipt')
+    } finally {
+      setPrintingId(null)
+    }
+  }
 
   // Rows are either term groups (School) or raw line items (Transport/Hostel).
   const rows    = groupByTerm ? groupByTermFn(year.lineItems) : year.lineItems
@@ -108,12 +130,24 @@ function YearSection({ year, paying, onPay, groupByTerm = false }) {
     ),
   }
 
+  // Print Receipt — only on paid rows whose payment was made via the parent portal.
+  const printCol = {
+    title: 'Receipt', key: '_print', width: 90, align: 'center',
+    render: (_, r) => (r.outstanding <= 0 && r.receiptId && r.createdBy === 'Parent Portal')
+      ? <Button size="small" type="link" icon={<PrinterOutlined />}
+          loading={printingId === r.receiptId} onClick={() => handlePrint(r.receiptId)}>
+          Print
+        </Button>
+      : null,
+  }
+
   // Grouped (School): Term | Total | Outstanding. Term total only — no head breakdown.
   const groupedCols = [
     checkCol,
     { title: 'Term / Period', key: 'term', render: (_, r) => r.label },
     { title: 'Total', key: 'amt', align: 'right', render: (_, r) => fmt(r.structureAmount) },
     outstandingCol,
+    printCol,
   ]
 
   // Ungrouped (Transport/Hostel): full head-wise detail (unchanged).
@@ -127,6 +161,7 @@ function YearSection({ year, paying, onPay, groupByTerm = false }) {
       render: (_, li) => li.concessionAmount > 0 ? <Tag color="green">-{fmt(li.concessionAmount)}</Tag> : '—',
     },
     outstandingCol,
+    printCol,
   ]
 
   return (
@@ -237,8 +272,11 @@ export default function FeeHomePage() {
         FeePeriodId:      li.feePeriodId || null,
         BusRouteId:       li.busRouteId  || null,
         HostelId:         li.hostelId    || null,
-        Amount:           li.outstanding,
-        ConcessionAmount: 0,
+        // outstanding already nets out the concession; send gross + concession so the
+        // server records net_amount = outstanding (correct paid total) while the receipt
+        // still shows the concession line.
+        Amount:           (li.outstanding || 0) + (li.concessionAmount || 0),
+        ConcessionAmount: li.concessionAmount || 0,
       }))
 
       const orderRes = await api.post('/mobile/fees/payment-orders', {

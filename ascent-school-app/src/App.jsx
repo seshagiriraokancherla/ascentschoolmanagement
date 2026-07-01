@@ -1,6 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { ConfigProvider, App as AntApp } from 'antd'
+import { ConfigProvider, App as AntApp, Spin } from 'antd'
 import { useBrandingStore } from './store/brandingStore'
 import { useAuthStore }     from './store/authStore'
 import LoginPage        from './pages/auth/LoginPage'
@@ -17,6 +17,7 @@ import TransportFeePage       from './pages/fee/TransportFeePage'
 import HostelFeePage          from './pages/fee/HostelFeePage'
 import OtherFeePage           from './pages/fee/OtherFeePage'
 import ReceiptsPage           from './pages/fee/ReceiptsPage'
+import PendingPaymentsPage     from './pages/fee/PendingPaymentsPage'
 import GatewaySettingsPage    from './pages/fee/GatewaySettingsPage'
 import DashboardPage         from './pages/dashboard/DashboardPage'
 import AttendancePage        from './pages/attendance/AttendancePage'
@@ -24,6 +25,7 @@ import TransportPage         from './pages/transport/TransportPage'
 import HostelPage            from './pages/hostel/HostelPage'
 import MarksEntryPage        from './pages/marks/MarksEntryPage'
 import HomeworkPage          from './pages/homework/HomeworkPage'
+import DailyHomeworkPage     from './pages/homework/DailyHomeworkPage'
 import AnnouncementsPage     from './pages/announcements/AnnouncementsPage'
 import EventsPage            from './pages/events/EventsPage'
 import StudentsImportPage    from './pages/students/StudentsImportPage'
@@ -40,6 +42,9 @@ import BloodGroupSearchPage        from './pages/students/BloodGroupSearchPage'
 import SMSPage                    from './pages/sms/SMSPage'
 import FeeConcessionPage          from './pages/fee/FeeConcessionPage'
 import SchoolSettingsPage         from './pages/settings/SchoolSettingsPage'
+import SmsGatewayPage             from './pages/settings/SmsGatewayPage'
+import NoAccess                   from './pages/NoAccess'
+import { PATH_PERM }              from './config/permissions'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:62845'
 
@@ -54,10 +59,28 @@ function RequireAuth({ children }) {
   return isAuthenticated ? children : <Navigate to="/login" replace />
 }
 
+/**
+ * Page-level permission gate. `path` is looked up in PATH_PERM; if the user
+ * lacks the required permission, a 403 page is shown instead of the page.
+ * Pages with no mapping (or a null mapping, e.g. Dashboard) are always allowed.
+ */
+function Protected({ path, children }) {
+  const hasPermission = useAuthStore((s) => s.hasPermission)
+  const perm = PATH_PERM[path]
+  if (perm && !hasPermission(perm)) return <NoAccess />
+  return children
+}
+
 
 function App() {
   const { branding, setBranding } = useBrandingStore()
   const login                     = useAuthStore((s) => s.login)
+
+  // Gate rendering until the mount silent-refresh has resolved. Without this,
+  // RequireAuth sees isAuthenticated=false on a page reload (access token is in
+  // memory only) and redirects to /login BEFORE the refresh completes — so a
+  // valid session would still get bounced to the login page on every F5.
+  const [authChecked, setAuthChecked] = useState(false)
 
   const subdomain = getSubdomain()
   const headers   = subdomain ? { 'X-Subdomain': subdomain } : {}
@@ -107,7 +130,17 @@ function App() {
         })
       })
       .catch(() => {}) // Not logged in — user goes to /login
+      .finally(() => setAuthChecked(true)) // release the render gate either way
   }, [])
+
+  // Hold rendering (don't mount Routes/RequireAuth) until the session check is done.
+  if (!authChecked) {
+    return (
+      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Spin size="large" />
+      </div>
+    )
+  }
 
   return (
     <ConfigProvider theme={{ token: { colorPrimary: branding.primaryColor || '#1677ff', colorLink: branding.primaryColor || '#1677ff' } }}>
@@ -121,41 +154,44 @@ function App() {
               element={<RequireAuth><AppLayout /></RequireAuth>}
             >
               <Route index element={<DashboardPage />} />
-              <Route path="students"              element={<StudentsPage />} />
-              <Route path="students/new"          element={<StudentFormPage />} />
-              <Route path="students/import"       element={<StudentsImportPage />} />
-              <Route path="students/promote"         element={<PromoteStudentsPage />} />
-              <Route path="students/blood-group"     element={<BloodGroupSearchPage />} />
-              <Route path="students/:id"          element={<StudentFormPage />} />
-              <Route path="fees/structure"             element={<FeeStructurePage />} />
-              <Route path="fees/structure/import"      element={<FeeStructureImportPage />} />
-              <Route path="fees/collect/admission"     element={<AdmissionFeePage />} />
-              <Route path="fees/collect/school"        element={<SchoolFeePage />} />
-              <Route path="fees/collect/transport"     element={<TransportFeePage />} />
-              <Route path="fees/collect/hostel"        element={<HostelFeePage />} />
-              <Route path="fees/collect/other"         element={<OtherFeePage />} />
-              <Route path="fees/receipts"              element={<ReceiptsPage />} />
-              <Route path="fees/receipts/import"      element={<FeeReceiptsImportPage />} />
-              <Route path="fees/concessions"          element={<FeeConcessionPage />} />
-              <Route path="master"           element={<MasterDataPage />} />
-              <Route path="attendance"               element={<AttendancePage />} />
-              <Route path="transport"                element={<TransportPage />} />
-              <Route path="hostel"                  element={<HostelPage />} />
-              <Route path="marks"                    element={<MarksEntryPage />} />
-              <Route path="homework"                 element={<HomeworkPage />} />
-              <Route path="announcements"            element={<AnnouncementsPage />} />
-              <Route path="events"                  element={<EventsPage />} />
-              <Route path="reports"                   element={<ReportsPage />} />
-              <Route path="staff"                        element={<StaffPage />} />
-              <Route path="staff/attendance"             element={<StaffAttendancePage />} />
-              <Route path="staff/attendance/summary"     element={<StaffAttendanceSummaryPage />} />
-              <Route path="staff/advances"               element={<StaffAdvancesPage />} />
-              <Route path="staff/salaries"               element={<StaffSalariesPage />} />
-              <Route path="sms"                          element={<SMSPage />} />
-              <Route path="settings/school"          element={<SchoolSettingsPage />} />
-              <Route path="settings/roles"           element={<RolesPage />} />
-              <Route path="settings/users"           element={<UsersPage />} />
-              <Route path="settings/payment-gateway" element={<GatewaySettingsPage />} />
+              <Route path="students"              element={<Protected path="/students"><StudentsPage /></Protected>} />
+              <Route path="students/new"          element={<Protected path="/students/new"><StudentFormPage /></Protected>} />
+              <Route path="students/import"       element={<Protected path="/students/import"><StudentsImportPage /></Protected>} />
+              <Route path="students/promote"         element={<Protected path="/students/promote"><PromoteStudentsPage /></Protected>} />
+              <Route path="students/blood-group"     element={<Protected path="/students/blood-group"><BloodGroupSearchPage /></Protected>} />
+              <Route path="students/:id"          element={<Protected path="/students/:id"><StudentFormPage /></Protected>} />
+              <Route path="fees/structure"             element={<Protected path="/fees/structure"><FeeStructurePage /></Protected>} />
+              <Route path="fees/structure/import"      element={<Protected path="/fees/structure/import"><FeeStructureImportPage /></Protected>} />
+              <Route path="fees/collect/admission"     element={<Protected path="/fees/collect/admission"><AdmissionFeePage /></Protected>} />
+              <Route path="fees/collect/school"        element={<Protected path="/fees/collect/school"><SchoolFeePage /></Protected>} />
+              <Route path="fees/collect/transport"     element={<Protected path="/fees/collect/transport"><TransportFeePage /></Protected>} />
+              <Route path="fees/collect/hostel"        element={<Protected path="/fees/collect/hostel"><HostelFeePage /></Protected>} />
+              <Route path="fees/collect/other"         element={<Protected path="/fees/collect/other"><OtherFeePage /></Protected>} />
+              <Route path="fees/receipts"              element={<Protected path="/fees/receipts"><ReceiptsPage /></Protected>} />
+              <Route path="fees/receipts/import"      element={<Protected path="/fees/receipts/import"><FeeReceiptsImportPage /></Protected>} />
+              <Route path="fees/pending-payments"     element={<Protected path="/fees/pending-payments"><PendingPaymentsPage /></Protected>} />
+              <Route path="fees/concessions"          element={<Protected path="/fees/concessions"><FeeConcessionPage /></Protected>} />
+              <Route path="master"           element={<Protected path="/master"><MasterDataPage /></Protected>} />
+              <Route path="attendance"               element={<Protected path="/attendance"><AttendancePage /></Protected>} />
+              <Route path="transport"                element={<Protected path="/transport"><TransportPage /></Protected>} />
+              <Route path="hostel"                  element={<Protected path="/hostel"><HostelPage /></Protected>} />
+              <Route path="marks"                    element={<Protected path="/marks"><MarksEntryPage /></Protected>} />
+              <Route path="homework/daily"           element={<Protected path="/homework/daily"><DailyHomeworkPage /></Protected>} />
+              <Route path="homework"                 element={<Protected path="/homework"><HomeworkPage /></Protected>} />
+              <Route path="announcements"            element={<Protected path="/announcements"><AnnouncementsPage /></Protected>} />
+              <Route path="events"                  element={<Protected path="/events"><EventsPage /></Protected>} />
+              <Route path="reports"                   element={<Protected path="/reports"><ReportsPage /></Protected>} />
+              <Route path="staff"                        element={<Protected path="/staff"><StaffPage /></Protected>} />
+              <Route path="staff/attendance"             element={<Protected path="/staff/attendance"><StaffAttendancePage /></Protected>} />
+              <Route path="staff/attendance/summary"     element={<Protected path="/staff/attendance/summary"><StaffAttendanceSummaryPage /></Protected>} />
+              <Route path="staff/advances"               element={<Protected path="/staff/advances"><StaffAdvancesPage /></Protected>} />
+              <Route path="staff/salaries"               element={<Protected path="/staff/salaries"><StaffSalariesPage /></Protected>} />
+              <Route path="sms"                          element={<Protected path="/sms"><SMSPage /></Protected>} />
+              <Route path="settings/school"          element={<Protected path="/settings/school"><SchoolSettingsPage /></Protected>} />
+              <Route path="settings/roles"           element={<Protected path="/settings/roles"><RolesPage /></Protected>} />
+              <Route path="settings/users"           element={<Protected path="/settings/users"><UsersPage /></Protected>} />
+              <Route path="settings/payment-gateway" element={<Protected path="/settings/payment-gateway"><GatewaySettingsPage /></Protected>} />
+              <Route path="settings/sms-gateway"     element={<Protected path="/settings/sms-gateway"><SmsGatewayPage /></Protected>} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

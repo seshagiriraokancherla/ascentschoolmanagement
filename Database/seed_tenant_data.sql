@@ -35,6 +35,9 @@ PRINT 'Admin password hash: ' + @PasswordHash
 --    Principal gets ALL permissions.
 --    Other roles get their typical subset.
 --    Idempotent — skips if already mapped.
+--    Roles are matched by role_name ONLY (not "school_id IS NULL"): some DBs
+--    create the default roles with a non-NULL school_id, and a "school_id IS NULL"
+--    filter would map nothing there — leaving users able to see only the Dashboard.
 -- ============================================================
 
 -- Principal: all 24 permissions
@@ -43,7 +46,6 @@ SELECT r.role_id, p.permission_id
 FROM roles r
 CROSS JOIN permissions p
 WHERE r.role_name = 'Principal'
-  AND r.school_id IS NULL
   AND NOT EXISTS (
       SELECT 1 FROM role_permissions rp
       WHERE rp.role_id = r.role_id AND rp.permission_id = p.permission_id
@@ -55,13 +57,19 @@ SELECT r.role_id, p.permission_id
 FROM roles r
 CROSS JOIN permissions p
 WHERE r.role_name = 'Admin Clerk'
-  AND r.school_id IS NULL
   AND p.permission_code IN (
       'STUDENT_PROFILE.VIEW', 'STUDENT_PROFILE.CREATE', 'STUDENT_PROFILE.EDIT',
       'STUDENT_FEE.VIEW',
       'ATTENDANCE.VIEW',
       'MARKS.VIEW',
-      'TRANSPORT.VIEW'
+      'TRANSPORT.VIEW',
+      'MASTER_DATA.VIEW',
+      'HOMEWORK.VIEW', 'HOMEWORK.MANAGE',
+      'ANNOUNCEMENT.VIEW', 'ANNOUNCEMENT.MANAGE',
+      'EVENTS.VIEW', 'EVENTS.MANAGE',
+      'STAFF.VIEW',
+      'REPORTS.VIEW',
+      'SMS.SEND'
   )
   AND NOT EXISTS (
       SELECT 1 FROM role_permissions rp
@@ -74,10 +82,10 @@ SELECT r.role_id, p.permission_id
 FROM roles r
 CROSS JOIN permissions p
 WHERE r.role_name = 'Fee Clerk'
-  AND r.school_id IS NULL
   AND p.permission_code IN (
       'STUDENT_PROFILE.VIEW',
-      'STUDENT_FEE.VIEW', 'STUDENT_FEE.COLLECT', 'STUDENT_FEE.CANCEL_RECEIPT', 'STUDENT_FEE.CONCESSION'
+      'STUDENT_FEE.VIEW', 'STUDENT_FEE.COLLECT', 'STUDENT_FEE.CANCEL_RECEIPT', 'STUDENT_FEE.CONCESSION',
+      'REPORTS.VIEW'
   )
   AND NOT EXISTS (
       SELECT 1 FROM role_permissions rp
@@ -90,12 +98,15 @@ SELECT r.role_id, p.permission_id
 FROM roles r
 CROSS JOIN permissions p
 WHERE r.role_name = 'Class Teacher'
-  AND r.school_id IS NULL
   AND p.permission_code IN (
       'STUDENT_PROFILE.VIEW',
       'STUDENT_FEE.VIEW',
       'ATTENDANCE.VIEW', 'ATTENDANCE.MARK', 'ATTENDANCE.EDIT',
-      'MARKS.VIEW', 'MARKS.ENTER', 'MARKS.EDIT'
+      'MARKS.VIEW', 'MARKS.ENTER', 'MARKS.EDIT',
+      'HOMEWORK.VIEW', 'HOMEWORK.MANAGE',
+      'ANNOUNCEMENT.VIEW',
+      'EVENTS.VIEW',
+      'REPORTS.VIEW'
   )
   AND NOT EXISTS (
       SELECT 1 FROM role_permissions rp
@@ -108,7 +119,6 @@ SELECT r.role_id, p.permission_id
 FROM roles r
 CROSS JOIN permissions p
 WHERE r.role_name = 'Librarian'
-  AND r.school_id IS NULL
   AND p.permission_code IN (
       'STUDENT_PROFILE.VIEW',
       'LIBRARY.VIEW', 'LIBRARY.ISSUE', 'LIBRARY.RETURN', 'LIBRARY.MANAGE'
@@ -137,6 +147,38 @@ IF NOT EXISTS (SELECT 1 FROM payment_modes WHERE mode_name = 'Online')
     INSERT INTO payment_modes (mode_name, school_id, is_online) VALUES ('Online', NULL, 1)
 
 PRINT 'Payment modes seeded.'
+GO
+
+
+-- ============================================================
+-- B2. SMS Gateway config + templates (SMS Center)
+--     Seeds the shared smslogin.mobi account + the 3 default templates
+--     for @SchoolId. template_id is left blank — set each school's own
+--     DLT template ids via School App → Settings → SMS Gateway.
+--     OTP is unaffected (hardcoded global account in SmsHelper.cs).
+-- ============================================================
+DECLARE @SmsSchoolId INT = 1   -- ← must match @SchoolId at top of script
+
+IF NOT EXISTS (SELECT 1 FROM sms_configs WHERE school_id = @SmsSchoolId)
+    INSERT INTO sms_configs (school_id, provider, api_url, username, api_key, sender_id, is_enabled, created_by)
+    VALUES (@SmsSchoolId, 'smslogin', 'https://smslogin.mobi/v3/api.php',
+            'mushkin', 'c6cacc7b6d643993b770', 'ASNTNF', 1, 'seed')
+
+IF NOT EXISTS (SELECT 1 FROM sms_templates WHERE school_id = @SmsSchoolId AND template_key = 'ABSENT')
+    INSERT INTO sms_templates (school_id, template_key, title, template_id, message_text, placeholders)
+    VALUES (@SmsSchoolId, 'ABSENT', 'Absent Notification', '',
+            N'Dear Parent, your ward {name} was absent on {date}. Please ensure regular attendance.', '{name},{date}')
+
+IF NOT EXISTS (SELECT 1 FROM sms_templates WHERE school_id = @SmsSchoolId AND template_key = 'FEE_DUE')
+    INSERT INTO sms_templates (school_id, template_key, title, template_id, message_text, placeholders)
+    VALUES (@SmsSchoolId, 'FEE_DUE', 'Fee Due Reminder', '',
+            N'Dear Parent, your ward {name} has an outstanding fee of Rs.{amount}. Please pay at the earliest.', '{name},{amount}')
+
+IF NOT EXISTS (SELECT 1 FROM sms_templates WHERE school_id = @SmsSchoolId AND template_key = 'CUSTOM')
+    INSERT INTO sms_templates (school_id, template_key, title, template_id, message_text, placeholders)
+    VALUES (@SmsSchoolId, 'CUSTOM', 'Custom Message', '', N'', '{name}')
+
+PRINT 'SMS gateway config + templates seeded.'
 GO
 
 

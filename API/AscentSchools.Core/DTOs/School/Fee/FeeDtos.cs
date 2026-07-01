@@ -75,6 +75,10 @@ namespace AscentSchools.Core.DTOs.School.Fee
         public decimal PaidAmount        { get; set; }
         public decimal ConcessionAmount  { get; set; }
         public decimal Outstanding       { get; set; }
+        // The receipt that paid this line (latest if more than one); null if unpaid.
+        // Used by the mobile app to offer a "Print Receipt" action on paid rows.
+        public int?    ReceiptId         { get; set; }
+        public string  CreatedBy         { get; set; }  // receipt's created_by (e.g. "Mobile App")
     }
 
     // ── Cross-year fee summary (by student_unique_id) ─────────────────────
@@ -153,6 +157,7 @@ namespace AscentSchools.Core.DTOs.School.Fee
         public int      ReceiptId        { get; set; }
         public string   ReceiptNo        { get; set; }
         public long     StudentId        { get; set; }
+        public int?     StudentUniqueId  { get; set; }
         public string   StudentName      { get; set; }
         public string   AdmissionNo      { get; set; }
         public string   ClassName        { get; set; }

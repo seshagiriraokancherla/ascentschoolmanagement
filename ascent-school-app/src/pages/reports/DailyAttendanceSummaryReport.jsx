@@ -60,11 +60,11 @@ export default function DailyAttendanceSummaryReport() {
 
   const toRows = () => data.map(r => [
     r.attendanceDate, r.className, r.sectionName,
-    r.totalStudents, r.present, r.absent, r.late,
-    r.totalStudents > 0 ? `${Math.round((r.present / r.totalStudents) * 100)}%` : '—',
+    r.totalStudents, r.present, r.absent, r.late, r.halfDay || 0,
+    r.totalStudents > 0 ? `${Math.round(((r.present + 0.5 * (r.halfDay || 0)) / r.totalStudents) * 100)}%` : '—',
   ])
 
-  const COLS = ['Date', 'Class', 'Section', 'Total', 'Present', 'Absent', 'Late', 'Attendance %']
+  const COLS = ['Date', 'Class', 'Section', 'Total', 'Present', 'Absent', 'Late', 'Half Day', 'Attendance %']
 
   const handlePdf = () => {
     if (!data.length) { message.warning('No data to export.'); return }
@@ -101,9 +101,13 @@ export default function DailyAttendanceSummaryReport() {
       render: v => <span style={{ color: '#fa8c16', fontWeight: 600 }}>{v}</span>,
     },
     {
+      title: 'Half Day', dataIndex: 'halfDay', width: 80, align: 'center',
+      render: v => <span style={{ color: '#1677ff', fontWeight: 600 }}>{v || 0}</span>,
+    },
+    {
       title: 'Attendance %', width: 110, align: 'center',
       render: (_, r) => r.totalStudents > 0
-        ? `${Math.round((r.present / r.totalStudents) * 100)}%`
+        ? `${Math.round(((r.present + 0.5 * (r.halfDay || 0)) / r.totalStudents) * 100)}%`
         : '—',
     },
   ]
@@ -169,6 +173,7 @@ export default function DailyAttendanceSummaryReport() {
           const present = data.reduce((s, r) => s + r.present,       0)
           const absent  = data.reduce((s, r) => s + r.absent,        0)
           const late    = data.reduce((s, r) => s + r.late,          0)
+          const halfDay = data.reduce((s, r) => s + (r.halfDay || 0), 0)
           return (
             <Table.Summary.Row style={{ fontWeight: 700, background: '#f0f5ff' }}>
               <Table.Summary.Cell index={0} colSpan={3}>Grand Total</Table.Summary.Cell>
@@ -176,8 +181,9 @@ export default function DailyAttendanceSummaryReport() {
               <Table.Summary.Cell index={4} align="center" style={{ color: '#52c41a' }}>{present}</Table.Summary.Cell>
               <Table.Summary.Cell index={5} align="center" style={{ color: '#ff4d4f' }}>{absent}</Table.Summary.Cell>
               <Table.Summary.Cell index={6} align="center" style={{ color: '#fa8c16' }}>{late}</Table.Summary.Cell>
-              <Table.Summary.Cell index={7} align="center">
-                {total > 0 ? `${Math.round((present / total) * 100)}%` : '—'}
+              <Table.Summary.Cell index={7} align="center" style={{ color: '#1677ff' }}>{halfDay}</Table.Summary.Cell>
+              <Table.Summary.Cell index={8} align="center">
+                {total > 0 ? `${Math.round(((present + 0.5 * halfDay) / total) * 100)}%` : '—'}
               </Table.Summary.Cell>
             </Table.Summary.Row>
           )

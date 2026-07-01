@@ -414,3 +414,40 @@ CREATE TABLE parent_refresh_tokens (
     CONSTRAINT FK_parent_refresh_tokens_parent  FOREIGN KEY (parent_id) REFERENCES parent_accounts(parent_id)
 );
 GO
+
+
+-- ============================================================
+-- 16. app_config
+--     Drives the mobile force/soft update gate (Option 3).
+--     The Android app sends applicationId + versionCode to
+--     GET /mobile/app/config on launch; the server compares
+--     against the matching row (or the '*' fallback) and tells
+--     the app whether an update is REQUIRED or AVAILABLE.
+--     Change min_supported_version_code here to force-update
+--     all installed apps — no API redeploy needed.
+-- ============================================================
+CREATE TABLE app_config (
+    config_id                   INT             NOT NULL IDENTITY(1,1),
+    application_id              VARCHAR(100)    NOT NULL,   -- e.g. 'in.educare.app'; '*' = default fallback
+    platform                   VARCHAR(10)     NOT NULL DEFAULT 'android',
+    min_supported_version_code  INT             NOT NULL DEFAULT 1,   -- app below this  -> FORCE update
+    latest_version_code         INT             NOT NULL DEFAULT 1,   -- app below this (>= min) -> SOFT update
+    update_message             NVARCHAR(500)   NULL,
+    store_url                  VARCHAR(300)    NULL,                  -- optional override; else app builds market:// link
+    auto_update_enabled        BIT             NOT NULL DEFAULT 0,    -- 0 = never auto-prompt; 1 = prompt via version check
+    updated_at                 DATETIME        NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT PK_app_config          PRIMARY KEY (config_id),
+    CONSTRAINT UQ_app_config_app_plat UNIQUE (application_id, platform)
+);
+GO
+
+-- Seed one row per published applicationId + a '*' fallback (arms the gate, forces nobody)
+INSERT INTO app_config (application_id, platform, min_supported_version_code, latest_version_code)
+VALUES
+    ('*',                     'android', 1, 12),
+    ('in.educare.app',        'android', 1, 12),
+    ('in.educare.stannsasf',  'android', 1, 12),
+    ('in.educare.holyspiritjm','android', 1, 12),
+    ('in.educare.depaulemyv', 'android', 1, 12),
+    ('in.educare.demo',       'android', 1, 12);
+GO

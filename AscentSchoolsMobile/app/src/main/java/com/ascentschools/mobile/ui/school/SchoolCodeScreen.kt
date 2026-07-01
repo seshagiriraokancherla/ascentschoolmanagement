@@ -1,15 +1,19 @@
 package com.ascentschools.mobile.ui.school
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.ascentschools.mobile.ui.theme.NavyBlue
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -20,6 +24,12 @@ fun SchoolCodeScreen(
 ) {
     val state by viewModel.state.collectAsState()
     var code by remember { mutableStateOf("") }
+
+    // Generic app logo (the flavor launcher icon, e.g. CHAK). Loaded via Coil from
+    // getApplicationIcon() — safe for adaptive icons (painterResource on a mipmap
+    // adaptive-icon XML crashes on API 26+).
+    val context = LocalContext.current
+    val appLogo = remember { context.packageManager.getApplicationIcon(context.packageName) }
 
     LaunchedEffect(state) {
         if (state is SchoolCodeState.Done) onResolved()
@@ -34,6 +44,14 @@ fun SchoolCodeScreen(
                 modifier = Modifier.padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                AsyncImage(
+                    model              = appLogo,
+                    contentDescription = "Logo",
+                    modifier           = Modifier
+                        .size(96.dp)
+                        .clip(CircleShape)
+                )
+                Spacer(Modifier.height(16.dp))
                 Text("CHAK IN", style = MaterialTheme.typography.headlineSmall, color = NavyBlue)
                 Spacer(Modifier.height(8.dp))
                 Text(

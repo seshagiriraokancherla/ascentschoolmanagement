@@ -13,8 +13,9 @@ namespace AscentSchools.Core.DTOs.School.Dashboard
         public int     TodayPresent          { get; set; }
         public int     TodayAbsent           { get; set; }
         public int     TodayLate             { get; set; }
+        public int     TodayHalfDay          { get; set; }
         public int     TodayTotalMarked      { get; set; }
-        public decimal AttendancePct         { get; set; }  // (Present+Late) / TotalMarked × 100
+        public decimal AttendancePct         { get; set; }  // (Present+Late+0.5×HalfDay) / TotalMarked × 100
 
         // ── Fee collection ────────────────────────────────────────────────────
         public decimal TodayCollection    { get; set; }

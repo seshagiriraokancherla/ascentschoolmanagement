@@ -107,6 +107,7 @@ export default function ClassStudentsReport() {
   }
 
   const tableColumns = [
+    { title: 'S.No', key: 'serialNo', width: 60, render: (_, __, index) => index + 1 },
     { title: 'Adm No',       dataIndex: 'admissionNo',  width: 100 },
     { title: 'Student Name', dataIndex: 'studentName',  width: 200 },
     { title: 'Gender',       dataIndex: 'gender',       width: 80 },

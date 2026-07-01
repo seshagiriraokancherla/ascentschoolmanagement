@@ -99,9 +99,9 @@ namespace AscentSchools.API.Controllers.Mobile
             if (request.Entries == null || !request.Entries.Any())
                 return Fail(HttpStatusCode.BadRequest, "No entries provided.");
 
-            var validStatuses = new[] { "Present", "Absent", "Late", "Holiday" };
+            var validStatuses = new[] { "Present", "Absent", "Late", "HalfDay", "Holiday" };
             if (request.Entries.Any(e => !validStatuses.Contains(e.Status)))
-                return Fail(HttpStatusCode.BadRequest, "Status must be Present, Absent, Late or Holiday.");
+                return Fail(HttpStatusCode.BadRequest, "Status must be Present, Absent, Late, HalfDay or Holiday.");
 
             var saveReq = new SaveAttendanceRequest
             {

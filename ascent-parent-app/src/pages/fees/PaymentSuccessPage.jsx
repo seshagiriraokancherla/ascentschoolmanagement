@@ -11,6 +11,7 @@ export default function PaymentSuccessPage() {
   const { state } = useLocation()
   const { branding } = useBrandingStore()
   const receipt   = state?.receipt
+  const reprint   = state?.reprint    // true when reprinting an earlier receipt from the fee list
 
   if (!receipt) {
     return (
@@ -48,7 +49,7 @@ export default function PaymentSuccessPage() {
       <Result
         icon={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
         status="success"
-        title="Payment Successful!"
+        title={reprint ? 'Fee Receipt' : 'Payment Successful!'}
         subTitle={`Receipt No: ${receipt.receiptNo}`}
       />
 

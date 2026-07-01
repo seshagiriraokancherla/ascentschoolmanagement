@@ -9,7 +9,7 @@ import dayjs from 'dayjs'
 const { RangePicker } = DatePicker
 const { Text } = Typography
 
-const STATUS_COLOR = { P: '#52c41a', A: '#ff4d4f', L: '#fa8c16' }
+const STATUS_COLOR = { P: '#52c41a', A: '#ff4d4f', L: '#fa8c16', H: '#1677ff' }
 
 // "YYYY-MM-DD" → "01\nJun" (two-line header for narrow columns)
 function dateColTitle(key) {
@@ -134,14 +134,24 @@ export default function AttendanceRegisterReport() {
         : <Text type="secondary">0</Text>,
     },
     {
+      title: 'HD',
+      dataIndex: 'halfDay',
+      fixed: 'right',
+      width: 40,
+      align: 'center',
+      render: v => v > 0
+        ? <Text style={{ color: STATUS_COLOR.H, fontWeight: 600 }}>{v}</Text>
+        : <Text type="secondary">0</Text>,
+    },
+    {
       title: '%',
       fixed: 'right',
       width: 50,
       align: 'center',
       render: (_, r) => {
-        const total = r.present + r.absent + r.late
+        const total = r.present + r.absent + r.late + (r.halfDay || 0)
         return total > 0
-          ? <Text strong>{Math.round((r.present / total) * 100)}%</Text>
+          ? <Text strong>{Math.round(((r.present + 0.5 * (r.halfDay || 0)) / total) * 100)}%</Text>
           : '—'
       },
     },
@@ -157,11 +167,11 @@ export default function AttendanceRegisterReport() {
   }
 
   const exportCols = register
-    ? ['S.No', 'Adm No', 'Name', ...dates.map(dk => dayjs(dk).format('DD-MMM')), 'P', 'A', 'L', '%']
+    ? ['S.No', 'Adm No', 'Name', ...dates.map(dk => dayjs(dk).format('DD-MMM')), 'P', 'A', 'L', 'HD', '%']
     : []
 
   const toRows = () => (register?.rows || []).map(r => {
-    const total = r.present + r.absent + r.late
+    const total = r.present + r.absent + r.late + (r.halfDay || 0)
     return [
       r.serialNo,
       r.admissionNo,
@@ -170,7 +180,8 @@ export default function AttendanceRegisterReport() {
       r.present,
       r.absent,
       r.late,
-      total > 0 ? `${Math.round((r.present / total) * 100)}%` : '—',
+      r.halfDay || 0,
+      total > 0 ? `${Math.round(((r.present + 0.5 * (r.halfDay || 0)) / total) * 100)}%` : '—',
     ]
   })
 
@@ -200,7 +211,8 @@ export default function AttendanceRegisterReport() {
   const grandP = (register?.rows || []).reduce((s, r) => s + r.present, 0)
   const grandA = (register?.rows || []).reduce((s, r) => s + r.absent,  0)
   const grandL = (register?.rows || []).reduce((s, r) => s + r.late,    0)
-  const grandT = grandP + grandA + grandL
+  const grandH = (register?.rows || []).reduce((s, r) => s + (r.halfDay || 0), 0)
+  const grandT = grandP + grandA + grandL + grandH
 
   return (
     <div>
@@ -269,6 +281,7 @@ export default function AttendanceRegisterReport() {
                 <Text style={{ color: STATUS_COLOR.P }}>P = Present</Text>
                 <Text style={{ color: STATUS_COLOR.A, marginLeft: 8 }}>A = Absent</Text>
                 <Text style={{ color: STATUS_COLOR.L, marginLeft: 8 }}>L = Late</Text>
+                <Text style={{ color: STATUS_COLOR.H, marginLeft: 8 }}>H = Half Day</Text>
                 <Text type="secondary" style={{ marginLeft: 8 }}>
                   {dates.length} working day{dates.length !== 1 ? 's' : ''}
                 </Text>
@@ -295,8 +308,9 @@ export default function AttendanceRegisterReport() {
                 <Table.Summary.Cell align="center" style={{ color: STATUS_COLOR.P }}>{grandP}</Table.Summary.Cell>
                 <Table.Summary.Cell align="center" style={{ color: STATUS_COLOR.A }}>{grandA}</Table.Summary.Cell>
                 <Table.Summary.Cell align="center" style={{ color: STATUS_COLOR.L }}>{grandL}</Table.Summary.Cell>
+                <Table.Summary.Cell align="center" style={{ color: STATUS_COLOR.H }}>{grandH}</Table.Summary.Cell>
                 <Table.Summary.Cell align="center">
-                  {grandT > 0 ? `${Math.round((grandP / grandT) * 100)}%` : '—'}
+                  {grandT > 0 ? `${Math.round(((grandP + 0.5 * grandH) / grandT) * 100)}%` : '—'}
                 </Table.Summary.Cell>
               </Table.Summary.Row>
             ) : undefined}

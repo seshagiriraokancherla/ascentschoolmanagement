@@ -1,7 +1,18 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+}
+
+// Release signing credentials live in keystore.properties at the project root
+// (gitignored). If the file is absent (e.g. a fresh clone), release builds fall
+// back to unsigned and the Generate Signed Bundle/APK wizard still works.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) load(FileInputStream(keystorePropertiesFile))
 }
 
 android {
@@ -12,8 +23,8 @@ android {
         applicationId = "in.educare.mobile"   // overridden by each flavor
         minSdk        = 24
         targetSdk     = 35
-        versionCode   = 10
-        versionName   = "1.1"
+        versionCode   = 19
+        versionName   = "1.8"
     }
 
     // ── White-label school flavors ────────────────────────────────────────────
@@ -69,6 +80,17 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                storeFile     = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+                keyAlias      = keystoreProperties["keyAlias"] as String
+                keyPassword   = keystoreProperties["keyPassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         debug {
             // Local dev API (IIS Express binds to localhost only).
@@ -80,6 +102,9 @@ android {
             buildConfigField("String", "API_BASE_URL", "\"http://localhost:62845/\"")
         }
         release {
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             buildConfigField("String", "API_BASE_URL", "\"https://edu-care.in/api/\"")

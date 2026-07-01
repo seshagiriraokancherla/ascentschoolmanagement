@@ -67,8 +67,12 @@ async function request(method, path, body, retry = false) {
       return request(method, path, body, true)
     } catch (err) {
       processQueue(err)
+      // Clear auth state only. RequireAuth (subscribed to isAuthenticated) then
+      // redirects to /login via React Router — a client-side navigation. The old
+      // `window.location.href = '/login'` did a full page load, which returned the
+      // host's 404 page when SPA fallback wasn't configured (see public/.htaccess
+      // and public/web.config).
       useAuthStore.getState().logout()
-      window.location.href = '/login'
       throw err
     } finally {
       refreshing = false

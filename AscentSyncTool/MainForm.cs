@@ -38,9 +38,10 @@ namespace AscentSyncTool
             StartPosition = FormStartPosition.CenterScreen;
 
             var tabs = new TabControl { Dock = DockStyle.Fill };
+            tabs.TabPages.Add(MakePage("Download Receipts", _tabDownload));
             tabs.TabPages.Add(MakePage("Export Receipts",   _tabReceipts));
             tabs.TabPages.Add(MakePage("Export Students",   _tabStudents));
-            tabs.TabPages.Add(MakePage("Download Receipts", _tabDownload));
+            
             Controls.Add(tabs);
 
             WireExportReceipts();

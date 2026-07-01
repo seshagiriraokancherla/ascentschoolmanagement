@@ -155,6 +155,7 @@ data class AttendanceSummaryDto(
     val presentDays: Int,
     val absentDays: Int,
     val lateDays: Int,
+    val halfDayDays: Int = 0,
     val records: List<AttendanceRecordDto>
 )
 
@@ -270,10 +271,42 @@ data class MobileFeeLineItemDto(
     val paidAmount       : Double = 0.0,
     val outstanding      : Double = 0.0,
     val concessionAmount : Double = 0.0,
+    val receiptId        : Int?   = null,   // the receipt that paid this line (null if unpaid)
+    val createdBy        : String? = null,  // receipt's created_by, e.g. "Mobile App"
 ) {
     // isPaid not returned by server — derived locally
     val isPaid: Boolean get() = outstanding <= 0
+    // Show the Print button only for paid lines created via the mobile app.
+    val canPrint: Boolean get() = isPaid && receiptId != null && createdBy == "Mobile App"
 }
+
+// ── Receipt detail (for in-app print / save-as-PDF) ──────────────────────────
+data class ReceiptDetailDto(
+    val receiptId       : Int = 0,
+    val receiptNo       : String? = null,
+    val studentName     : String? = null,
+    val admissionNo     : String? = null,
+    val className       : String? = null,
+    val fatherName      : String? = null,
+    val academicYear    : String? = null,
+    val paymentDate     : String? = null,
+    val totalAmount     : Double = 0.0,
+    val paymentModeName : String? = null,
+    val status          : String? = null,
+    val remarks         : String? = null,
+    val createdBy       : String? = null,
+    val items           : List<ReceiptItemDto> = emptyList()
+)
+
+data class ReceiptItemDto(
+    val feeTypeName      : String? = null,
+    val routeName        : String? = null,
+    val hostelName       : String? = null,
+    val termName         : String? = null,
+    val amount           : Double = 0.0,
+    val concessionAmount : Double = 0.0,
+    val netAmount        : Double = 0.0
+)
 
 // feeTypeCategory replaces paymentModeId — server resolves the online payment mode
 data class MobileCreateOrderRequest(
@@ -309,8 +342,21 @@ data class MobileVerifyRequest(
 )
 
 data class MobilePaymentResultDto(
-    val receiptId : Int,
-    val receiptNo : String?,
-    val amount    : Double,
-    val message   : String?
+    val receiptId   : Int,
+    val receiptNo   : String?,
+    // Server returns the full receipt whose total field is "totalAmount"
+    // (FeeReceiptDto.TotalAmount). Must match that JSON name or it stays 0.0.
+    val totalAmount : Double = 0.0,
+    val message     : String?
+)
+
+// ── App update gate ─────────────────────────────────────────────────────────
+// GET mobile/app/config?applicationId=&platform=android&versionCode=
+data class AppVersionStatusDto(
+    val updateRequired          : Boolean = false,  // true → hard block
+    val updateAvailable         : Boolean = false,  // true → soft nudge
+    val minSupportedVersionCode : Int     = 0,
+    val latestVersionCode       : Int     = 0,
+    val message                 : String? = null,
+    val storeUrl                : String? = null
 )

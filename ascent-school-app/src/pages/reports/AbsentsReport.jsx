@@ -32,6 +32,8 @@ export default function AbsentsReport() {
   const [rows,       setRows]       = useState([])
   const [loading,    setLoading]    = useState(false)
   const [loaded,     setLoaded]     = useState(false)
+  const [page,       setPage]       = useState(1)
+  const [pageSize,   setPageSize]   = useState(50)
 
   useEffect(() => {
     api.get('/school/master/classes').then(r => setClasses(r.data?.data || []))
@@ -101,6 +103,7 @@ export default function AbsentsReport() {
   }
 
   const tableColumns = [
+    { title: 'S.No', key: 'serialNo', width: 60, render: (_, __, index) => (page - 1) * pageSize + index + 1 },
     { title: 'Date',         dataIndex: 'attendanceDate', width: 100 },
     { title: 'Adm No',       dataIndex: 'admissionNo',    width: 100 },
     { title: 'Student Name', dataIndex: 'studentName',    width: 200 },
@@ -172,7 +175,12 @@ export default function AbsentsReport() {
             dataSource={rows}
             columns={tableColumns}
             size="small"
-            pagination={{ pageSize: 50, showTotal: t => `${t} records` }}
+            pagination={{
+              current: page,
+              pageSize,
+              showTotal: t => `${t} records`,
+              onChange: (p, ps) => { setPage(p); setPageSize(ps) },
+            }}
             loading={loading}
             scroll={{ x: 'max-content' }}
           />

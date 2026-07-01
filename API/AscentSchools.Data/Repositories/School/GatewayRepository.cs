@@ -2,6 +2,7 @@ using AscentSchools.Core.DTOs.School.Fee;
 using AscentSchools.Data.ConnectionFactory;
 using Dapper;
 using System;
+using System.Collections.Generic;
 
 namespace AscentSchools.Data.Repositories.School
 {
@@ -206,6 +207,52 @@ namespace AscentSchools.Data.Repositories.School
                     "UPDATE payment_gateway_orders SET status = 'Failed' WHERE gateway_order_id = @gatewayOrderId",
                     new { gatewayOrderId });
         }
+
+        /// <summary>
+        /// Lists orders still in 'Pending' state (client callback / webhook never completed),
+        /// joined to the student for display. Used by the admin reconciliation page.
+        /// </summary>
+        public List<GatewayOrderListItem> GetPendingOrders(
+            string tenantDbName, int schoolId, DateTime? createdAfter, DateTime? createdBefore)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.Query<GatewayOrderListItem>(
+                    @"SELECT o.gateway_order_id  GatewayOrderId,
+                             o.gateway_name      GatewayName,
+                             o.external_order_id ExternalOrderId,
+                             o.amount            Amount,
+                             o.academic_year_id  AcademicYearId,
+                             o.created_by        CreatedBy,
+                             o.created_at        CreatedAt,
+                             o.payload_json      PayloadJson,
+                             o.student_id        StudentId,
+                             s.student_name      StudentName,
+                             s.admission_no      AdmissionNo
+                      FROM   payment_gateway_orders o
+                      LEFT  JOIN students s ON s.student_id = o.student_id
+                      WHERE  o.status = 'Pending'
+                        AND  o.school_id = @schoolId
+                        AND  (@createdAfter  IS NULL OR o.created_at >= @createdAfter)
+                        AND  (@createdBefore IS NULL OR o.created_at <= @createdBefore)
+                      ORDER BY o.created_at DESC",
+                    new { schoolId, createdAfter, createdBefore }).AsList();
+        }
+    }
+
+    /// <summary>Row shape for the pending-orders reconciliation list (data layer).</summary>
+    public class GatewayOrderListItem
+    {
+        public int      GatewayOrderId  { get; set; }
+        public string   GatewayName     { get; set; }
+        public string   ExternalOrderId { get; set; }
+        public decimal  Amount          { get; set; }
+        public int      AcademicYearId  { get; set; }
+        public string   CreatedBy       { get; set; }
+        public DateTime CreatedAt       { get; set; }
+        public string   PayloadJson     { get; set; }
+        public long     StudentId       { get; set; }
+        public string   StudentName     { get; set; }
+        public string   AdmissionNo     { get; set; }
     }
 
     public class GatewayOrderRecord

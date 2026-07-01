@@ -2,6 +2,7 @@ using AscentSchools.Core.DTOs.School.Homework;
 using AscentSchools.Data.ConnectionFactory;
 using AscentSchools.Data.Repositories.School;
 using System;
+using System.Linq;
 using System.Net.Http;
 using System.Web.Http;
 
@@ -30,6 +31,21 @@ namespace AscentSchools.API.Controllers.School
                 return BadRequest("Due date is required.");
             var id = _repo.CreateHomework(Tenant.TenantDbName, Tenant.SchoolId, Tenant.FullName, request);
             return Created(id, "Homework created.");
+        }
+
+        // POST school/homework/batch — multi-subject daily homework entry.
+        [HttpPost, Route("batch")]
+        public HttpResponseMessage CreateBatchHomework([FromBody] BatchHomeworkRequest request)
+        {
+            if (request == null)
+                return BadRequest("No data provided.");
+            if (request.AssignedDate == default(DateTime))
+                return BadRequest("Date is required.");
+            if (request.Items == null || !request.Items.Any(i => i.SubjectId.HasValue && !string.IsNullOrWhiteSpace(i.Description)))
+                return BadRequest("Enter homework for at least one subject.");
+
+            var saved = _repo.CreateBatchHomework(Tenant.TenantDbName, Tenant.SchoolId, Tenant.FullName, request);
+            return Ok(saved, $"Saved homework for {saved} subject(s).");
         }
 
         [HttpPut, Route("{id:int}")]

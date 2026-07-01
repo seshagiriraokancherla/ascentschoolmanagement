@@ -75,6 +75,50 @@ namespace AscentSchools.API.Helpers
             }
         }
 
+        public OrderPaymentStatus FetchOrderPayment(string keyId, string keySecret, string externalOrderId)
+        {
+            try
+            {
+                var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{keyId}:{keySecret}"));
+                var httpRequest = new HttpRequestMessage(HttpMethod.Get, $"orders/{externalOrderId}/payments");
+                httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", credentials);
+
+                var response = _http.SendAsync(httpRequest).GetAwaiter().GetResult();
+                var body     = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+
+                if (!response.IsSuccessStatusCode)
+                    return new OrderPaymentStatus { Success = false, Error = $"Razorpay API error ({(int)response.StatusCode}): {body}" };
+
+                var items = JObject.Parse(body)["items"] as JArray;
+                if (items == null || items.Count == 0)
+                    return new OrderPaymentStatus { Success = true, Found = false };
+
+                // Prefer a captured payment; otherwise take the most recent attempt
+                // (surfaces authorized / failed so the UI can show why it isn't reconcilable).
+                JObject chosen = null;
+                foreach (var it in items)
+                {
+                    if ((string)it["status"] == "captured") { chosen = (JObject)it; break; }
+                }
+                if (chosen == null) chosen = (JObject)items[items.Count - 1];
+
+                var amountPaise = chosen["amount"]?.Value<long>() ?? 0;
+                return new OrderPaymentStatus
+                {
+                    Success        = true,
+                    Found          = true,
+                    PaymentId      = chosen["id"]?.ToString(),
+                    Status         = chosen["status"]?.ToString(),
+                    AmountInRupees = amountPaise / 100m,
+                    Method         = chosen["method"]?.ToString(),
+                };
+            }
+            catch (Exception ex)
+            {
+                return new OrderPaymentStatus { Success = false, Error = ex.Message };
+            }
+        }
+
         public bool VerifyPaymentSignature(string orderId, string paymentId, string signature, string keySecret)
         {
             // Razorpay signature: HMAC-SHA256("{orderId}|{paymentId}", keySecret)

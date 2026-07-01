@@ -1,0 +1,56 @@
+In the AscentMigration folder we have ascentmigration project, in that we need to add few tables migration from legacydb to newdb.
+i am providing mapping to the tables.
+--legacy table -- 
+
+ [SAS_TermMonthData](
+	[TrmID] [varchar](10) NULL,
+	[TrmMnthData] [varchar](20) NULL,
+	[YearNam] [varchar](10) NULL,
+	[OrdrNo] [int] NULL,
+	[Descrpt] [varchar](30) NULL,
+	[AcdYear] [varchar](10) NULL,
+	[FeeCategory] [varchar](20) NULL,
+	[TraStatus] [varchar](5) NULL,
+	[CrtBy] [varchar](10) NULL,
+	[CrtDat] [datetime] NULL,
+	[BranchID] [varchar](10) NULL,
+	[MachID] [varchar](20) NULL,
+	[DeletBy] [varchar](60) NULL
+) ON [PRIMARY]
+GO
+
+
+
+--new table--
+  [fee_periods](
+	[fee_period_id] [int] IDENTITY(1,1) NOT NULL,
+	[school_id] [int] NOT NULL,
+	[academic_year_id] [int] NULL,
+	[month_no] [tinyint] NOT NULL,
+	[year_no] [smallint] NOT NULL,
+	[period_label] [varchar](20) NOT NULL,
+	[sequence_no] [int] NULL,
+	[status] [varchar](10) NOT NULL,
+	[created_by] [varchar](25) NULL,
+	[created_at] [datetime] NOT NULL)
+ 
+
+
+Note: get the rows from legacy using select * from SAS_TermMonthData where descrpt='Monthly'
+Mapping:
+ legacydb column=>newdb column mapping columns:
+   TrmMnthData=>period_label
+  yearnam=>year_no
+ordno=>sequence_no
+trastatus=>status=('A'='Active','D'=>'Deleted') 
+   acdyear=>academic_year_id ((get from newdb) select academic_year_id from academic_years where academic_year=<acdyear>)
+    
+   
+school_id,created_by,created_at will need to populate(check other tables migration) same as other tables.
+month_no in new table should be populated with 'trmmnthdata''s month(legacy table TermMonthData) (in that field data will be like October-2026,January-2026 like that,extract month number from it).
+
+Let me know if any doubts.
+
+
+
+

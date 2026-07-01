@@ -83,6 +83,24 @@ namespace AscentSchools.API.Controllers.School
 
             var sentBy = Tenant.FullName ?? Tenant.UserId.ToString();
 
+            // Capture tenant values into locals — the parallel Task.Run threads below have
+            // no HttpContext, so TenantContext.Current (and thus Tenant.*) is null there.
+            var dbName   = Tenant.TenantDbName;
+            var schoolId = Tenant.SchoolId;
+
+            // Load this school's gateway account + the template for the requested type.
+            var account = _repo.GetSmsAccount(Tenant.TenantDbName, Tenant.SchoolId);
+            if (account == null || !account.IsEnabled)
+                return BadRequest("SMS gateway is not configured or is disabled for this school. Configure it in Settings → SMS Gateway.");
+
+            var templateKey = TemplateKeyFor(req.SmsType);
+            var template    = _repo.GetTemplate(Tenant.TenantDbName, Tenant.SchoolId, templateKey);
+            if (template == null || !template.IsActive || string.IsNullOrWhiteSpace(template.TemplateId))
+                return BadRequest($"No active SMS template (with a DLT template id) is configured for '{req.SmsType}'. Set it in Settings → SMS Gateway.");
+
+            var tplId        = template.TemplateId;
+            var templateText = template.MessageText;
+
             // Send all recipients in this batch in parallel
             var tasks = req.Recipients.Select(r => Task.Run(() =>
             {
@@ -94,7 +112,7 @@ namespace AscentSchools.API.Controllers.School
                         Mobile = r.Mobile ?? "", Message = "", Status = "Failed",
                         ErrorMessage = "No mobile number", SentBy = sentBy,
                     };
-                    _repo.LogSms(Tenant.TenantDbName, Tenant.SchoolId, entry);
+                    _repo.LogSms(dbName, schoolId, entry);
                     return new SmsDispatchResult
                     {
                         StudentId = r.StudentId, StudentName = r.StudentName,
@@ -102,10 +120,11 @@ namespace AscentSchools.API.Controllers.School
                     };
                 }
 
-                string message    = BuildMessage(req.SmsType, r, req.Date, req.CustomMessage);
-                string templateId = GetTemplateId(req.SmsType);
-                string response   = SmsHelper.SendSms(r.Mobile, message, templateId);
-                bool   success    = !response.StartsWith("ERROR=");
+                string message  = BuildMessage(req.SmsType, templateText, r, req.Date, req.CustomMessage);
+                string response = SmsHelper.SendSms(
+                    account.ApiUrl, account.Username, account.ApiKey, account.SenderId,
+                    r.Mobile, message, tplId);
+                bool   success  = !response.StartsWith("ERROR=");
 
                 var logEntry = new SmsLogEntry
                 {
@@ -115,7 +134,7 @@ namespace AscentSchools.API.Controllers.School
                     ErrorMessage = success ? null : response,
                     SentBy  = sentBy,
                 };
-                _repo.LogSms(Tenant.TenantDbName, Tenant.SchoolId, logEntry);
+                _repo.LogSms(dbName, schoolId, logEntry);
 
                 return new SmsDispatchResult
                 {
@@ -159,38 +178,72 @@ namespace AscentSchools.API.Controllers.School
             return Ok(logs);
         }
 
+        // ── Gateway config endpoints (Settings → SMS Gateway) ──────────────────
+
+        // GET school/sms/config
+        [HttpGet, Route("config")]
+        public HttpResponseMessage GetConfig()
+        {
+            // Returns null if never configured — the UI shows a blank form.
+            return Ok(_repo.GetSmsConfig(Tenant.TenantDbName, Tenant.SchoolId));
+        }
+
+        // PUT school/sms/config
+        [HttpPut, Route("config")]
+        public HttpResponseMessage SaveConfig([FromBody] UpdateSmsConfigRequest req)
+        {
+            if (req == null) return BadRequest("No data provided.");
+            if (string.IsNullOrWhiteSpace(req.ApiUrl) ||
+                string.IsNullOrWhiteSpace(req.Username) ||
+                string.IsNullOrWhiteSpace(req.SenderId))
+                return BadRequest("API URL, Username and Sender ID are required.");
+
+            var by = Tenant.FullName ?? Tenant.UserId.ToString();
+            _repo.UpsertSmsConfig(Tenant.TenantDbName, Tenant.SchoolId, req, by);
+            return Ok(_repo.GetSmsConfig(Tenant.TenantDbName, Tenant.SchoolId), "SMS gateway settings saved.");
+        }
+
+        // POST school/sms/templates  (add or edit by template_key)
+        [HttpPost, Route("templates")]
+        public HttpResponseMessage SaveTemplate([FromBody] SaveSmsTemplateRequest req)
+        {
+            if (req == null || string.IsNullOrWhiteSpace(req.TemplateKey))
+                return BadRequest("templateKey is required.");
+
+            _repo.UpsertTemplate(Tenant.TenantDbName, Tenant.SchoolId, req);
+            return Ok(_repo.GetTemplates(Tenant.TenantDbName, Tenant.SchoolId), "Template saved.");
+        }
+
+        // DELETE school/sms/templates/{key}
+        [HttpDelete, Route("templates/{key}")]
+        public HttpResponseMessage DeleteTemplate(string key)
+        {
+            _repo.DeleteTemplate(Tenant.TenantDbName, Tenant.SchoolId, key);
+            return Ok(_repo.GetTemplates(Tenant.TenantDbName, Tenant.SchoolId), "Template deleted.");
+        }
+
         // ── Helpers ───────────────────────────────────────────────────────────
 
-        private static string BuildMessage(string smsType, SmsRecipient r, string date, string customMessage)
+        private static string TemplateKeyFor(string smsType)
         {
             switch (smsType)
             {
-                case "Absent":
-                    return string.Format(
-                        "Dear Parent, your ward {0} was absent on {1}. Please ensure regular attendance.",
-                        r.StudentName, date ?? "today");
-
-                case "FeeDue":
-                    return string.Format(
-                        "Dear Parent, your ward {0} has an outstanding fee of Rs.{1}. Please pay at the earliest.",
-                        r.StudentName, r.OutstandingAmount.ToString("F2"));
-
-                case "Custom":
-                    return (customMessage ?? "").Replace("{name}", r.StudentName);
-
-                default:
-                    return customMessage ?? "";
+                case "Absent": return "ABSENT";
+                case "FeeDue": return "FEE_DUE";
+                default:       return "CUSTOM";
             }
         }
 
-        private static string GetTemplateId(string smsType)
+        // Custom uses the text typed at send time; other types use the school's stored template text.
+        private static string BuildMessage(string smsType, string templateText, SmsRecipient r, string date, string customMessage)
         {
-            switch (smsType)
-            {
-                case "Absent": return SmsHelper.AbsentTemplateId;
-                case "FeeDue": return SmsHelper.FeeDueTemplateId;
-                default:       return SmsHelper.CustomTemplateId;
-            }
+            string text = smsType == "Custom" ? (customMessage ?? "") : (templateText ?? "");
+            return text
+                .Replace("{name}",        r.StudentName ?? "")
+                .Replace("{class}",       r.ClassName   ?? "")
+                .Replace("{admissionNo}", r.AdmissionNo ?? "")
+                .Replace("{date}",        date ?? "")
+                .Replace("{amount}",      r.OutstandingAmount.ToString("F2"));
         }
 
         private class SmsDispatchResult

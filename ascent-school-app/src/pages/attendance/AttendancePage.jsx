@@ -1,21 +1,22 @@
 import { useEffect, useState } from 'react'
 import {
   Card, Select, DatePicker, Button, Table, Tag, Space,
-  Typography, App as AntApp, Row, Col, Radio, Input, Tabs,
+  Typography, App as AntApp, Row, Col, Radio, Input, Tabs, Popconfirm, Empty,
 } from 'antd'
 import {
-  SearchOutlined, SaveOutlined, CheckCircleOutlined,
+  SearchOutlined, SaveOutlined, CheckCircleOutlined, DeleteOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import api from '../../api/axiosInstance'
 
 const { Title, Text } = Typography
 
-const STATUS_OPTIONS = ['Present', 'Absent', 'Late', 'Holiday']
-const STATUS_COLOR   = { Present: 'success', Absent: 'error', Late: 'warning', Holiday: 'default' }
+const STATUS_OPTIONS = ['Present', 'Absent', 'Late', 'HalfDay', 'Holiday']
+const STATUS_COLOR   = { Present: 'success', Absent: 'error', Late: 'warning', HalfDay: 'blue', Holiday: 'default' }
+const STATUS_LABEL   = { HalfDay: 'Half Day' }
 
 export default function AttendancePage() {
-  const { message } = AntApp.useApp()
+  const { message, modal } = AntApp.useApp()
 
   const [classes,          setClasses]          = useState([])
   const [selectedClass,    setSelectedClass]    = useState(null)
@@ -35,6 +36,15 @@ export default function AttendancePage() {
   const [summaryMonth,    setSummaryMonth]    = useState(dayjs())
   const [summary,         setSummary]         = useState([])
   const [summaryLoad,     setSummaryLoad]     = useState(false)
+
+  // Delete attendance tab
+  const [delClass,    setDelClass]    = useState(null)
+  const [delSections, setDelSections] = useState([])
+  const [delSection,  setDelSection]  = useState(null)
+  const [delDate,     setDelDate]     = useState(dayjs())
+  const [delGrid,     setDelGrid]     = useState(null)
+  const [delLoading,  setDelLoading]  = useState(false)
+  const [deleting,    setDeleting]    = useState(false)
 
   useEffect(() => {
     api.get('/school/master/classes').then(r => setClasses(r.data.data || []))
@@ -100,12 +110,59 @@ export default function AttendancePage() {
         })),
       })
       message.success('Attendance saved.')
+
+      // Offer to SMS the absentees (same flow/template as SMS Center → Absent).
+      const absentCount = Object.values(entries).filter(e => e.status === 'Absent').length
+
       // Reload to reflect isMarked flag
       loadGrid()
+
+      if (absentCount > 0) {
+        modal.confirm({
+          title:      'Send SMS to absentees?',
+          content:    `${absentCount} student(s) marked Absent. Send the Absent SMS to their parents?`,
+          okText:     'Yes, send SMS',
+          cancelText: 'No',
+          onOk:       () => sendAbsentSms(),
+        })
+      }
     } catch (e) {
       message.error(e.message || 'Failed to save.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Sends the Absent SMS to today's absentees for the loaded class/section, reusing the
+  // SMS Center endpoints: the server recomputes absentees (with parent mobile) from the
+  // just-saved attendance and uses the school's ABSENT template.
+  const sendAbsentSms = async () => {
+    const date = selectedDate.format('YYYY-MM-DD')
+    try {
+      const rr = await api.get(
+        `/school/sms/recipients?smsType=Absent&date=${date}&classId=${selectedClass}&sectionId=${selectedSection}`
+      )
+      const list = rr.data?.data || []
+      if (list.length === 0) {
+        message.info('No absentees with a mobile number to SMS.')
+        return
+      }
+      const res = await api.post('/school/sms/send', {
+        smsType:    'Absent',
+        date,
+        recipients: list.map(s => ({
+          studentId:         s.studentId,
+          studentName:       s.studentName,
+          admissionNo:       s.admissionNo,
+          className:         s.className,
+          mobile:            s.fatherMobile,
+          outstandingAmount: 0,
+        })),
+      })
+      const r = res.data?.data || {}
+      message.success(`SMS sent: ${r.sent || 0}, failed: ${r.failed || 0}.`)
+    } catch (e) {
+      message.error(e?.response?.data?.message || e.message || 'Failed to send SMS.')
     }
   }
 
@@ -127,8 +184,50 @@ export default function AttendancePage() {
     }
   }
 
+  // ── Delete attendance ─────────────────────────────────────────────────────
+  const loadDelGrid = async () => {
+    if (!delClass || !delDate) {
+      message.warning('Select class and date first.')
+      return
+    }
+    setDelLoading(true)
+    try {
+      const date = delDate.format('YYYY-MM-DD')
+      const secParam = delSection ? `&sectionId=${delSection}` : ''
+      const r = await api.get(`/school/attendance?classId=${delClass}${secParam}&date=${date}`)
+      setDelGrid(r.data.data)
+    } catch {
+      message.error('Failed to load attendance.')
+    } finally {
+      setDelLoading(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    try {
+      const date = delDate.format('YYYY-MM-DD')
+      const secParam = delSection ? `&sectionId=${delSection}` : ''
+      const r = await api.delete(`/school/attendance?classId=${delClass}${secParam}&date=${date}`)
+      message.success(r.data?.message || 'Attendance deleted.')
+      loadDelGrid()  // refresh — should now show "Not marked"
+    } catch (e) {
+      message.error(e.message || 'Failed to delete attendance.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const delMarkedCount = (delGrid?.students || []).filter(s => s.status).length
+
   // ── Mark attendance columns ───────────────────────────────────────────────
   const markColumns = [
+    {
+      title: '#',
+      key: 'sno',
+      width: 60,
+      render: (_, __, index) => index + 1,
+    },
     {
       title: 'Student',
       key: 'student',
@@ -151,7 +250,7 @@ export default function AttendancePage() {
         >
           {STATUS_OPTIONS.map(st => (
             <Radio.Button key={st} value={st}>
-              <Tag color={STATUS_COLOR[st]} style={{ margin: 0, cursor: 'pointer' }}>{st}</Tag>
+              <Tag color={STATUS_COLOR[st]} style={{ margin: 0, cursor: 'pointer' }}>{STATUS_LABEL[st] || st}</Tag>
             </Radio.Button>
           ))}
         </Radio.Group>
@@ -182,6 +281,8 @@ export default function AttendancePage() {
       render: d => <Tag color="error">{d}</Tag> },
     { title: 'Late',        dataIndex: 'lateDays',    key: 'lateDays',    width: 80,
       render: d => d > 0 ? <Tag color="warning">{d}</Tag> : <Tag>{d}</Tag> },
+    { title: 'Half Day',    dataIndex: 'halfDayDays', key: 'halfDayDays', width: 90,
+      render: d => d > 0 ? <Tag color="blue">{d}</Tag> : <Tag>{d || 0}</Tag> },
     { title: 'Days Marked', dataIndex: 'totalMarked', key: 'totalMarked', width: 100 },
     {
       title: 'Attendance %',
@@ -189,7 +290,7 @@ export default function AttendancePage() {
       width: 120,
       render: (_, r) => {
         const pct = r.totalMarked > 0
-          ? Math.round(((r.presentDays + r.lateDays) / r.totalMarked) * 100)
+          ? Math.round(((r.presentDays + r.lateDays + 0.5 * (r.halfDayDays || 0)) / r.totalMarked) * 100)
           : 0
         const color = pct >= 85 ? 'success' : pct >= 75 ? 'warning' : 'error'
         return <Tag color={color}>{pct}%</Tag>
@@ -200,6 +301,7 @@ export default function AttendancePage() {
   const presentCount = Object.values(entries).filter(e => e.status === 'Present').length
   const absentCount  = Object.values(entries).filter(e => e.status === 'Absent').length
   const lateCount    = Object.values(entries).filter(e => e.status === 'Late').length
+  const halfDayCount = Object.values(entries).filter(e => e.status === 'HalfDay').length
 
   return (
     <div>
@@ -274,6 +376,7 @@ export default function AttendancePage() {
                             <Tag color="success">P: {presentCount}</Tag>
                             <Tag color="error">A: {absentCount}</Tag>
                             {lateCount > 0 && <Tag color="warning">L: {lateCount}</Tag>}
+                            {halfDayCount > 0 && <Tag color="blue">HD: {halfDayCount}</Tag>}
                           </Space>
                         )}
                       </Space>
@@ -370,6 +473,126 @@ export default function AttendancePage() {
                     size="middle"
                   />
                 </Card>
+              </>
+            ),
+          },
+          {
+            key:   'delete',
+            label: 'Delete Attendance',
+            children: (
+              <>
+                <Card style={{ marginBottom: 16 }}>
+                  <Row gutter={16} align="middle" wrap>
+                    <Col>
+                      <Text strong>Class</Text>
+                      <Select
+                        style={{ display: 'block', width: 160, marginTop: 4 }}
+                        placeholder="Select class"
+                        value={delClass}
+                        onChange={v => {
+                          setDelClass(v)
+                          setDelSection(null)
+                          setDelGrid(null)
+                          loadSections(v, setDelSections)
+                        }}
+                        options={classes.map(c => ({ label: c.className, value: c.classId }))}
+                      />
+                    </Col>
+                    <Col>
+                      <Text strong>Section</Text>
+                      <Select
+                        style={{ display: 'block', width: 200, marginTop: 4 }}
+                        placeholder="All Sections (whole class)"
+                        value={delSection}
+                        allowClear
+                        disabled={!delClass}
+                        onChange={v => { setDelSection(v ?? null); setDelGrid(null) }}
+                        options={[
+                          { label: 'All Sections (whole class)', value: null },
+                          ...delSections.map(s => ({ label: s.sectionName, value: s.sectionId })),
+                        ]}
+                      />
+                    </Col>
+                    <Col>
+                      <Text strong>Date</Text>
+                      <DatePicker
+                        style={{ display: 'block', marginTop: 4 }}
+                        value={delDate}
+                        onChange={v => { setDelDate(v); setDelGrid(null) }}
+                        format="DD/MM/YYYY"
+                        disabledDate={d => d && d.isAfter(dayjs(), 'day')}
+                      />
+                    </Col>
+                    <Col style={{ marginTop: 20 }}>
+                      <Button
+                        type="primary"
+                        icon={<SearchOutlined />}
+                        loading={delLoading}
+                        onClick={loadDelGrid}
+                      >
+                        Load
+                      </Button>
+                    </Col>
+                  </Row>
+                </Card>
+
+                {delGrid && (
+                  <Card
+                    title={
+                      <Space>
+                        <span>{delGrid.className} — {dayjs(delGrid.date).format('DD MMM YYYY')}</span>
+                        {delGrid.isMarked
+                          ? <Tag color="blue">{delMarkedCount} marked</Tag>
+                          : <Tag>Not marked</Tag>}
+                      </Space>
+                    }
+                    extra={
+                      <Popconfirm
+                        title="Delete attendance?"
+                        description={`This permanently removes attendance for ${delMarkedCount} student(s) — ${delSection ? 'this section' : 'the whole class (all sections)'} — on ${dayjs(delGrid.date).format('DD MMM YYYY')}.`}
+                        okText="Yes, delete"
+                        okButtonProps={{ danger: true }}
+                        cancelText="Cancel"
+                        disabled={!delGrid.isMarked}
+                        onConfirm={handleDelete}
+                      >
+                        <Button danger icon={<DeleteOutlined />} loading={deleting} disabled={!delGrid.isMarked}>
+                          Delete Attendance
+                        </Button>
+                      </Popconfirm>
+                    }
+                  >
+                    {delGrid.isMarked ? (
+                      <Table
+                        dataSource={delGrid.students.filter(s => s.status)}
+                        rowKey="studentId"
+                        pagination={false}
+                        size="small"
+                        columns={[
+                          { title: '#', key: 'sno', width: 60, render: (_, __, i) => i + 1 },
+                          {
+                            title: 'Student', key: 'student',
+                            render: (_, s) => (
+                              <div>
+                                <div style={{ fontWeight: 500 }}>{s.studentName}</div>
+                                <Text type="secondary" style={{ fontSize: 12 }}>{s.admissionNo}</Text>
+                              </div>
+                            ),
+                          },
+                          { title: 'Section', dataIndex: 'sectionName', key: 'sectionName', width: 100,
+                            render: s => s || '—' },
+                          {
+                            title: 'Status', dataIndex: 'status', key: 'status', width: 140,
+                            render: st => <Tag color={STATUS_COLOR[st] || 'default'}>{STATUS_LABEL[st] || st}</Tag>,
+                          },
+                          { title: 'Remarks', dataIndex: 'remarks', key: 'remarks', render: r => r || '—' },
+                        ]}
+                      />
+                    ) : (
+                      <Empty description="No attendance marked for this class, section and date." />
+                    )}
+                  </Card>
+                )}
               </>
             ),
           },

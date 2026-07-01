@@ -58,5 +58,56 @@ namespace AscentSchools.Core.Constants
             public const string View   = "HOSTEL.VIEW";
             public const string Manage = "HOSTEL.MANAGE";
         }
+
+        // ── Admin / settings / supporting modules ────────────────────────
+        public static class MasterData
+        {
+            public const string View   = "MASTER_DATA.VIEW";
+            public const string Manage = "MASTER_DATA.MANAGE";
+        }
+
+        public static class Homework
+        {
+            public const string View   = "HOMEWORK.VIEW";
+            public const string Manage = "HOMEWORK.MANAGE";
+        }
+
+        public static class Announcement
+        {
+            public const string View   = "ANNOUNCEMENT.VIEW";
+            public const string Manage = "ANNOUNCEMENT.MANAGE";
+        }
+
+        public static class Events
+        {
+            public const string View   = "EVENTS.VIEW";
+            public const string Manage = "EVENTS.MANAGE";
+        }
+
+        public static class Staff
+        {
+            public const string View   = "STAFF.VIEW";
+            public const string Manage = "STAFF.MANAGE";
+        }
+
+        public static class Reports
+        {
+            public const string View = "REPORTS.VIEW";
+        }
+
+        public static class Sms
+        {
+            public const string Send = "SMS.SEND";
+        }
+
+        public static class Settings
+        {
+            public const string Manage = "SETTINGS.MANAGE";
+        }
+
+        public static class UserManagement
+        {
+            public const string Manage = "USER_MGMT.MANAGE";
+        }
     }
 }

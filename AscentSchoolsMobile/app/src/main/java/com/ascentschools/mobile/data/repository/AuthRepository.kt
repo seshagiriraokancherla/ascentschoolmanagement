@@ -123,6 +123,7 @@ class AuthRepository(
             val body = resp.bodyOrError()
             if (!body.success || body.data == null) error(body.message ?: "Failed to select child")
             saveSession(body.data)
+            tokenStore.childLinkId = linkId   // remember so we can restore child context after a refresh
             body.data
         }
     }

@@ -266,7 +266,21 @@ namespace AscentSchools.API.Controllers.School
                 return BadRequest("Payment signature verification failed. The order has been marked as failed. Please try again.");
             }
 
-            // Reconstruct collect request from stored payload
+            var receiptId = ReconcileOrderToReceipt(
+                Tenant.TenantDbName, Tenant.SchoolId, order, request.PaymentId, "");
+
+            var receipt = _repo.GetReceiptById(Tenant.TenantDbName, Tenant.SchoolId, receiptId);
+            return Created(receipt, "Payment verified. Receipt generated.");
+        }
+
+        // Shared receipt-creation path used by the verify callback, the webhook, and the
+        // manual reconcile endpoint — keeps all three producing identical receipts.
+        // Reconstructs the collect request from the stored payload, creates the receipt,
+        // and marks the order Paid. viaLabel distinguishes the source in the receipt remarks
+        // (e.g. " via webhook", " via reconcile"; "" for the direct callback).
+        private int ReconcileOrderToReceipt(
+            string dbName, int schoolId, GatewayOrderRecord order, string paymentId, string viaLabel)
+        {
             var originalRequest = JsonConvert.DeserializeObject<CreatePaymentOrderRequest>(order.PayloadJson);
 
             var collectRequest = new CollectFeeRequest
@@ -277,17 +291,195 @@ namespace AscentSchools.API.Controllers.School
                 AcademicYearId   = order.AcademicYearId,
                 PaymentModeId    = order.PaymentModeId,
                 PaymentDate      = originalRequest?.PaymentDate ?? DateTime.UtcNow,
-                Remarks          = $"Online ({order.GatewayName}). Ref: {request.PaymentId}",
+                Remarks          = $"Online ({order.GatewayName}){viaLabel}. Ref: {paymentId}",
                 Items            = originalRequest?.Items ?? new List<CollectFeeItem>(),
             };
 
-            var receiptId = _repo.CollectFee(
-                Tenant.TenantDbName, Tenant.SchoolId, order.CreatedBy, collectRequest);
+            var receiptId = _repo.CollectFee(dbName, schoolId, order.CreatedBy, collectRequest);
+            _gatewayRepo.MarkOrderPaid(dbName, order.GatewayOrderId, paymentId, receiptId);
+            return receiptId;
+        }
 
-            _gatewayRepo.MarkOrderPaid(Tenant.TenantDbName, gatewayOrderId, request.PaymentId, receiptId);
+        // ── Reconciliation: list pending orders, check live status, reconcile ──
+        // Lets an admin recover payments where the parent paid but left the app before
+        // the success callback ran (and no webhook is configured). Uses the gateway API
+        // keys already stored in gateway_configs — no Razorpay dashboard access needed.
+
+        // GET school/fees/payment-orders/pending?createdAfter=&createdBefore=
+        [HttpGet, Route("payment-orders/pending")]
+        public HttpResponseMessage GetPendingPaymentOrders(
+            DateTime? createdAfter = null, DateTime? createdBefore = null)
+        {
+            var orders = _gatewayRepo.GetPendingOrders(
+                Tenant.TenantDbName, Tenant.SchoolId, createdAfter, createdBefore);
+
+            var result = orders.Select(o =>
+            {
+                string category = null;
+                try { category = JsonConvert.DeserializeObject<CreatePaymentOrderRequest>(o.PayloadJson)?.FeeTypeCategory; }
+                catch { /* malformed payload — leave category null */ }
+
+                return new PendingPaymentOrderDto
+                {
+                    GatewayOrderId  = o.GatewayOrderId,
+                    ExternalOrderId = o.ExternalOrderId,
+                    Amount          = o.Amount,
+                    AcademicYearId  = o.AcademicYearId,
+                    FeeTypeCategory = category,
+                    CreatedBy       = o.CreatedBy,
+                    CreatedAt       = o.CreatedAt.ToString("yyyy-MM-dd HH:mm"),
+                    StudentId       = o.StudentId,
+                    StudentName     = o.StudentName,
+                    AdmissionNo     = o.AdmissionNo,
+                };
+            }).ToList();
+
+            return Ok(result);
+        }
+
+        // GET school/fees/payment-orders/{gatewayOrderId}/status
+        // Fetches the order's live status from the gateway (Check status button).
+        [HttpGet, Route("payment-orders/{gatewayOrderId:int}/status")]
+        public HttpResponseMessage GetPaymentOrderStatus(int gatewayOrderId)
+        {
+            var order = _gatewayRepo.GetOrder(Tenant.TenantDbName, gatewayOrderId, Tenant.SchoolId);
+            if (order == null) return NotFound("Payment order not found.");
+
+            var config = _gatewayRepo.GetActiveConfig(Tenant.TenantDbName, Tenant.SchoolId);
+            if (config == null) return BadRequest("No active payment gateway configured.");
+
+            var keySecret = _gatewayRepo.GetKeySecret(Tenant.TenantDbName, Tenant.SchoolId);
+            var gateway   = GatewayServiceFactory.Get(order.GatewayName);
+            var status    = gateway.FetchOrderPayment(config.KeyId, keySecret, order.ExternalOrderId);
+
+            if (!status.Success)
+                return ServerError($"Could not fetch payment status from gateway: {status.Error}");
+
+            var (reconcilable, note) = EvaluateStatus(order.Amount, order.Status, status);
+
+            return Ok(new PaymentOrderStatusDto
+            {
+                GatewayOrderId = order.GatewayOrderId,
+                OrderStatus    = order.Status,
+                Found          = status.Found,
+                GatewayStatus  = status.Status,
+                PaymentId      = status.PaymentId,
+                Method         = status.Method,
+                Amount         = status.AmountInRupees,
+                Reconcilable   = reconcilable,
+                Note           = note,
+            });
+        }
+
+        // Decides whether an order can be reconciled and the human-readable reason.
+        // Shared by the single-order status check and the bulk scan so both agree.
+        private (bool reconcilable, string note) EvaluateStatus(
+            decimal orderAmount, string orderDbStatus, OrderPaymentStatus status)
+        {
+            var amountMatches = Math.Abs(status.AmountInRupees - orderAmount) <= 0.01m;
+            var captured      = status.Found && status.Status == "captured";
+            var reconcilable  = captured && amountMatches && orderDbStatus != "Paid";
+
+            string note;
+            if (!status.Found)                note = "No payment attempt found — the parent did not complete payment.";
+            else if (!captured)               note = $"Payment is '{status.Status}', not captured. Not reconcilable.";
+            else if (!amountMatches)          note = $"Captured ₹{status.AmountInRupees:0.00} does not match order ₹{orderAmount:0.00}. Reconcile manually.";
+            else if (orderDbStatus == "Paid") note = "Already reconciled.";
+            else                              note = "Captured — ready to reconcile.";
+            return (reconcilable, note);
+        }
+
+        // GET school/fees/payment-orders/scan?createdAfter=&createdBefore=&onlyReconcilable=true
+        // Checks every pending order against the gateway in one pass and returns the rows
+        // (by default only the captured/reconcilable ones) so the admin doesn't have to
+        // click "Check status" on each row across many pages.
+        [HttpGet, Route("payment-orders/scan")]
+        public HttpResponseMessage ScanPendingPaymentOrders(
+            DateTime? createdAfter = null, DateTime? createdBefore = null, bool onlyReconcilable = true)
+        {
+            var config = _gatewayRepo.GetActiveConfig(Tenant.TenantDbName, Tenant.SchoolId);
+            if (config == null) return BadRequest("No active payment gateway configured.");
+
+            var keySecret = _gatewayRepo.GetKeySecret(Tenant.TenantDbName, Tenant.SchoolId);
+            var orders    = _gatewayRepo.GetPendingOrders(
+                Tenant.TenantDbName, Tenant.SchoolId, createdAfter, createdBefore);
+
+            var result = new List<ScannedPaymentOrderDto>();
+            foreach (var o in orders)
+            {
+                var gateway = GatewayServiceFactory.Get(
+                    string.IsNullOrWhiteSpace(o.GatewayName) ? config.GatewayName : o.GatewayName);
+                var status  = gateway.FetchOrderPayment(config.KeyId, keySecret, o.ExternalOrderId);
+                if (!status.Success) continue;   // skip rows we couldn't reach; admin can re-scan / check individually
+
+                var (reconcilable, note) = EvaluateStatus(o.Amount, "Pending", status);
+                if (onlyReconcilable && !reconcilable) continue;
+
+                string category = null;
+                try { category = JsonConvert.DeserializeObject<CreatePaymentOrderRequest>(o.PayloadJson)?.FeeTypeCategory; }
+                catch { /* malformed payload — leave category null */ }
+
+                result.Add(new ScannedPaymentOrderDto
+                {
+                    GatewayOrderId  = o.GatewayOrderId,
+                    ExternalOrderId = o.ExternalOrderId,
+                    Amount          = o.Amount,
+                    AcademicYearId  = o.AcademicYearId,
+                    FeeTypeCategory = category,
+                    CreatedBy       = o.CreatedBy,
+                    CreatedAt       = o.CreatedAt.ToString("yyyy-MM-dd HH:mm"),
+                    StudentId       = o.StudentId,
+                    StudentName     = o.StudentName,
+                    AdmissionNo     = o.AdmissionNo,
+                    Found           = status.Found,
+                    GatewayStatus   = status.Status,
+                    PaymentId       = status.PaymentId,
+                    Method          = status.Method,
+                    GatewayAmount   = status.AmountInRupees,
+                    Reconcilable    = reconcilable,
+                    Note            = note,
+                });
+            }
+
+            return Ok(result);
+        }
+
+        // POST school/fees/payment-orders/{gatewayOrderId}/reconcile
+        // Creates the receipt for a pending order that actually captured at the gateway.
+        [HttpPost, Route("payment-orders/{gatewayOrderId:int}/reconcile")]
+        public HttpResponseMessage ReconcilePaymentOrder(int gatewayOrderId)
+        {
+            var order = _gatewayRepo.GetOrder(Tenant.TenantDbName, gatewayOrderId, Tenant.SchoolId);
+            if (order == null) return NotFound("Payment order not found.");
+
+            // Idempotent: already processed (e.g. a late webhook landed first).
+            if (order.Status == "Paid" && order.ReceiptId.HasValue)
+            {
+                var existing = _repo.GetReceiptById(Tenant.TenantDbName, Tenant.SchoolId, order.ReceiptId.Value);
+                return Ok(existing, "Payment already reconciled.");
+            }
+
+            var config = _gatewayRepo.GetActiveConfig(Tenant.TenantDbName, Tenant.SchoolId);
+            if (config == null) return BadRequest("No active payment gateway configured.");
+
+            var keySecret = _gatewayRepo.GetKeySecret(Tenant.TenantDbName, Tenant.SchoolId);
+            var gateway   = GatewayServiceFactory.Get(order.GatewayName);
+            var status    = gateway.FetchOrderPayment(config.KeyId, keySecret, order.ExternalOrderId);
+
+            if (!status.Success)
+                return ServerError($"Could not fetch payment status from gateway: {status.Error}");
+
+            if (!status.Found || status.Status != "captured")
+                return BadRequest($"No captured payment found for this order (gateway status: {status.Status ?? "none"}). The order remains pending.");
+
+            if (Math.Abs(status.AmountInRupees - order.Amount) > 0.01m)
+                return BadRequest($"Captured amount (₹{status.AmountInRupees:0.00}) does not match the order amount (₹{order.Amount:0.00}). Not reconciled — please verify manually.");
+
+            var receiptId = ReconcileOrderToReceipt(
+                Tenant.TenantDbName, Tenant.SchoolId, order, status.PaymentId, " via reconcile");
 
             var receipt = _repo.GetReceiptById(Tenant.TenantDbName, Tenant.SchoolId, receiptId);
-            return Created(receipt, "Payment verified. Receipt generated.");
+            return Created(receipt, "Payment reconciled. Receipt generated.");
         }
 
         // ── Payment Webhook (Razorpay server → our server) ────────────────
@@ -343,22 +535,7 @@ namespace AscentSchools.API.Controllers.School
 
             try
             {
-                var originalRequest = JsonConvert.DeserializeObject<CreatePaymentOrderRequest>(order.PayloadJson);
-
-                var collectRequest = new CollectFeeRequest
-                {
-                    StudentId        = order.StudentId,
-                    StudentUniqueId  = originalRequest?.StudentUniqueId,
-                    FeeTypeCategory  = originalRequest?.FeeTypeCategory,
-                    AcademicYearId   = order.AcademicYearId,
-                    PaymentModeId    = order.PaymentModeId,
-                    PaymentDate      = originalRequest?.PaymentDate ?? DateTime.UtcNow,
-                    Remarks          = $"Online ({order.GatewayName}) via webhook. Ref: {paymentId}",
-                    Items            = originalRequest?.Items ?? new List<CollectFeeItem>(),
-                };
-
-                var receiptId = _repo.CollectFee(dbName, schoolId, order.CreatedBy, collectRequest);
-                _gatewayRepo.MarkOrderPaid(dbName, order.GatewayOrderId, paymentId, receiptId);
+                ReconcileOrderToReceipt(dbName, schoolId, order, paymentId, " via webhook");
             }
             catch
             {

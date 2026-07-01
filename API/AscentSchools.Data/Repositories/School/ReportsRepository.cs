@@ -33,8 +33,8 @@ namespace AscentSchools.Data.Repositories.School
                       WHERE s.school_id        = @schoolId
                         AND s.academic_year_id = @academicYearId
                         AND s.status IN ('Active', 'Y')
-                      GROUP BY s.class_id, c.class_name, s.section_id, sec.section_name
-                      ORDER BY c.class_name, sec.section_name",
+                      GROUP BY s.class_id, c.class_name, c.sequence_no, s.section_id, sec.section_name
+                      ORDER BY c.sequence_no, sec.section_name",
                     new { schoolId, academicYearId });
         }
 
@@ -78,11 +78,18 @@ namespace AscentSchools.Data.Repositories.School
                       WHERE c.class_id = @classId",
                     new { classId, sectionId });
 
+                // Scope to the current academic year — this report has no year picker, and
+                // without this the multi-year student model (classes/sections shared across
+                // years) returns prior-year/promoted students too.
                 var students = conn.Query<StudentMeta>(
                     @"SELECT student_id StudentId, admission_no AdmissionNo, student_name StudentName
                       FROM students
                       WHERE class_id = @classId AND section_id = @sectionId
                         AND school_id = @schoolId AND status IN ('Active','Y')
+                        AND academic_year_id = (
+                            SELECT TOP 1 academic_year_id FROM academic_years
+                            WHERE school_id = @schoolId AND status = 'Active'
+                            ORDER BY academic_year_id DESC)
                       ORDER BY student_name",
                     new { classId, sectionId, schoolId }).ToList();
 
@@ -103,16 +110,18 @@ namespace AscentSchools.Data.Repositories.School
                 var rows = students.Select(s =>
                 {
                     var dayMap = new Dictionary<int, string>();
-                    int p = 0, a = 0, l = 0;
+                    int p = 0, a = 0, l = 0, h = 0;
                     foreach (var rec in records[s.StudentId])
                     {
                         dayMap[rec.DayNo] = rec.Status == "Present" ? "P"
                                           : rec.Status == "Absent"  ? "A"
                                           : rec.Status == "Late"    ? "L"
+                                          : rec.Status == "HalfDay" ? "H"
                                           : rec.Status?.Substring(0, 1).ToUpper() ?? "";
                         if (rec.Status == "Present") p++;
                         else if (rec.Status == "Absent") a++;
                         else if (rec.Status == "Late")   l++;
+                        else if (rec.Status == "HalfDay") h++;
                     }
                     return new AttendanceSheetRowDto
                     {
@@ -123,6 +132,7 @@ namespace AscentSchools.Data.Repositories.School
                         Present     = p,
                         Absent      = a,
                         Late        = l,
+                        HalfDay     = h,
                     };
                 });
 
@@ -579,17 +589,19 @@ namespace AscentSchools.Data.Repositories.School
                 var rows = students.Select(s =>
                 {
                     var dateMap = new Dictionary<string, string>();
-                    int p = 0, a = 0, l = 0;
+                    int p = 0, a = 0, l = 0, h = 0;
                     foreach (var rec in records[s.StudentId])
                     {
                         var v = rec.Status == "Present" ? "P"
                               : rec.Status == "Absent"  ? "A"
                               : rec.Status == "Late"    ? "L"
+                              : rec.Status == "HalfDay" ? "H"
                               : rec.Status?.Substring(0, 1).ToUpper() ?? "";
                         dateMap[rec.DateKey] = v;
                         if (v == "P") p++;
                         else if (v == "A") a++;
                         else if (v == "L") l++;
+                        else if (v == "H") h++;
                     }
                     return new AttendanceRegisterRowDto
                     {
@@ -599,6 +611,7 @@ namespace AscentSchools.Data.Repositories.School
                         Present     = p,
                         Absent      = a,
                         Late        = l,
+                        HalfDay     = h,
                         DateData    = dateMap,
                     };
                 });
@@ -665,7 +678,7 @@ namespace AscentSchools.Data.Repositories.School
                 var rows = students.Select(s =>
                 {
                     var monthData = new Dictionary<string, MonthCounts>();
-                    int tp = 0, ta = 0, tl = 0;
+                    int tp = 0, ta = 0, tl = 0, th = 0;
 
                     foreach (var rec in records[s.StudentId])
                     {
@@ -675,6 +688,7 @@ namespace AscentSchools.Data.Repositories.School
                         if      (rec.Status == "Present") { monthData[key].Present++; tp++; }
                         else if (rec.Status == "Absent")  { monthData[key].Absent++;  ta++; }
                         else if (rec.Status == "Late")    { monthData[key].Late++;    tl++; }
+                        else if (rec.Status == "HalfDay") { monthData[key].HalfDay++; th++; }
                     }
 
                     return new MonthlyAttendanceRowDto
@@ -684,6 +698,7 @@ namespace AscentSchools.Data.Repositories.School
                         TotalPresent = tp,
                         TotalAbsent  = ta,
                         TotalLate    = tl,
+                        TotalHalfDay = th,
                         MonthData    = monthData,
                     };
                 });
@@ -713,7 +728,8 @@ namespace AscentSchools.Data.Repositories.School
                         COUNT(DISTINCT s.student_id)                   TotalStudents,
                         SUM(CASE WHEN sa.status = 'Present' THEN 1 ELSE 0 END) Present,
                         SUM(CASE WHEN sa.status = 'Absent'  THEN 1 ELSE 0 END) Absent,
-                        SUM(CASE WHEN sa.status = 'Late'    THEN 1 ELSE 0 END) Late
+                        SUM(CASE WHEN sa.status = 'Late'    THEN 1 ELSE 0 END) Late,
+                        SUM(CASE WHEN sa.status = 'HalfDay' THEN 1 ELSE 0 END) HalfDay
                       FROM student_attendance sa
                       JOIN students  s   ON s.student_id   = sa.student_id
                       LEFT JOIN classes   c   ON c.class_id    = s.class_id
@@ -722,6 +738,10 @@ namespace AscentSchools.Data.Repositories.School
                         AND sa.attendance_date BETWEEN @dateFrom AND @dateTo
                         AND (@classId   IS NULL OR s.class_id   = @classId)
                         AND (@sectionId IS NULL OR s.section_id = @sectionId)
+                        AND s.academic_year_id = (
+                            SELECT TOP 1 academic_year_id FROM academic_years
+                            WHERE school_id = @schoolId AND status = 'Active'
+                            ORDER BY academic_year_id DESC)
                       GROUP BY sa.attendance_date, s.class_id, c.class_name,
                                s.section_id, sec.section_name
                       ORDER BY sa.attendance_date, c.class_name, sec.section_name",

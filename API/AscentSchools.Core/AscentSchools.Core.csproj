@@ -61,6 +61,7 @@
     <Compile Include="DTOs\Control\Users\SetUserStatusRequest.cs" />
     <Compile Include="DTOs\Control\Users\TenantRoleDto.cs" />
     <Compile Include="DTOs\Control\Users\TenantUserDto.cs" />
+    <Compile Include="DTOs\Mobile\AppConfig\AppConfigDtos.cs" />
     <Compile Include="DTOs\Mobile\Data\FeeDtos.cs" />
     <Compile Include="DTOs\School\Auth\SchoolUserRecord.cs" />
     <Compile Include="DTOs\School\Events\SchoolEventDto.cs" />

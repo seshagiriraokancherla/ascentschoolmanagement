@@ -19,15 +19,17 @@ namespace AscentSchools.API.Controllers.School
         }
 
         // GET /school/attendance?classId=5&sectionId=2&date=2025-01-15
+        // sectionId is optional — omit it to load the whole class (all sections).
         [HttpGet, Route("")]
-        public HttpResponseMessage GetAttendance([FromUri] int classId, [FromUri] int sectionId, [FromUri] string date)
+        public HttpResponseMessage GetAttendance([FromUri] int classId, [FromUri] int? sectionId, [FromUri] string date)
         {
-            if (classId <= 0 || sectionId <= 0)
-                return BadRequest("classId and sectionId are required.");
+            if (classId <= 0)
+                return BadRequest("classId is required.");
             if (string.IsNullOrWhiteSpace(date) || !DateTime.TryParse(date, out _))
                 return BadRequest("A valid date (yyyy-MM-dd) is required.");
 
-            var grid = _repo.GetAttendanceGrid(Tenant.TenantDbName, Tenant.SchoolId, classId, sectionId, date);
+            var grid = _repo.GetAttendanceGrid(Tenant.TenantDbName, Tenant.SchoolId, classId,
+                                               sectionId > 0 ? sectionId : null, date);
             return Ok(grid);
         }
 
@@ -44,12 +46,28 @@ namespace AscentSchools.API.Controllers.School
             if (request.Entries == null || !request.Entries.Any())
                 return BadRequest("No entries provided.");
 
-            var validStatuses = new[] { "Present", "Absent", "Late", "Holiday" };
+            var validStatuses = new[] { "Present", "Absent", "Late", "HalfDay", "Holiday" };
             if (request.Entries.Any(e => !validStatuses.Contains(e.Status)))
-                return BadRequest("Status must be Present, Absent, Late or Holiday.");
+                return BadRequest("Status must be Present, Absent, Late, HalfDay or Holiday.");
 
             _repo.SaveAttendance(Tenant.TenantDbName, Tenant.SchoolId, Tenant.FullName, request);
             return Ok(true, "Attendance saved.");
+        }
+
+        // DELETE /school/attendance?classId=5&sectionId=2&date=2025-01-15
+        // Hard-deletes attendance for a class on a date (so it can be re-marked).
+        // sectionId is optional — omit it to delete the whole class (all sections).
+        [HttpDelete, Route("")]
+        public HttpResponseMessage DeleteAttendance([FromUri] int classId, [FromUri] int? sectionId, [FromUri] string date)
+        {
+            if (classId <= 0)
+                return BadRequest("classId is required.");
+            if (string.IsNullOrWhiteSpace(date) || !DateTime.TryParse(date, out _))
+                return BadRequest("A valid date (yyyy-MM-dd) is required.");
+
+            var count = _repo.DeleteAttendance(Tenant.TenantDbName, Tenant.SchoolId, classId,
+                                               sectionId > 0 ? sectionId : null, date);
+            return Ok(count, $"Deleted attendance for {count} student(s).");
         }
 
         // GET /school/attendance/summary?classId=5&sectionId=2&month=3&year=2025

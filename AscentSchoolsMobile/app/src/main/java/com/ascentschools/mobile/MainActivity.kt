@@ -14,10 +14,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.ascentschools.mobile.data.api.MobileOrderResponse
+import com.ascentschools.mobile.data.repository.AppConfigRepository
 import com.ascentschools.mobile.data.repository.AuthRepository
 import com.ascentschools.mobile.data.repository.FeeRepository
 import com.ascentschools.mobile.data.repository.StudentRepository
 import com.ascentschools.mobile.data.repository.TeacherRepository
+import com.ascentschools.mobile.data.repository.UpdateStatus
+import com.ascentschools.mobile.ui.update.ForceUpdateScreen
+import com.ascentschools.mobile.ui.update.UpdateAvailableDialog
 import com.ascentschools.mobile.ui.auth.SmsAuthScreen
 import com.ascentschools.mobile.ui.auth.SmsAuthViewModel
 import com.ascentschools.mobile.ui.fee.FeeViewModel
@@ -63,6 +67,7 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
         val studentRepo = StudentRepository(api)
         val feeRepo     = FeeRepository(api)
         val teacherRepo = TeacherRepository(api)
+        val appConfigRepo = AppConfigRepository(api)
 
         setContent {
             AscentTheme {
@@ -80,6 +85,15 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                     mutableStateOf(isGenericApp && tokenStore.schoolCode.isNullOrBlank())
                 }
 
+                // App update gate. null = still checking the server's version config.
+                // Auto-update prompts are opt-in per app_config.auto_update_enabled: when the
+                // flag is off (default) the server returns no-update, so nothing shows here and
+                // users update via the manual "Update App" button on the login screen.
+                // Fails open inside the repo, so a backend error never blocks launch.
+                var updateStatus  by remember { mutableStateOf<UpdateStatus?>(null) }
+                var softDismissed by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) { updateStatus = appConfigRepo.checkVersion() }
+
                 // On cold start: silently refresh the stored session so the access token
                 // is valid before any screen tries to make API calls.
                 // The refresh cookie is now persisted by PersistentCookieJar, so this
@@ -87,7 +101,12 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                 LaunchedEffect(Unit) {
                     if (isCheckingSession) {
                         when (tokenStore.userType) {
-                            "parent"  -> authRepo.silentRefresh()
+                            "parent"  -> authRepo.silentRefresh().onSuccess {
+                                // Refresh returns a parent token WITHOUT child context;
+                                // re-select the last child so data screens work after restart.
+                                val linkId = tokenStore.childLinkId
+                                if (linkId > 0) authRepo.selectChild(linkId)
+                            }
                             "teacher" -> authRepo.silentRefreshTeacher()
                             else      -> Result.failure<Unit>(Exception("Unknown user type"))
                         }.onFailure {
@@ -100,10 +119,22 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                     }
                 }
 
-                if (isCheckingSession) {
+                val forced = updateStatus as? UpdateStatus.Forced
+
+                // Soft (optional) update nudge — overlays the normal content, dismissible.
+                (updateStatus as? UpdateStatus.Soft)?.let { soft ->
+                    if (!softDismissed)
+                        UpdateAvailableDialog(soft.message, soft.storeUrl) { softDismissed = true }
+                }
+
+                if (updateStatus == null || isCheckingSession) {
+                    // Still checking app version and/or refreshing the session.
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
+                } else if (forced != null) {
+                    // Hard block — must update to continue.
+                    ForceUpdateScreen(forced.message, forced.storeUrl)
                 } else if (needsSchool) {
                     val schoolVm = remember { SchoolCodeViewModel(authRepo, tokenStore) }
                     SchoolCodeScreen(viewModel = schoolVm, onResolved = { needsSchool = false })
@@ -165,6 +196,19 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                                 feeVm.initiatePayment(items, academicYearId, feeTypeCategory)
                             },
                             onChildSwitched = { childEpoch++ },
+                            onChangeSchool = if (isGenericApp) {
+                                {
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        runCatching { authRepo.logoutParent() }
+                                    }
+                                    tokenStore.clear()        // end session
+                                    tokenStore.clearSchool()  // drop school + branding
+                                    feeViewModel = null
+                                    isLoggedIn = false
+                                    userType   = ""
+                                    needsSchool = true        // back to SchoolCodeScreen
+                                }
+                            } else null,
                             onLogout = {
                                 CoroutineScope(Dispatchers.IO).launch {
                                     runCatching { authRepo.logoutParent() }

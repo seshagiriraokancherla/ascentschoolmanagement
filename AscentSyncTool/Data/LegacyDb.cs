@@ -61,13 +61,16 @@ namespace AscentSyncTool.Data
         //   FeeID       ← SAS_FeeTypes     (FeeTyp, Status 'A')
         public void InsertReceipt(LegacyFeeReceipt r)
         {
+
             using (var conn = Open())
+            {
+                conn.Execute("alter table SAS_FeeReceipts alter column RemarksDet varchar(200)");
                 conn.Execute(
                     @"INSERT INTO SAS_FeeReceipts
                         (FeeReciptID, FeeDat, RefNo, StuAdmnNo, FeeTyp, FeeAmt,
                          RemarksDet, PaymentTyp, ClassNam, AcdYear, FeeReceiptStat,
-                         FeeMasterID, FeeID,
-                         CrtBy, CrtDat, PymntTyp)
+                         FeeMasterID, FeeID, BranchID,
+                         CrtBy, CrtDat, PymntTyp,MachID,DeletBy,DeletResn,DelDate)
                       VALUES
                         (@FeeReciptID, @FeeDat, @RefNo, @StuAdmnNo, @FeeTyp, @FeeAmt,
                          @RemarksDet, @PaymentTyp, @ClassNam, @AcdYear, @FeeReceiptStat,
@@ -76,8 +79,10 @@ namespace AscentSyncTool.Data
                               AND FeeTyp = @FeeTyp AND FeeMasterStat = 'A' AND AcdYear = @AcdYear),
                          (SELECT TOP 1 FeeTypID FROM SAS_FeeTypes
                             WHERE FeeTyp = @FeeTyp AND FeeTypStatus = 'A'),
-                         'websync', GETDATE(), @PymntTyp)",
+                         (SELECT TOP 1 BranchID FROM SAS_LicenceDet),
+                         'websync', GETDATE(), @PymntTyp,'','','',getdate())",
                     r);
+            }
         }
     }
 }

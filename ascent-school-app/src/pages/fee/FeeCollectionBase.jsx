@@ -191,7 +191,11 @@ export default function FeeCollectionBase({ title, feeTypeCategory, joinTypeFilt
         FeePeriodId:      li.feePeriodId || null,
         BusRouteId:       li.busRouteId  || null,
         HostelId:         li.hostelId    || null,
-        Amount:           li.outstanding,
+        // li.outstanding already nets out the concession (structure − paid − concession).
+        // Send Amount as the gross (outstanding + concession) and ConcessionAmount as the
+        // concession, so the server stores net_amount = Amount − Concession = outstanding
+        // (correct paid total) while the receipt still shows the concession line.
+        Amount:           (li.outstanding || 0) + (li.concessionAmount || 0),
         ConcessionAmount: li.concessionAmount || 0,
       }))
 

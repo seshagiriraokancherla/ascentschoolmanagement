@@ -80,4 +80,53 @@ namespace AscentSchools.Core.DTOs.School.Fee
         public string OrderId   { get; set; }   // razorpay_order_id
         public string Signature { get; set; }   // razorpay_signature
     }
+
+    /// <summary>
+    /// One row in the admin "Pending Online Payments" reconciliation list.
+    /// Live gateway status is fetched separately per row (Check status button).
+    /// </summary>
+    public class PendingPaymentOrderDto
+    {
+        public int     GatewayOrderId  { get; set; }
+        public string  ExternalOrderId { get; set; }
+        public decimal Amount          { get; set; }
+        public int     AcademicYearId  { get; set; }
+        public string  FeeTypeCategory { get; set; }   // parsed from the stored payload
+        public string  CreatedBy       { get; set; }
+        public string  CreatedAt       { get; set; }   // preformatted "yyyy-MM-dd HH:mm" (UTC)
+        public long    StudentId       { get; set; }
+        public string  StudentName     { get; set; }
+        public string  AdmissionNo     { get; set; }
+    }
+
+    /// <summary>
+    /// A pending order with its live gateway status already attached — returned by the
+    /// bulk "Scan" so the UI can show only captured/reconcilable rows without per-row clicks.
+    /// </summary>
+    public class ScannedPaymentOrderDto : PendingPaymentOrderDto
+    {
+        public bool    Found         { get; set; }
+        public string  GatewayStatus { get; set; }   // captured / authorized / failed / created
+        public string  PaymentId     { get; set; }
+        public string  Method        { get; set; }
+        public decimal GatewayAmount { get; set; }   // amount at the gateway (rupees)
+        public bool    Reconcilable  { get; set; }
+        public string  Note          { get; set; }
+    }
+
+    /// <summary>
+    /// Live status of a pending order fetched from the gateway (Check status button).
+    /// </summary>
+    public class PaymentOrderStatusDto
+    {
+        public int     GatewayOrderId { get; set; }
+        public string  OrderStatus    { get; set; }   // our DB status (Pending/Paid/Failed)
+        public bool    Found          { get; set; }   // a payment attempt exists at the gateway
+        public string  GatewayStatus  { get; set; }   // captured / authorized / failed / created
+        public string  PaymentId      { get; set; }
+        public string  Method         { get; set; }   // upi / card / netbanking …
+        public decimal Amount         { get; set; }   // amount at the gateway (rupees)
+        public bool    Reconcilable   { get; set; }   // captured, amount matches, not yet Paid
+        public string  Note           { get; set; }   // human-readable explanation for the UI
+    }
 }

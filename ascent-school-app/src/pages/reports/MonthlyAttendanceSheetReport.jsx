@@ -8,7 +8,7 @@ import dayjs from 'dayjs'
 
 const { Text } = Typography
 
-const STATUS_COLOR = { present: '#52c41a', absent: '#ff4d4f', late: '#fa8c16' }
+const STATUS_COLOR = { present: '#52c41a', absent: '#ff4d4f', late: '#fa8c16', halfDay: '#1677ff' }
 
 function monthLabel(key) {
   // key = "YYYY-MM"
@@ -88,6 +88,7 @@ export default function MonthlyAttendanceSheetReport() {
             {' / '}
             <span style={{ color: STATUS_COLOR.absent }}>{m.absent}</span>
             {m.late > 0 && <><span style={{ color: '#999' }}>/</span><span style={{ color: STATUS_COLOR.late }}>{m.late}</span></>}
+            {m.halfDay > 0 && <><span style={{ color: '#999' }}>/</span><span style={{ color: STATUS_COLOR.halfDay }}>{m.halfDay}</span></>}
           </span>
         )
       },
@@ -116,13 +117,22 @@ export default function MonthlyAttendanceSheetReport() {
         : <Text type="secondary">0</Text>,
     },
     {
+      title: 'Total HD',
+      dataIndex: 'totalHalfDay',
+      width: 76,
+      align: 'center',
+      render: v => v > 0
+        ? <Text strong style={{ color: STATUS_COLOR.halfDay }}>{v}</Text>
+        : <Text type="secondary">0</Text>,
+    },
+    {
       title: '%',
       width: 60,
       align: 'center',
       render: (_, r) => {
-        const total = r.totalPresent + r.totalAbsent + r.totalLate
+        const total = r.totalPresent + r.totalAbsent + r.totalLate + (r.totalHalfDay || 0)
         return total > 0
-          ? <Text strong>{Math.round((r.totalPresent / total) * 100)}%</Text>
+          ? <Text strong>{Math.round(((r.totalPresent + 0.5 * (r.totalHalfDay || 0)) / total) * 100)}%</Text>
           : '—'
       },
     },
@@ -134,22 +144,23 @@ export default function MonthlyAttendanceSheetReport() {
     `Monthly Attendance Sheet — ${sheet?.className} ${sheet?.sectionName} (${sheet?.academicYear})`
 
   const exportCols = sheet
-    ? ['Adm No', 'Name', ...months.map(monthLabel), 'Total P', 'Total A', 'Total L', '%']
+    ? ['Adm No', 'Name', ...months.map(monthLabel), 'Total P', 'Total A', 'Total L', 'Total HD', '%']
     : []
 
   const toRows = () => (sheet?.rows || []).map(r => {
-    const total = r.totalPresent + r.totalAbsent + r.totalLate
+    const total = r.totalPresent + r.totalAbsent + r.totalLate + (r.totalHalfDay || 0)
     return [
       r.admissionNo,
       r.studentName,
       ...months.map(mk => {
         const m = r.monthData?.[mk]
-        return m ? `P:${m.present} A:${m.absent} L:${m.late}` : ''
+        return m ? `P:${m.present} A:${m.absent} L:${m.late} HD:${m.halfDay || 0}` : ''
       }),
       r.totalPresent,
       r.totalAbsent,
       r.totalLate,
-      total > 0 ? `${Math.round((r.totalPresent / total) * 100)}%` : '—',
+      r.totalHalfDay || 0,
+      total > 0 ? `${Math.round(((r.totalPresent + 0.5 * (r.totalHalfDay || 0)) / total) * 100)}%` : '—',
     ]
   })
 
@@ -179,7 +190,8 @@ export default function MonthlyAttendanceSheetReport() {
   const grandP = (sheet?.rows || []).reduce((s, r) => s + r.totalPresent, 0)
   const grandA = (sheet?.rows || []).reduce((s, r) => s + r.totalAbsent,  0)
   const grandL = (sheet?.rows || []).reduce((s, r) => s + r.totalLate,    0)
-  const grandT = grandP + grandA + grandL
+  const grandH = (sheet?.rows || []).reduce((s, r) => s + (r.totalHalfDay || 0), 0)
+  const grandT = grandP + grandA + grandL + grandH
 
   return (
     <div>
@@ -240,7 +252,8 @@ export default function MonthlyAttendanceSheetReport() {
                 <Text style={{ color: STATUS_COLOR.present }}>P = Present</Text>
                 <Text style={{ color: STATUS_COLOR.absent,  marginLeft: 8 }}>A = Absent</Text>
                 <Text style={{ color: STATUS_COLOR.late,    marginLeft: 8 }}>L = Late</Text>
-                <Text type="secondary" style={{ marginLeft: 8 }}>— cell: P / A / L counts per month</Text>
+                <Text style={{ color: STATUS_COLOR.halfDay, marginLeft: 8 }}>H = Half Day</Text>
+                <Text type="secondary" style={{ marginLeft: 8 }}>— cell: P / A / L / H counts per month</Text>
               </span>
             </Col>
             <Col>
@@ -262,8 +275,9 @@ export default function MonthlyAttendanceSheetReport() {
                 <Table.Summary.Cell align="center" style={{ color: STATUS_COLOR.present }}>{grandP}</Table.Summary.Cell>
                 <Table.Summary.Cell align="center" style={{ color: STATUS_COLOR.absent  }}>{grandA}</Table.Summary.Cell>
                 <Table.Summary.Cell align="center" style={{ color: STATUS_COLOR.late    }}>{grandL}</Table.Summary.Cell>
+                <Table.Summary.Cell align="center" style={{ color: STATUS_COLOR.halfDay }}>{grandH}</Table.Summary.Cell>
                 <Table.Summary.Cell align="center">
-                  {grandT > 0 ? `${Math.round((grandP / grandT) * 100)}%` : '—'}
+                  {grandT > 0 ? `${Math.round(((grandP + 0.5 * grandH) / grandT) * 100)}%` : '—'}
                 </Table.Summary.Cell>
               </Table.Summary.Row>
             ) : undefined}

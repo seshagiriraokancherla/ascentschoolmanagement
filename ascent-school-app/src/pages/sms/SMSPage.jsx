@@ -14,11 +14,16 @@ import api from '../../api/axiosInstance'
 const { Text, Title } = Typography
 const { TextArea }    = Input
 
+// Default dropdown labels (fallback). The Send tab overrides each label with the
+// matching sms_template's Title loaded from the server (see SMS_TYPE_KEY).
 const SMS_TYPES = [
   { value: 'Absent',  label: 'Absent Notification' },
   { value: 'FeeDue',  label: 'Fee Due Reminder'    },
   { value: 'Custom',  label: 'Custom Message'       },
 ]
+
+// SMS Center type -> sms_templates.template_key (so the template Title can drive the label)
+const SMS_TYPE_KEY = { Absent: 'ABSENT', FeeDue: 'FEE_DUE', Custom: 'CUSTOM' }
 
 const BATCH_SIZES = [25, 50]
 
@@ -52,6 +57,7 @@ function SendTab() {
   const [years,        setYears]        = useState([])
   const [classes,      setClasses]      = useState([])
   const [sections,     setSections]     = useState([])
+  const [smsTypes,     setSmsTypes]     = useState(SMS_TYPES)   // labels overridden from template Titles
 
   const [smsType,      setSmsType]      = useState('Absent')
   const [date,         setDate]         = useState(dayjs())
@@ -80,6 +86,16 @@ function SendTab() {
       if (current) setYearId(current.academicYearId)
     })
     api.get('/school/master/classes').then(r => setClasses(r.data?.data || []))
+    // Override dropdown labels with each template's Title (key-matched); falls back
+    // to the default label when a template is missing or has no title.
+    api.get('/school/sms/config').then(r => {
+      const byKey = {}
+      ;(r.data?.data?.templates || []).forEach(t => { byKey[t.templateKey] = t })
+      setSmsTypes(SMS_TYPES.map(d => {
+        const t = byKey[SMS_TYPE_KEY[d.value]]
+        return { value: d.value, label: (t?.title?.trim()) ? t.title : d.label }
+      }))
+    }).catch(() => {})
   }, [])
 
   const loadSections = useCallback(async (cid) => {
@@ -164,6 +180,8 @@ function SendTab() {
           recipients:    batch.map(s => ({
             studentId:         s.studentId,
             studentName:       s.studentName,
+            admissionNo:       s.admissionNo,
+            className:         s.className,
             mobile:            s.fatherMobile,
             outstandingAmount: s.outstandingAmount ?? 0,
           })),
@@ -224,7 +242,7 @@ function SendTab() {
             <div style={{ marginBottom: 4 }}><Text strong>SMS Type</Text></div>
             <Select
               style={{ width: '100%' }}
-              options={SMS_TYPES}
+              options={smsTypes}
               value={smsType}
               onChange={handleTypeChange}
             />

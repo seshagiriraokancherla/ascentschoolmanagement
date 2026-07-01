@@ -138,6 +138,109 @@ namespace AscentSchools.Data.Repositories.School
                     });
         }
 
+        // ── SMS gateway config (per school) ────────────────────────────────────
+
+        /// <summary>Gateway account WITH api_key — for the send path only.</summary>
+        public SmsAccount GetSmsAccount(string tenantDbName, int schoolId)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.QueryFirstOrDefault<SmsAccount>(
+                    @"SELECT provider Provider, api_url ApiUrl, username Username,
+                             api_key ApiKey, sender_id SenderId, is_enabled IsEnabled
+                      FROM   sms_configs WHERE school_id = @schoolId",
+                    new { schoolId });
+        }
+
+        /// <summary>Gateway account for the settings page (api_key omitted) + templates.</summary>
+        public SmsConfigDto GetSmsConfig(string tenantDbName, int schoolId)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+            {
+                var cfg = conn.QueryFirstOrDefault<SmsConfigDto>(
+                    @"SELECT config_id ConfigId, provider Provider, api_url ApiUrl,
+                             username Username, sender_id SenderId,
+                             CASE WHEN LEN(ISNULL(api_key,'')) > 0 THEN 1 ELSE 0 END HasApiKey,
+                             is_enabled IsEnabled,
+                             CONVERT(VARCHAR(19), updated_at, 120) UpdatedAt
+                      FROM   sms_configs WHERE school_id = @schoolId",
+                    new { schoolId });
+
+                if (cfg != null)
+                    cfg.Templates = new List<SmsTemplateDto>(GetTemplates(tenantDbName, schoolId));
+                return cfg;
+            }
+        }
+
+        public void UpsertSmsConfig(string tenantDbName, int schoolId, UpdateSmsConfigRequest req, string updatedBy)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                conn.Execute(
+                    @"IF EXISTS (SELECT 1 FROM sms_configs WHERE school_id = @schoolId)
+                        UPDATE sms_configs
+                        SET provider   = @Provider,
+                            api_url    = @ApiUrl,
+                            username   = @Username,
+                            -- blank/null api_key keeps the existing one
+                            api_key    = CASE WHEN ISNULL(@ApiKey,'') = '' THEN api_key ELSE @ApiKey END,
+                            sender_id  = @SenderId,
+                            is_enabled = @IsEnabled,
+                            updated_at = GETDATE()
+                        WHERE school_id = @schoolId
+                      ELSE
+                        INSERT INTO sms_configs (school_id, provider, api_url, username, api_key, sender_id, is_enabled, created_by)
+                        VALUES (@schoolId, @Provider, @ApiUrl, @Username, ISNULL(@ApiKey,''), @SenderId, @IsEnabled, @updatedBy)",
+                    new { schoolId, req.Provider, req.ApiUrl, req.Username, req.ApiKey, req.SenderId, req.IsEnabled, updatedBy });
+        }
+
+        // ── SMS templates (per school per key) ──────────────────────────────────
+
+        public IEnumerable<SmsTemplateDto> GetTemplates(string tenantDbName, int schoolId)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.Query<SmsTemplateDto>(
+                    @"SELECT template_row_id TemplateRowId, template_key TemplateKey, title Title,
+                             template_id TemplateId, message_text MessageText,
+                             placeholders Placeholders, is_active IsActive
+                      FROM   sms_templates WHERE school_id = @schoolId
+                      ORDER BY template_key",
+                    new { schoolId });
+        }
+
+        public SmsTemplateDto GetTemplate(string tenantDbName, int schoolId, string templateKey)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.QueryFirstOrDefault<SmsTemplateDto>(
+                    @"SELECT template_row_id TemplateRowId, template_key TemplateKey, title Title,
+                             template_id TemplateId, message_text MessageText,
+                             placeholders Placeholders, is_active IsActive
+                      FROM   sms_templates WHERE school_id = @schoolId AND template_key = @templateKey",
+                    new { schoolId, templateKey });
+        }
+
+        public void UpsertTemplate(string tenantDbName, int schoolId, SaveSmsTemplateRequest req)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                conn.Execute(
+                    @"IF EXISTS (SELECT 1 FROM sms_templates WHERE school_id = @schoolId AND template_key = @TemplateKey)
+                        UPDATE sms_templates
+                        SET title = @Title, template_id = ISNULL(@TemplateId,''),
+                            message_text = ISNULL(@MessageText,''), placeholders = @Placeholders,
+                            is_active = @IsActive, updated_at = GETDATE()
+                        WHERE school_id = @schoolId AND template_key = @TemplateKey
+                      ELSE
+                        INSERT INTO sms_templates (school_id, template_key, title, template_id, message_text, placeholders, is_active)
+                        VALUES (@schoolId, @TemplateKey, @Title, ISNULL(@TemplateId,''), ISNULL(@MessageText,''), @Placeholders, @IsActive)",
+                    new { schoolId, req.TemplateKey, req.Title, req.TemplateId, req.MessageText, req.Placeholders, req.IsActive });
+        }
+
+        public void DeleteTemplate(string tenantDbName, int schoolId, string templateKey)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                conn.Execute(
+                    "DELETE FROM sms_templates WHERE school_id = @schoolId AND template_key = @templateKey",
+                    new { schoolId, templateKey });
+        }
+
         // ── History ───────────────────────────────────────────────────────────
 
         public IEnumerable<SmsLogDto> GetLogs(

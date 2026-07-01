@@ -154,7 +154,7 @@ private fun AttendanceContent(
 @Composable
 private fun SummaryCard(summary: AttendanceSummaryDto) {
     val pct = if (summary.totalDays > 0)
-        (summary.presentDays.toFloat() / summary.totalDays * 100).toInt() else 0
+        ((summary.presentDays + 0.5f * summary.halfDayDays) / summary.totalDays * 100).toInt() else 0
     val barColor = when {
         pct >= 75 -> Present
         pct >= 60 -> Late
@@ -192,6 +192,7 @@ private fun SummaryCard(summary: AttendanceSummaryDto) {
                 StatPill("Present", summary.presentDays.toString(), Present)
                 StatPill("Absent",  summary.absentDays.toString(),  Absent)
                 StatPill("Late",    summary.lateDays.toString(),    Late)
+                StatPill("Half Day", summary.halfDayDays.toString(), HalfDay)
                 StatPill("Total",   summary.totalDays.toString(),   NavyBlue)
             }
         }
@@ -293,7 +294,7 @@ private fun AttendanceLegend() {
         modifier              = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        listOf("Present" to Present, "Absent" to Absent, "Late" to Late).forEach { (label, color) ->
+        listOf("Present" to Present, "Absent" to Absent, "Late" to Late, "Half Day" to HalfDay).forEach { (label, color) ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Box(Modifier.size(10.dp).clip(CircleShape).background(color))
                 Text(label, style = MaterialTheme.typography.labelSmall,

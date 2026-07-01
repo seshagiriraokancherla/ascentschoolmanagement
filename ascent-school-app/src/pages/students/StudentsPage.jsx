@@ -52,6 +52,8 @@ export default function StudentsPage() {
   const [sectionId,      setSectionId]      = useState(null)
   const [academicYearId, setAcademicYearId] = useState(null)
   const [status,         setStatus]         = useState('')
+  const [pageSize,       setPageSize]        = useState(20)
+  const [page,           setPage]            = useState(1)
 
   const load = async (params = {}) => {
     setLoading(true)
@@ -202,6 +204,12 @@ export default function StudentsPage() {
   const academicYearOptions = academicYears.map((y) => ({ value: y.academicYearId, label: y.academicYear }))
 
   const columns = [
+    {
+      title:  'S.No',
+      key:    'serialNo',
+      width:  60,
+      render: (_, __, index) => (page - 1) * pageSize + index + 1,
+    },
     {
       title:     'Photo',
       dataIndex: 'photoPath',
@@ -362,7 +370,12 @@ export default function StudentsPage() {
         columns={columns}
         loading={loading}
         size="small"
-        pagination={{ pageSize: 20, showTotal: (total) => `${total} students` }}
+        pagination={{
+          current: page,
+          pageSize,
+          showTotal: (total) => `${total} students`,
+          onChange: (p, ps) => { setPage(p); setPageSize(ps) },
+        }}
       />
 
       {/* Block Student Modal */}

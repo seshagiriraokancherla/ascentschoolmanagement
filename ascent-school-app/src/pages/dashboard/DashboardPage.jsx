@@ -42,7 +42,7 @@ export default function DashboardPage() {
 
   const {
     totalActiveStudents,
-    attendanceMarkedToday, todayPresent, todayAbsent, todayLate, todayTotalMarked, attendancePct,
+    attendanceMarkedToday, todayPresent, todayAbsent, todayLate, todayHalfDay, todayTotalMarked, attendancePct,
     todayCollection, monthCollection, monthReceiptCount,
     last6MonthsCollection, recentReceipts, upcomingHomework, activeAnnouncementsCount,
   } = data
@@ -98,7 +98,7 @@ export default function DashboardPage() {
               valueStyle={{ color: attendancePct >= 85 ? '#52c41a' : '#faad14' }}
             />
             {attendanceMarkedToday
-              ? <Text type="secondary" style={{ fontSize: 12 }}>P: {todayPresent} · A: {todayAbsent}{todayLate > 0 ? ` · L: ${todayLate}` : ''} of {todayTotalMarked}</Text>
+              ? <Text type="secondary" style={{ fontSize: 12 }}>P: {todayPresent} · A: {todayAbsent}{todayLate > 0 ? ` · L: ${todayLate}` : ''}{todayHalfDay > 0 ? ` · HD: ${todayHalfDay}` : ''} of {todayTotalMarked}</Text>
               : <Text type="secondary" style={{ fontSize: 12 }}>Not marked yet today</Text>
             }
           </Card>
@@ -183,6 +183,15 @@ export default function DashboardPage() {
                       <Text strong style={{ color: '#faad14' }}>{todayLate}</Text>
                     </div>
                     <Progress percent={todayTotalMarked > 0 ? Math.round(todayLate / todayTotalMarked * 100) : 0} strokeColor="#faad14" showInfo={false} />
+                  </div>
+                )}
+                {todayHalfDay > 0 && (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text>Half Day</Text>
+                      <Text strong style={{ color: '#1677ff' }}>{todayHalfDay}</Text>
+                    </div>
+                    <Progress percent={todayTotalMarked > 0 ? Math.round(todayHalfDay / todayTotalMarked * 100) : 0} strokeColor="#1677ff" showInfo={false} />
                   </div>
                 )}
                 <div style={{ textAlign: 'center', marginTop: 4 }}>

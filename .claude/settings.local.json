@@ -38,7 +38,24 @@
       "PowerShell(where.exe msbuild 2>$null; & \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" /nologo /v:m \"D:\\\\AscentSchoolsApplication\\\\AscentMigration\\\\AscentMigration.csproj\" 2>&1 | Select-Object -Last 15)",
       "Bash(Get-ChildItem -Path \"D:\\\\AscentSchoolsApplication\\\\AscentMigration\" -Directory)",
       "PowerShell(Select-String *)",
-      "Bash(where gradle *)"
+      "Bash(where gradle *)",
+      "PowerShell(Get-Command claude -ErrorAction SilentlyContinue; Write-Output \"---npm global---\"; npm config get prefix 2>$null; Write-Output \"---checking common locations---\"; $p = @\\(\"$env:APPDATA\\\\npm\\\\claude.cmd\",\"$env:LOCALAPPDATA\\\\Programs\\\\claude\\\\claude.exe\",\"$env:USERPROFILE\\\\.claude\\\\local\\\\claude.exe\",\"$env:USERPROFILE\\\\AppData\\\\Local\\\\claude\\\\bin\\\\claude.exe\"\\); foreach\\($f in $p\\){ if\\(Test-Path $f\\){ Write-Output \"FOUND: $f\" } })",
+      "Bash(ls gradlew*)",
+      "Bash(ls app/)",
+      "Bash(/c/Users/seshagiri/AppData/Local/Android/Sdk/platform-tools/adb.exe devices *)",
+      "Bash(/c/Users/seshagiri/AppData/Local/Android/Sdk/platform-tools/adb.exe reverse *)",
+      "PowerShell(& \"C:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr\\\\bin\\\\java.exe\" -version 2>$null; powershell -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\seshagiri\\\\Source\\\\ascentschoolmanagement\\\\AscentSchoolsMobile\\\\gen_icons.ps1\")",
+      "Bash(rm -f mipmap-anydpi-v26/ic_launcher.xml mipmap-anydpi-v26/ic_launcher_round.xml)",
+      "Bash(rm -f mipmap-*/ic_launcher.webp mipmap-*/ic_launcher_round.webp mipmap-*/ic_launcher_foreground.webp)",
+      "Bash(rm -f drawable/ic_launcher.xml drawable/ic_launcher_round.xml drawable/ic_launcher_background.xml)",
+      "Bash(rmdir mipmap-anydpi-v26 *)",
+      "Bash(ls -d node_modules)",
+      "Bash(ls node_modules/.bin/vite*)",
+      "Bash(node -v)",
+      "Bash(npm -v)",
+      "Bash(grep -A1 '\"build:demo\"' package.json)",
+      "Bash(git check-ignore *)",
+      "PowerShell(dotnet build *)"
     ]
   }
 }

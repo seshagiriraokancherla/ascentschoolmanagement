@@ -1,0 +1,30 @@
+{
+  "_README": [
+    "Copy this file to deploy.config.json (gitignored) and fill in the FTP password + verify the remotePath for each school.",
+    "Only 'stannsasf' and the API path are confirmed; the other school/parent paths are pattern-guessed — verify each in Plesk (Websites & Domains -> Hosting Settings -> Document Root).",
+    "'mode' must match an .env.<mode> file in the app (ascent-school-app / ascent-parent-app).",
+    "Set parentRemote to \"\" for any school that has no parent subdomain (it will be skipped)."
+  ],
+  "ftp": {
+    "host": "ftp.edu-care.in",
+    "username": "educawin9",
+    "password": "REPLACE_WITH_FTP_PASSWORD",
+    "passive": true
+  },
+  "api": {
+    "projectDir": "API/AscentSchools.API",
+    "publishDir": "API/AscentSchools.API/bin/Release/Publish",
+    "remotePath": "/httpdocs/api",
+    "uploadWebConfig": true,
+    "excludeDirs": ["Uploads"]
+  },
+  "schoolApp": { "appDir": "ascent-school-app" },
+  "parentApp": { "appDir": "ascent-parent-app" },
+  "schools": [
+    { "name": "stannsasf",    "mode": "stannsasf",    "schoolRemote": "/stannsasf.edu-care.in/httpdocs",    "parentRemote": "/parent.stannsasf.edu-care.in/httpdocs" },
+    { "name": "demo",         "mode": "demo",         "schoolRemote": "/demo.edu-care.in/httpdocs",         "parentRemote": "" },
+    { "name": "depaulemyv",   "mode": "depaulemyv",   "schoolRemote": "/depaulemyv.edu-care.in/httpdocs",   "parentRemote": "/parent.depaulemyv.edu-care.in/httpdocs" },
+    { "name": "holyspiritjm", "mode": "holyspiritjm", "schoolRemote": "/holyspiritjm.edu-care.in/httpdocs", "parentRemote": "/parent.holyspiritjm.edu-care.in/httpdocs" },
+    { "name": "stannsbng",    "mode": "stannsbng",    "schoolRemote": "/stannsbng.edu-care.in/httpdocs",    "parentRemote": "/parent.stannsbng.edu-care.in/httpdocs" }
+  ]
+}

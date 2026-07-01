@@ -59,7 +59,30 @@ INSERT INTO permissions (permission_code, module_code, description) VALUES
 ('TRANSPORT.MANAGE',            'TRANSPORT',        'Manage buses, routes and fees'),
 -- Hostel
 ('HOSTEL.VIEW',                 'HOSTEL',           'View hostel details'),
-('HOSTEL.MANAGE',               'HOSTEL',           'Manage hostel rooms and allocation');
+('HOSTEL.MANAGE',               'HOSTEL',           'Manage hostel rooms and allocation'),
+-- Master Data
+('MASTER_DATA.VIEW',            'MASTER_DATA',      'View master data'),
+('MASTER_DATA.MANAGE',          'MASTER_DATA',      'Manage master data'),
+-- Homework
+('HOMEWORK.VIEW',               'HOMEWORK',         'View homework'),
+('HOMEWORK.MANAGE',             'HOMEWORK',         'Create / edit homework'),
+-- Announcements
+('ANNOUNCEMENT.VIEW',           'ANNOUNCEMENT',     'View announcements'),
+('ANNOUNCEMENT.MANAGE',         'ANNOUNCEMENT',     'Create / edit announcements'),
+-- Events
+('EVENTS.VIEW',                 'EVENTS',           'View events gallery'),
+('EVENTS.MANAGE',               'EVENTS',           'Manage events gallery'),
+-- Staff
+('STAFF.VIEW',                  'STAFF',            'View staff'),
+('STAFF.MANAGE',                'STAFF',            'Manage staff, attendance and salaries'),
+-- Reports
+('REPORTS.VIEW',                'REPORTS',          'View reports'),
+-- SMS
+('SMS.SEND',                    'SMS',              'Send SMS and view history'),
+-- Settings
+('SETTINGS.MANAGE',             'SETTINGS',         'Manage school settings and payment gateway'),
+-- User Management
+('USER_MGMT.MANAGE',            'USER_MGMT',        'Manage roles, permissions and users');
 GO
 
 
@@ -1177,6 +1200,41 @@ CREATE TABLE sms_logs (
 CREATE INDEX IX_sms_logs_school_type_date ON sms_logs (school_id, sms_type, sent_at DESC);
 GO
 -- ============================================================
+-- 42a. sms_configs / sms_templates
+--      Per-school SMS gateway account + DLT message templates (SMS Center).
+--      Seeded per-school by seed_tenant_data.sql. OTP is unaffected
+--      (it uses the hardcoded global account in SmsHelper.cs).
+-- ============================================================
+CREATE TABLE sms_configs (
+    config_id   INT IDENTITY(1,1) NOT NULL,
+    school_id   INT          NOT NULL,
+    provider    VARCHAR(30)  NOT NULL DEFAULT 'smslogin',
+    api_url     VARCHAR(200) NOT NULL,
+    username    VARCHAR(100) NOT NULL,
+    api_key     VARCHAR(200) NOT NULL,            -- never returned by the GET endpoint
+    sender_id   VARCHAR(20)  NOT NULL,            -- school's DLT-approved header
+    is_enabled  BIT          NOT NULL DEFAULT 1,
+    created_by  VARCHAR(150) NULL,
+    updated_at  DATETIME     NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT PK_sms_configs        PRIMARY KEY (config_id),
+    CONSTRAINT UQ_sms_configs_school UNIQUE (school_id)
+);
+GO
+CREATE TABLE sms_templates (
+    template_row_id INT IDENTITY(1,1) NOT NULL,
+    school_id       INT           NOT NULL,
+    template_key    VARCHAR(40)   NOT NULL,       -- 'ABSENT','FEE_DUE','CUSTOM', future keys...
+    title           VARCHAR(100)  NULL,
+    template_id     VARCHAR(50)   NOT NULL DEFAULT '',   -- DLT id ('' = not set yet)
+    message_text    NVARCHAR(500) NOT NULL DEFAULT '',   -- {name},{date},{amount} placeholders
+    placeholders    VARCHAR(200)  NULL,
+    is_active       BIT           NOT NULL DEFAULT 1,
+    updated_at      DATETIME      NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT PK_sms_templates PRIMARY KEY (template_row_id),
+    CONSTRAINT UQ_sms_templates UNIQUE (school_id, template_key)
+);
+GO
+-- ============================================================
 -- 44. fee_concessions
 --     One active concession per student per fee type per school (school fees),
 --     or per student per bus route per term (transport concessions).
@@ -1242,4 +1300,60 @@ GO
 CREATE UNIQUE INDEX UQ_fee_concessions_hostel_period
     ON fee_concessions (student_id, hostel_id, school_id, fee_period_id)
     WHERE status = 'Active' AND hostel_id IS NOT NULL AND fee_period_id IS NOT NULL;
+GO
+
+
+-- ============================================================
+-- 45. grade_types
+--     Marks-to-grade bands per subject (e.g. 90-100 → A+).
+--     Migrated from legacy SAS_MarksGrade.
+-- ============================================================
+CREATE TABLE grade_types (
+    id            INT          NOT NULL IDENTITY(1,1),
+    grade_name    VARCHAR(200) NULL,
+    subject_id    INT          NULL,        -- FK → subjects; NULL when legacy subject not matched
+    max_marks     FLOAT        NULL,
+    min_marks     FLOAT        NULL,
+    grade         VARCHAR(100) NULL,
+    remarks       VARCHAR(200) NULL,
+    status        VARCHAR(10)  NOT NULL DEFAULT 'Active',
+    created_date  DATETIME     NOT NULL DEFAULT GETDATE(),
+    created_by    VARCHAR(200) NULL,
+    school_id     INT          NOT NULL,
+    CONSTRAINT PK_grade_types         PRIMARY KEY (id),
+    CONSTRAINT FK_grade_types_subject FOREIGN KEY (subject_id) REFERENCES subjects(subject_id)
+);
+GO
+
+
+-- ============================================================
+-- 46. exam_master
+--     Per-class/per-subject exam definitions (marks, grade band, date).
+--     Migrated from legacy SAS_ExamNam (full detail rows).
+-- ============================================================
+CREATE TABLE exam_master (
+    id                INT          NOT NULL IDENTITY(1,1),
+    exam_type_id      INT          NULL,        -- FK → exam_types (by name)
+    class_id          INT          NULL,        -- FK → classes
+    exam_total_marks  INT          NULL,
+    exam_min_marks    INT          NULL,
+    subject_min_marks INT          NULL,
+    sub_max_marks     INT          NULL,
+    exam_remarks      VARCHAR(300) NULL,
+    academic_year_id  INT          NULL,        -- FK → academic_years
+    subject_id        INT          NULL,        -- FK → subjects
+    exam_status       VARCHAR(10)  NOT NULL DEFAULT 'Active',
+    created_by        VARCHAR(200) NULL,
+    created_date      DATETIME     NOT NULL DEFAULT GETDATE(),
+    school_id         INT          NOT NULL,
+    exam_category     VARCHAR(200) NULL,
+    exam_date         DATE         NULL,
+    grade_type_id     INT          NULL,        -- FK → grade_types
+    CONSTRAINT PK_exam_master            PRIMARY KEY (id),
+    CONSTRAINT FK_exam_master_exam_type  FOREIGN KEY (exam_type_id)     REFERENCES exam_types(exam_type_id),
+    CONSTRAINT FK_exam_master_class      FOREIGN KEY (class_id)         REFERENCES classes(class_id),
+    CONSTRAINT FK_exam_master_year       FOREIGN KEY (academic_year_id) REFERENCES academic_years(academic_year_id),
+    CONSTRAINT FK_exam_master_subject    FOREIGN KEY (subject_id)       REFERENCES subjects(subject_id),
+    CONSTRAINT FK_exam_master_grade_type FOREIGN KEY (grade_type_id)    REFERENCES grade_types(id)
+);
 GO

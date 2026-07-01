@@ -71,6 +71,7 @@
     <Compile Include="Repositories\Mobile\MobileStudentAuthRepository.cs" />
     <Compile Include="Repositories\Mobile\MobileParentAuthRepository.cs" />
     <Compile Include="Repositories\Mobile\MobileDataRepository.cs" />
+    <Compile Include="Repositories\Mobile\AppConfigRepository.cs" />
     <Compile Include="Repositories\School\AttendanceRepository.cs" />
     <Compile Include="Repositories\School\DashboardRepository.cs" />
     <Compile Include="Repositories\School\TransportRepository.cs" />

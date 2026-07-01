@@ -12,16 +12,16 @@ namespace AscentSchools.API.Helpers
         private const string ApiKey   = "c6cacc7b6d643993b770";
         private const string SenderId = "ASNTNF";
 
-        // OTP template (registered)
+        // OTP template (registered) — OTP always uses the hardcoded global account above.
         private const string OtpTemplateId = "1707177794812186006";
 
-        // School SMS templates — register these DLT templates before going live
-        public const string AbsentTemplateId = "PLACEHOLDER_ABSENT_TPL_ID";
-        public const string FeeDueTemplateId  = "PLACEHOLDER_FEEDUE_TPL_ID";
-        public const string CustomTemplateId  = "PLACEHOLDER_CUSTOM_TPL_ID";
+        // NOTE: School SMS (Absent / FeeDue / Custom / future types) no longer uses
+        // hardcoded constants. The SMS Center reads each school's own account + DLT
+        // template ids from the sms_configs / sms_templates tables and calls the
+        // per-account SendSms overload below. OTP is intentionally left global.
 
         /// <summary>
-        /// Sends a 6-digit OTP via SMS.
+        /// Sends a 6-digit OTP via SMS using the global account. Unchanged.
         /// </summary>
         public static string SendOtp(string mobile, string parentName, string otp)
         {
@@ -32,15 +32,23 @@ namespace AscentSchools.API.Helpers
         }
 
         /// <summary>
-        /// Sends any SMS through the gateway.
+        /// Sends an SMS through the GLOBAL hardcoded account (used by OTP only).
         /// Returns the raw gateway response; a response starting with "ERROR=" means an exception occurred.
         /// </summary>
         public static string SendSms(string mobile, string message, string templateId)
+            => SendSms(ApiUrl, Username, ApiKey, SenderId, mobile, message, templateId);
+
+        /// <summary>
+        /// Sends an SMS through a per-school account (used by the SMS Center).
+        /// Returns the raw gateway response; a response starting with "ERROR=" means an exception occurred.
+        /// </summary>
+        public static string SendSms(string apiUrl, string username, string apiKey, string senderId,
+                                     string mobile, string message, string templateId)
         {
             try
             {
                 var url = string.Format("{0}?username={1}&apikey={2}&senderid={3}&mobile={4}&message={5}&templateid={6}",
-                    ApiUrl, Username, ApiKey, SenderId,
+                    apiUrl, username, apiKey, senderId,
                     Uri.EscapeDataString(mobile),
                     Uri.EscapeDataString(message),
                     templateId);

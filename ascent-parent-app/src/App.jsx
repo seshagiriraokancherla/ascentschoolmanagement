@@ -1,6 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { ConfigProvider, App as AntApp } from 'antd'
+import { ConfigProvider, App as AntApp, Spin } from 'antd'
 import { useAuthStore }    from './store/authStore'
 import { useBrandingStore } from './store/brandingStore'
 import { connectAuthStore } from './api/axiosInstance'
@@ -29,6 +29,12 @@ function RequireChild({ children }) {
 export default function App() {
   const { branding, setBranding } = useBrandingStore()
   const { login, setChild, setToken, logout } = useAuthStore()
+
+  // Gate rendering until the mount silent-refresh resolves. Without this,
+  // RequireAuth/RequireChild see no token on a page reload (it's in memory only)
+  // and redirect to /login BEFORE the refresh completes — bouncing a valid
+  // session to the login page on every F5.
+  const [authChecked, setAuthChecked] = useState(false)
 
   // Connect auth store to axiosInstance for silent refresh
   useEffect(() => {
@@ -85,7 +91,16 @@ export default function App() {
         }
       })
       .catch(() => {})
+      .finally(() => setAuthChecked(true)) // release the render gate either way
   }, [])
+
+  if (!authChecked) {
+    return (
+      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Spin size="large" />
+      </div>
+    )
+  }
 
   return (
     <ConfigProvider theme={{ token: { colorPrimary: branding.primaryColor || '#1677ff' } }}>

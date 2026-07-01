@@ -1,3 +1,4 @@
+/* global __APP_VERSION__, __BUILD_DATE__ */
 import { useState } from 'react'
 import { Layout, Menu, Avatar, Dropdown, Typography } from 'antd'
 import {
@@ -11,6 +12,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import api from '../api/axiosInstance'
 import { useAuthStore }     from '../store/authStore'
 import { useBrandingStore } from '../store/brandingStore'
+import { PATH_PERM }        from '../config/permissions'
 
 const { Header, Sider, Content, Footer } = Layout
 
@@ -45,6 +47,7 @@ const NAV_ITEMS = [
       { key: '/fees/collect/other',       label: 'Other Fee' },
       { key: '/fees/receipts',            label: 'Receipts' },
       { key: '/fees/receipts/import',     label: 'Legacy Receipt Import' },
+      { key: '/fees/pending-payments',    label: 'Pending Online Payments' },
       { key: '/fees/concessions',         label: 'Fee Concession' },
     ],
   },
@@ -81,9 +84,13 @@ const NAV_ITEMS = [
     label: 'Hostel',
   },
   {
-    key:   '/homework',
+    key:   'homework',
     icon:  <BookOutlined />,
     label: 'Homework',
+    children: [
+      { key: '/homework/daily', label: 'Daily Homework' },
+      { key: '/homework',       label: 'Homework List'  },
+    ],
   },
   {
     key:   '/announcements',
@@ -119,16 +126,40 @@ const NAV_ITEMS = [
       { key: '/settings/roles',          icon: <SafetyOutlined />,  label: 'Roles & Permissions' },
       { key: '/settings/users',          icon: <TeamOutlined />,    label: 'User Management' },
       { key: '/settings/payment-gateway',                            label: 'Payment Gateway' },
+      { key: '/settings/sms-gateway',                                label: 'SMS Gateway' },
     ],
   },
 ]
+
+/**
+ * Filters nav items by the logged-in user's permissions (PATH_PERM map).
+ * A leaf item is kept when it has no mapped permission or the user holds it.
+ * A parent item is kept only when at least one child survives the filter.
+ */
+function filterNav(items, hasPermission) {
+  return items
+    .map((item) => {
+      if (item.children) {
+        const children = item.children.filter((c) => {
+          const perm = PATH_PERM[c.key]
+          return !perm || hasPermission(perm)
+        })
+        return children.length ? { ...item, children } : null
+      }
+      const perm = PATH_PERM[item.key]
+      return !perm || hasPermission(perm) ? item : null
+    })
+    .filter(Boolean)
+}
 
 export default function AppLayout() {
   const navigate        = useNavigate()
   const location        = useLocation()
   const logout          = useAuthStore((s) => s.logout)
   const user            = useAuthStore((s) => s.user)
+  const hasPermission   = useAuthStore((s) => s.hasPermission)
   const { branding }    = useBrandingStore()
+  const navItems        = filterNav(NAV_ITEMS, hasPermission)
   const headerBg   = branding.headerBgColor  || '#001529'
   const headerText = branding.navTextColor   || '#ffffff'
   const [collapsed, setCollapsed] = useState(false)
@@ -145,7 +176,7 @@ export default function AppLayout() {
   ]
 
   // Derive open keys from current path
-  const openKeys = NAV_ITEMS
+  const openKeys = navItems
     .filter((item) => item.children?.some((c) => location.pathname.startsWith(c.key)))
     .map((item) => item.key)
 
@@ -192,7 +223,7 @@ export default function AppLayout() {
             mode="inline"
             selectedKeys={[location.pathname]}
             defaultOpenKeys={openKeys}
-            items={NAV_ITEMS}
+            items={navItems}
             onClick={({ key }) => navigate(key)}
             style={{ borderRight: 0, paddingTop: 8 }}
           />
@@ -205,6 +236,7 @@ export default function AppLayout() {
           </Content>
           <Footer style={{ textAlign: 'center', padding: '12px 24px', background: '#f0f2f5', color: '#8c8c8c', fontSize: 12 }}>
             Powered by Ascent Info Solutions
+            {' · '}v{__APP_VERSION__} ({__BUILD_DATE__})
           </Footer>
         </Layout>
       </Layout>

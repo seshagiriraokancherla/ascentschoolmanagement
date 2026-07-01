@@ -7,6 +7,7 @@ using AscentSchools.Data.Repositories.School;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Web.Http;
 
 namespace AscentSchools.API.Controllers.Mobile
@@ -25,6 +26,21 @@ namespace AscentSchools.API.Controllers.Mobile
             _feeRepo     = new FeeRepository(cf);
             _gwRepo      = new GatewayRepository(cf);
             _studentRepo = new StudentRepository(cf);
+        }
+
+        // Receipt "Collected by" label. The Android app sends X-Client-App: mobile;
+        // the parent web portal (parent.{subdomain}...) sends no such header, so it
+        // defaults to "Parent Portal".
+        private string ResolveClientSource()
+        {
+            if (Request.Headers.TryGetValues("X-Client-App", out var vals))
+            {
+                var v = vals?.FirstOrDefault()?.Trim();
+                if (string.Equals(v, "mobile",  StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(v, "android", StringComparison.OrdinalIgnoreCase))
+                    return "Mobile App";
+            }
+            return "Parent Portal";
         }
 
         // GET /mobile/fees/outstanding?feeTypeCategory=School
@@ -108,7 +124,7 @@ namespace AscentSchools.API.Controllers.Mobile
                 config.GatewayName, orderResult.ExternalOrderId,
                 total, yearStudentId.Value, request.AcademicYearId,
                 modeId.Value, JsonConvert.SerializeObject(payloadRequest),
-                ctx.DisplayName ?? "Parent Portal");
+                ResolveClientSource());
 
             return Created(new CreatePaymentOrderResponse
             {
@@ -153,6 +169,7 @@ namespace AscentSchools.API.Controllers.Mobile
                 return BadRequest("Payment signature verification failed.");
             }
 
+            var source   = ResolveClientSource();
             var original = JsonConvert.DeserializeObject<CreatePaymentOrderRequest>(order.PayloadJson);
             var collect  = new CollectFeeRequest
             {
@@ -162,15 +179,33 @@ namespace AscentSchools.API.Controllers.Mobile
                 AcademicYearId  = order.AcademicYearId,
                 PaymentModeId   = order.PaymentModeId,
                 PaymentDate     = original?.PaymentDate ?? DateTime.UtcNow,
-                Remarks         = $"Online ({order.GatewayName}) via parent portal. Ref: {request.PaymentId}",
+                Remarks         = $"Online ({order.GatewayName}) via {source}. Ref: {request.PaymentId}",
                 Items           = original?.Items ?? new List<CollectFeeItem>(),
             };
 
-            var receiptId = _feeRepo.CollectFee(ctx.DbName, ctx.SchoolId, "Parent Portal", collect);
+            var receiptId = _feeRepo.CollectFee(ctx.DbName, ctx.SchoolId, source, collect);
             _gwRepo.MarkOrderPaid(ctx.DbName, gatewayOrderId, request.PaymentId, receiptId);
 
             var receipt = _feeRepo.GetReceiptById(ctx.DbName, ctx.SchoolId, receiptId);
             return Created(receipt, "Payment verified. Receipt generated.");
+        }
+
+        // GET /mobile/fees/receipts/{id}
+        // Receipt detail for the in-app print / save-as-PDF view.
+        // Validated to belong to the currently selected child (by student_unique_id).
+        [HttpGet, Route("receipts/{id:int}")]
+        public System.Net.Http.HttpResponseMessage GetReceipt(int id)
+        {
+            var ctx      = MobileContext.Current;
+            var uniqueId = _studentRepo.GetStudentUniqueId(ctx.DbName, ctx.SchoolId, ctx.StudentId);
+            if (uniqueId == null) return NotFound("Student not found.");
+
+            if (!_feeRepo.ReceiptBelongsToUniqueId(ctx.DbName, ctx.SchoolId, id, uniqueId.Value))
+                return NotFound("Receipt not found.");
+
+            var receipt = _feeRepo.GetReceiptById(ctx.DbName, ctx.SchoolId, id);
+            if (receipt == null) return NotFound("Receipt not found.");
+            return Ok(receipt);
         }
     }
 }
