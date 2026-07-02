@@ -1,0 +1,30 @@
+# iOS / Xcode — Ascent Schools app
+
+# Per-user Xcode state (window layout, breakpoints, last-selected scheme).
+# Never commit — it's machine-specific and causes noisy diffs / merge conflicts.
+# NOTE: xcshareddata/ (shared schemes, e.g. the Chakin scheme) IS committed —
+# only the per-user xcuserdata is ignored.
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad/
+
+# Build products / derived data
+build/
+DerivedData/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/xcode/package.xcworkspace/xcuserdata/
+
+# macOS cruft
+.DS_Store
+
+# Secrets — keep signing/keys out of the repo (mirrors Android keystore guidance)
+*.p12
+*.mobileprovision
+ExportOptions.plist

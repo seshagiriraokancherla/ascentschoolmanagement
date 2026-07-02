@@ -1,0 +1,33 @@
+// Common.xcconfig — shared settings across every school flavor.
+
+IPHONEOS_DEPLOYMENT_TARGET = 17.0
+SWIFT_VERSION = 5.0
+TARGETED_DEVICE_FAMILY = 1,2
+DEVELOPMENT_TEAM = DKVJKK3UBT
+
+CURRENT_PROJECT_VERSION = 1
+MARKETING_VERSION = 1.0.0
+
+CODE_SIGN_STYLE = Automatic
+ENABLE_PREVIEWS = YES
+
+// Use a real Info.plist so we can carry a custom SchoolCode key.
+GENERATE_INFOPLIST_FILE = NO
+INFOPLIST_FILE = ascentschooliosapp/Info.plist
+
+// Asset catalog & runtime
+ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/Frameworks
+PRODUCT_NAME = $(TARGET_NAME)
+STRING_CATALOG_GENERATE_SYMBOLS = YES
+SWIFT_APPROACHABLE_CONCURRENCY = YES
+SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor
+SWIFT_EMIT_LOC_STRINGS = YES
+SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES
+
+// Backend base URL — same for every school (school is resolved server-side via X-School-Code header).
+// The $() interpolation breaks the `//` so xcconfig does not see it as a comment.
+API_BASE_URL = https:/$()/edu-care.in/api/
+
+// Per-school overrides (SCHOOL_CODE, PRODUCT_BUNDLE_IDENTIFIER, APP_DISPLAY_NAME,
+// ASSETCATALOG_COMPILER_APPICON_NAME) live in the individual school xcconfigs.

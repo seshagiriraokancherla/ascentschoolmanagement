@@ -1,0 +1,19 @@
+#include "Common.xcconfig"
+
+// Phase 44 (Android parity: `ascent` generic flavor) — the "CHAK IN" build is a
+// SINGLE listing on the App Store used for schools that don't have their own
+// baked flavor yet. School is resolved at RUNTIME: on first launch the parent
+// enters the 4-digit `login_code` shared by the school office, the client
+// calls /mobile/auth/school-by-code, and the resolved subdomain is stored
+// (Keychain) and reused as the `X-School-Code` / `X-Subdomain` header.
+//
+// Baked flavors (Stannsasf/Depaulemyv/Holyspiritjm/Demo) stay unchanged — they
+// still ship with a hard-coded SCHOOL_CODE so their users never see the code
+// entry screen.
+
+// SCHOOL_CODE is intentionally EMPTY here — that's how RootView detects a
+// generic build and gates it on the school-code entry screen.
+SCHOOL_CODE =
+APP_DISPLAY_NAME = CHAK IN
+PRODUCT_BUNDLE_IDENTIFIER = in.educare.app
+ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon

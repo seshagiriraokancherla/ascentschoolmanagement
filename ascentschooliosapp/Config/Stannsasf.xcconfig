@@ -1,0 +1,6 @@
+#include "Common.xcconfig"
+
+SCHOOL_CODE = stannsasf
+APP_DISPLAY_NAME = St Anns Asif Nagar
+PRODUCT_BUNDLE_IDENTIFIER = in.educare.stannsasf
+ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon
