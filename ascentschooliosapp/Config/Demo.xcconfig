@@ -1,0 +1,6 @@
+#include "Common.xcconfig"
+
+SCHOOL_CODE = demo
+APP_DISPLAY_NAME = Demo School
+PRODUCT_BUNDLE_IDENTIFIER = in.educare.demo
+ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon

@@ -1,0 +1,6 @@
+#include "Common.xcconfig"
+
+SCHOOL_CODE = depaulemyv
+APP_DISPLAY_NAME = DePaul EM School
+PRODUCT_BUNDLE_IDENTIFIER = in.educare.depaulemyv
+ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon
