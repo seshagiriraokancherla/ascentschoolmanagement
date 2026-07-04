@@ -12,5 +12,8 @@ namespace AscentSchools.Core.DTOs.Control.Users
         public string   Status      { get; set; }
         public DateTime CreatedAt   { get; set; }
         public string   Roles       { get; set; }   // comma-separated role names for display
+        public int?     EmployeeId  { get; set; }   // linked staff_id (NULL for the admin)
+        public string   StaffName   { get; set; }   // from staff, for display
+        public string   Designation { get; set; }   // from staff, for display
     }
 }

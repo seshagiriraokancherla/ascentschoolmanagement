@@ -1043,6 +1043,15 @@ CREATE TABLE staff (
 CREATE INDEX IX_staff_school_status ON staff (school_id, status);
 GO
 
+-- Link users → staff (school-app logins are created from a staff record).
+-- Added here (not on the users table above) because staff is created after users.
+ALTER TABLE users
+    ADD CONSTRAINT FK_users_staff FOREIGN KEY (employee_id) REFERENCES staff(staff_id);
+GO
+-- One login per staff member (filtered so multiple NULLs are allowed, e.g. the admin).
+CREATE UNIQUE INDEX UQ_users_employee ON users (employee_id) WHERE employee_id IS NOT NULL;
+GO
+
 
 -- ============================================================
 -- 36. staff_attendance

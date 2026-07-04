@@ -193,8 +193,9 @@ export default function AttendancePage() {
     setDelLoading(true)
     try {
       const date = delDate.format('YYYY-MM-DD')
-      const secParam = delSection ? `&sectionId=${delSection}` : ''
-      const r = await api.get(`/school/attendance?classId=${delClass}${secParam}&date=${date}`)
+      // sectionId=0 = "all sections" (server maps 0 → whole class). Always send it so the
+      // query param is present — an absent optional param 405s in Web API action selection.
+      const r = await api.get(`/school/attendance?classId=${delClass}&sectionId=${delSection || 0}&date=${date}`)
       setDelGrid(r.data.data)
     } catch {
       message.error('Failed to load attendance.')
@@ -207,8 +208,8 @@ export default function AttendancePage() {
     setDeleting(true)
     try {
       const date = delDate.format('YYYY-MM-DD')
-      const secParam = delSection ? `&sectionId=${delSection}` : ''
-      const r = await api.delete(`/school/attendance?classId=${delClass}${secParam}&date=${date}`)
+      // sectionId=0 = "all sections" (server maps 0 → whole class); always sent so the param is present.
+      const r = await api.delete(`/school/attendance?classId=${delClass}&sectionId=${delSection || 0}&date=${date}`)
       message.success(r.data?.message || 'Attendance deleted.')
       loadDelGrid()  // refresh — should now show "Not marked"
     } catch (e) {
