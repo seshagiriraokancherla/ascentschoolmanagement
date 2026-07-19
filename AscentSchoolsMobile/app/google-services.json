@@ -1,0 +1,105 @@
+{
+  "project_info": {
+    "project_number": "369266582068",
+    "project_id": "ascent-schools",
+    "storage_bucket": "ascent-schools.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:369266582068:android:6c63d7b32a512faefb2061",
+        "android_client_info": {
+          "package_name": "in.educare.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-G72hVMTODRTeU4Y7JkvtKWZjIvbz9wE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:369266582068:android:a97f0d0ab9b67e9cfb2061",
+        "android_client_info": {
+          "package_name": "in.educare.demo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-G72hVMTODRTeU4Y7JkvtKWZjIvbz9wE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:369266582068:android:d01b3dd1efc0abb7fb2061",
+        "android_client_info": {
+          "package_name": "in.educare.depaulemyv"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-G72hVMTODRTeU4Y7JkvtKWZjIvbz9wE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:369266582068:android:5d73adc2a7114568fb2061",
+        "android_client_info": {
+          "package_name": "in.educare.holyspiritjm"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-G72hVMTODRTeU4Y7JkvtKWZjIvbz9wE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:369266582068:android:94ba359cff836449fb2061",
+        "android_client_info": {
+          "package_name": "in.educare.stannsasf"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-G72hVMTODRTeU4Y7JkvtKWZjIvbz9wE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
