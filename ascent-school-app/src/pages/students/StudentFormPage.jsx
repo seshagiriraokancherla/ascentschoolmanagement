@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
 import {
   Form, Input, Select, DatePicker, InputNumber, Upload, Avatar,
-  Button, Tabs, Card, Space, Row, Col, Divider, App as AntApp, Tag,
+  Button, Tabs, Card, Space, Row, Col, Divider, App as AntApp, Tag, Drawer, Table,
 } from 'antd'
 import {
-  ArrowLeftOutlined, SaveOutlined, UserOutlined, CameraOutlined,
+  ArrowLeftOutlined, SaveOutlined, UserOutlined, CameraOutlined, HistoryOutlined,
 } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import dayjs from 'dayjs'
 import api from '../../api/axiosInstance'
+import { uploadToR2, MAX_IMAGE_BYTES, IMAGE_TYPES } from '../../api/r2Upload'
 import { useAuthStore } from '../../store/authStore'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:62845'
@@ -42,6 +43,9 @@ export default function StudentFormPage() {
   const [photoPreview,  setPhotoPreview]  = useState(null)
   const [pendingPhoto,  setPendingPhoto]  = useState(null)   // File object waiting to upload
   const [student,       setStudent]       = useState(null)
+  const [historyOpen,   setHistoryOpen]   = useState(false)
+  const [historyRows,   setHistoryRows]   = useState([])
+  const [historyLoading,setHistoryLoading]= useState(false)
 
   // Lookup data
   const [academicYears,  setAcademicYears]  = useState([])
@@ -86,7 +90,7 @@ export default function StudentFormPage() {
       .then((res) => {
         const s = res.data?.data
         setStudent(s)
-        if (s.photoPath) setPhotoPreview(`${API_BASE}${s.photoPath}`)
+        if (s.photoPath) setPhotoPreview(/^https?:\/\//.test(s.photoPath) ? s.photoPath : `${API_BASE}${s.photoPath}`)
         form.setFieldsValue({
           // Basic
           admissionNo:    s.admissionNo,
@@ -245,22 +249,14 @@ export default function StudentFormPage() {
         savedId   = res.data?.data?.studentId
       }
 
-      // Upload pending photo if any
+      // Upload pending photo to R2 (student-images/{AdmissionNo}_{academicYear}.ext), then save its URL
       if (pendingPhoto && savedId) {
-        const token     = useAuthStore.getState().accessToken
-        const subdomain = import.meta.env.VITE_SUBDOMAIN ||
-          (window.location.hostname.split('.').length >= 3 ? window.location.hostname.split('.')[0] : null)
-        const photoHeaders = { Authorization: `Bearer ${token}` }
-        if (subdomain) photoHeaders['X-Subdomain'] = subdomain
-
-        const formData = new FormData()
-        formData.append('photo', pendingPhoto)
-        await fetch(`${API_BASE}/school/students/${savedId}/photo`, {
-          method:      'POST',
-          headers:     photoHeaders,
-          body:        formData,
-          credentials: 'include',
-        })
+        try {
+          const photoUrl = await uploadToR2({ purpose: 'student-photo', entityId: savedId, file: pendingPhoto })
+          await api.put(`/school/students/${savedId}/photo`, { photoUrl })
+        } catch (e) {
+          message.warning(`Student saved, but photo upload failed: ${e.message}`)
+        }
       }
 
       message.success(isEdit ? 'Student updated.' : 'Student registered.')
@@ -272,8 +268,16 @@ export default function StudentFormPage() {
     }
   }
 
-  // Photo selection (no auto-upload)
+  // Photo selection (no auto-upload); validate type + size (≤ 1 MB image)
   const handlePhotoSelect = (file) => {
+    if (!IMAGE_TYPES.includes(file.type)) {
+      message.error('Photo must be a JPG, PNG or WebP image.')
+      return false
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      message.error('Photo must be 1 MB or smaller.')
+      return false
+    }
     setPendingPhoto(file)
     const url = URL.createObjectURL(file)
     setPhotoPreview(url)
@@ -703,6 +707,31 @@ export default function StudentFormPage() {
     { key: '7', label: 'Other Info',          children: tabOther,     forceRender: true },
   ]
 
+  const openHistory = async () => {
+    setHistoryOpen(true)
+    setHistoryLoading(true)
+    try {
+      const res = await api.get(`/school/students/${id}/history`)
+      setHistoryRows(res.data?.data || [])
+    } catch {
+      message.error('Failed to load history.')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  const historyColumns = [
+    { title: 'Changed On', dataIndex: 'validFrom', width: 150,
+      render: v => dayjs(v).format('DD MMM YYYY, hh:mm A') },
+    { title: 'By', width: 120, render: (_, r) => r.updatedBy || r.createdBy || '—' },
+    { title: 'Name', dataIndex: 'studentName' },
+    { title: 'Adm No', dataIndex: 'admissionNo', width: 100 },
+    { title: 'Class / Sec', width: 130, render: (_, r) => r.className ? `${r.className}${r.sectionName ? ' - ' + r.sectionName : ''}` : '—' },
+    { title: 'Status', dataIndex: 'status', width: 90, render: v => v ? <Tag>{v}</Tag> : '—' },
+    { title: 'Father Mobile', dataIndex: 'fatherMobile', width: 120, render: v => v || '—' },
+    { title: 'Email', dataIndex: 'email', render: v => v || '—' },
+  ]
+
   return (
     <div>
       {/* Page header */}
@@ -733,7 +762,48 @@ export default function StudentFormPage() {
             {isEdit ? 'Save Changes' : 'Register Student'}
           </Button>
         </div>
+
+        {isEdit && student && (
+          <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #f0f0f0',
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        fontSize: 12, color: '#8c8c8c' }}>
+            <Button size="small" icon={<HistoryOutlined />} onClick={openHistory}>
+              View change history
+            </Button>
+            <div style={{ textAlign: 'right' }}>
+              {student.createdBy && (
+                <span>Created by <b>{student.createdBy}</b>
+                  {student.createdAt ? ` on ${dayjs(student.createdAt).format('DD MMM YYYY, hh:mm A')}` : ''}</span>
+              )}
+              {student.updatedBy && (
+                <span style={{ marginLeft: 16 }}>Last updated by <b>{student.updatedBy}</b>
+                  {student.updatedAt ? ` on ${dayjs(student.updatedAt).format('DD MMM YYYY, hh:mm A')}` : ''}</span>
+              )}
+            </div>
+          </div>
+        )}
       </Card>
+
+      <Drawer
+        title={`Change History${student ? ` — ${student.studentName}` : ''}`}
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        width={900}
+      >
+        <div style={{ marginBottom: 8, fontSize: 12, color: '#8c8c8c' }}>
+          Each row is a saved version (newest first). Times are UTC.
+        </div>
+        <Table
+          rowKey={(_, i) => i}
+          size="small"
+          loading={historyLoading}
+          dataSource={historyRows}
+          columns={historyColumns}
+          pagination={false}
+          scroll={{ x: 'max-content' }}
+          locale={{ emptyText: 'No history yet (or the temporal migration has not been applied).' }}
+        />
+      </Drawer>
     </div>
   )
 }

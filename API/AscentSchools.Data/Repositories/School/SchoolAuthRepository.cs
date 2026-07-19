@@ -54,6 +54,20 @@ namespace AscentSchools.Data.Repositories.School
                     new { userId, schoolId });
         }
 
+        /// <summary>Self-service password change: sets the hash and revokes all active refresh tokens.</summary>
+        public void UpdatePassword(string tenantDbName, int userId, string newPasswordHash)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+            {
+                conn.Execute(
+                    "UPDATE users SET password_hash = @newPasswordHash WHERE user_id = @userId",
+                    new { newPasswordHash, userId });
+                conn.Execute(
+                    "UPDATE refresh_tokens SET revoked_at = GETDATE() WHERE user_id = @userId AND revoked_at IS NULL",
+                    new { userId });
+            }
+        }
+
         public void UpdateLastLogin(string tenantDbName, int userId)
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))

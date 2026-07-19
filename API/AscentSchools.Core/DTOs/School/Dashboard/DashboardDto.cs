@@ -28,8 +28,8 @@ namespace AscentSchools.Core.DTOs.School.Dashboard
         // ── Recent receipts ───────────────────────────────────────────────────
         public IEnumerable<RecentReceiptDto> RecentReceipts { get; set; }
 
-        // ── Upcoming homework ─────────────────────────────────────────────────
-        public IEnumerable<UpcomingHomeworkDto> UpcomingHomework { get; set; }
+        // ── Recent homework ───────────────────────────────────────────────────
+        public IEnumerable<RecentHomeworkDto> RecentHomework { get; set; }
 
         // ── Announcements ─────────────────────────────────────────────────────
         public int ActiveAnnouncementsCount { get; set; }
@@ -50,13 +50,14 @@ namespace AscentSchools.Core.DTOs.School.Dashboard
         public decimal  TotalAmount  { get; set; }
         public DateTime PaymentDate  { get; set; }
         public string   Status       { get; set; }
+        public string   PaymentMode  { get; set; }   // Cash / Cheque / Online etc.
     }
 
-    public class UpcomingHomeworkDto
+    public class RecentHomeworkDto
     {
-        public string   Title       { get; set; }
-        public string   SubjectName { get; set; }
-        public string   ClassName   { get; set; }
-        public DateTime DueDate     { get; set; }
+        public string   Title        { get; set; }
+        public string   SubjectName  { get; set; }
+        public string   ClassName    { get; set; }
+        public DateTime AssignedDate { get; set; }
     }
 }

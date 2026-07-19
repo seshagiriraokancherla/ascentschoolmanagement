@@ -1,3 +1,4 @@
+using AscentSchools.API.Helpers;
 using AscentSchools.Core.DTOs.School.Homework;
 using AscentSchools.Data.ConnectionFactory;
 using AscentSchools.Data.Repositories.School;
@@ -18,18 +19,31 @@ namespace AscentSchools.API.Controllers.School
             _repo = new HomeworkRepository(new TenantConnectionFactory());
         }
 
+        // GET school/homework?classId=&sectionId=&assignedDate=&page=1&pageSize=20
+        // Server-paged. Returns { items, total, page, pageSize }.
         [HttpGet, Route("")]
-        public HttpResponseMessage GetHomework([FromUri] int? classId = null)
-            => Ok(_repo.GetHomework(Tenant.TenantDbName, Tenant.SchoolId, classId));
+        public HttpResponseMessage GetHomework(
+            [FromUri] int? classId = null, [FromUri] int? sectionId = null,
+            [FromUri] DateTime? assignedDate = null,
+            [FromUri] int page = 1, [FromUri] int pageSize = 20)
+        {
+            var (items, total) = _repo.GetHomeworkPaged(
+                Tenant.TenantDbName, Tenant.SchoolId, classId, sectionId, assignedDate, page, pageSize);
+            return Ok(new { items, total, page, pageSize });
+        }
 
         [HttpPost, Route("")]
         public HttpResponseMessage CreateHomework([FromBody] SaveHomeworkRequest request)
         {
             if (request == null || string.IsNullOrWhiteSpace(request.Title))
                 return BadRequest("Title is required.");
-            if (request.DueDate == default(DateTime))
-                return BadRequest("Due date is required.");
             var id = _repo.CreateHomework(Tenant.TenantDbName, Tenant.SchoolId, Tenant.FullName, request);
+
+            new PushNotifier().NotifyClass(
+                Tenant.TenantDbName, Tenant.GroupId, Tenant.SchoolId,
+                request.ClassId, request.SectionId,
+                "New Homework", request.Title, "homework", id);
+
             return Created(id, "Homework created.");
         }
 
@@ -45,6 +59,13 @@ namespace AscentSchools.API.Controllers.School
                 return BadRequest("Enter homework for at least one subject.");
 
             var saved = _repo.CreateBatchHomework(Tenant.TenantDbName, Tenant.SchoolId, Tenant.FullName, request);
+
+            if (saved > 0)
+                new PushNotifier().NotifyClass(
+                    Tenant.TenantDbName, Tenant.GroupId, Tenant.SchoolId,
+                    request.ClassId, request.SectionId,
+                    "New Homework", "Today's homework has been posted.", "homework", 0);
+
             return Ok(saved, $"Saved homework for {saved} subject(s).");
         }
 

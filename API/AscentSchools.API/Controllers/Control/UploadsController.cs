@@ -13,7 +13,7 @@ namespace AscentSchools.API.Controllers.Control
     /// Files are saved to ~/Uploads/branding/ and served as static files by IIS.
     /// </summary>
     [RoutePrefix("control/uploads")]
-    public class UploadsController : BaseControlController
+    public class ControlUploadsController : BaseControlController
     {
         private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".ico", ".webp" };
         private const int MaxFileSizeBytes = 2 * 1024 * 1024; // 2 MB

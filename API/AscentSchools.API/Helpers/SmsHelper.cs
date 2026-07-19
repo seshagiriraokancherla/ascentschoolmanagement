@@ -56,12 +56,29 @@ namespace AscentSchools.API.Helpers
                 ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
                 ServicePointManager.ServerCertificateValidationCallback = (object s, X509Certificate c, X509Chain ch, SslPolicyErrors e) => true;
 
-                using (var client = new WebClient())
+                // Bounded timeout (45s): the smslogin.mobi gateway is sometimes slow, and a
+                // plain WebClient would hang up to 100s (the default HttpWebRequest timeout),
+                // exceeding the mobile app's read timeout. 45s stays under the app's 60s so the
+                // app receives a real result/error instead of its own generic timeout.
+                using (var client = new TimedWebClient(45000))
                     return client.DownloadString(url);
             }
             catch (Exception ex)
             {
                 return "ERROR=" + ex.Message;
+            }
+        }
+
+        // WebClient with a configurable request timeout (WebClient itself exposes none).
+        private class TimedWebClient : WebClient
+        {
+            private readonly int _timeoutMs;
+            public TimedWebClient(int timeoutMs) { _timeoutMs = timeoutMs; }
+            protected override WebRequest GetWebRequest(Uri address)
+            {
+                var request = base.GetWebRequest(address);
+                if (request != null) request.Timeout = _timeoutMs;
+                return request;
             }
         }
     }

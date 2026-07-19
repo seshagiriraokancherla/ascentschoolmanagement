@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import api from '../../api/axiosInstance'
+import MediaUploader from '../../components/MediaUploader'
 
 const { Title, Text, Link } = Typography
 const { TextArea } = Input
@@ -72,17 +73,21 @@ export default function EventsPage() {
     const payload = {
       ...values,
       eventDate: values.eventDate ? values.eventDate.format('YYYY-MM-DD') : null,
+      // media_url now holds only an optional YouTube URL; uploads live in media_uploads.
+      mediaType: values.mediaUrl ? 'video' : 'image',
     }
     setSaving(true)
     try {
       if (modal.editing) {
         await api.put(`/school/events/${modal.editing.eventId}`, payload)
         message.success('Event updated.')
+        setModal({ open: false, editing: null })
       } else {
-        await api.post('/school/events', payload)
-        message.success('Event created.')
+        const res = await api.post('/school/events', payload)
+        const newId = res.data?.data
+        message.success('Event created — you can upload photos/videos below.')
+        setModal({ open: true, editing: { eventId: newId, ...values } })  // stay open in edit mode
       }
-      setModal({ open: false, editing: null })
       load()
     } catch (e) {
       message.error(e.message || 'Failed to save event.')
@@ -220,43 +225,12 @@ export default function EventsPage() {
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
 
-          <Form.Item name="mediaType" label="Media Type" rules={[{ required: true }]}>
-            <Select
-              options={[
-                { label: 'Image (Cloudinary / Google Drive)', value: 'image' },
-                { label: 'Video (YouTube)',                   value: 'video' },
-              ]}
-              onChange={v => setMediaType(v)}
-            />
-          </Form.Item>
-
           <Form.Item
             name="mediaUrl"
-            label={mediaType === 'video' ? 'YouTube URL' : 'Image URL (Cloudinary)'}
-            rules={[{ required: true, message: 'Media URL is required' }]}
-            extra={
-              mediaType === 'video'
-                ? 'Paste the YouTube video link (e.g. https://youtu.be/xxxx)'
-                : 'Paste the Cloudinary or Google Drive direct image link'
-            }
+            label="YouTube URL (optional)"
+            extra="Paste a YouTube video link for this event, if any. Photos/videos are uploaded below."
           >
-            <Input placeholder={mediaType === 'video' ? 'https://youtu.be/...' : 'https://res.cloudinary.com/...'} />
-          </Form.Item>
-
-          <Form.Item
-            name="thumbnailUrl"
-            label="Thumbnail URL (optional)"
-            extra="Leave blank — for images the media URL is used as thumbnail; for videos a default YouTube thumbnail is shown."
-          >
-            <Input />
-          </Form.Item>
-
-          <Form.Item
-            name="attachmentUrl"
-            label="Attachment URL (optional)"
-            extra="Paste a Google Drive or Cloudinary link to a PDF/doc. Users can download and view it."
-          >
-            <Input placeholder="https://drive.google.com/file/d/..." />
+            <Input placeholder="https://youtu.be/..." />
           </Form.Item>
 
           <Form.Item name="scope" label="Audience" rules={[{ required: true }]}>
@@ -285,6 +259,17 @@ export default function EventsPage() {
             <Switch />
           </Form.Item>
         </Form>
+
+        <div style={{ marginTop: 8 }}>
+          <Text strong>Photos / Videos</Text>
+          {modal.editing
+            ? <div style={{ marginTop: 8 }}>
+                <MediaUploader entityType="event" entityId={modal.editing.eventId} classes={['image', 'video']} max={3} />
+              </div>
+            : <div style={{ marginTop: 4 }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>Save the event first, then edit it to upload photos/videos.</Text>
+              </div>}
+        </div>
       </Modal>
     </div>
   )

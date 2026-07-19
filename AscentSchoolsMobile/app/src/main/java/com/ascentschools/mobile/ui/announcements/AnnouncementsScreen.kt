@@ -109,6 +109,11 @@ private fun AnnouncementCard(ann: AnnouncementDto) {
                 }
             }
 
+            if (ann.media?.isNotEmpty() == true) {
+                Spacer(Modifier.height(8.dp))
+                com.ascentschools.mobile.ui.components.MediaAttachments(ann.media)
+            }
+
             Spacer(Modifier.height(8.dp))
             Text(ann.createdAt ?: "", fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))

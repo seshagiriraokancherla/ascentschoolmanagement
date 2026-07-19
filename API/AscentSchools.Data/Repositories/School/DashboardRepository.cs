@@ -89,26 +89,27 @@ namespace AscentSchools.Data.Repositories.School
                           s.student_name StudentName,
                           fr.total_amount TotalAmount,
                           fr.payment_date PaymentDate,
-                          fr.status Status
+                          fr.status Status,
+                          pm.mode_name PaymentMode
                       FROM fee_receipts fr
                       JOIN students s ON s.student_id = fr.student_id
+                      LEFT JOIN payment_modes pm ON pm.payment_mode_id = fr.payment_mode_id
                       WHERE fr.school_id = @schoolId
-                      ORDER BY fr.created_at DESC",
+                      ORDER BY fr.payment_date DESC, fr.created_at DESC",
                     new { schoolId });
 
-                // ── 6. Upcoming homework (next 7 days) ────────────────────────
-                var upcomingHw = conn.Query<UpcomingHomeworkDto>(
+                // ── 6. Recent homework (most recently assigned) ───────────────
+                var recentHw = conn.Query<RecentHomeworkDto>(
                     @"SELECT TOP 7
                           h.title Title,
                           sub.subject_name SubjectName,
                           c.class_name ClassName,
-                          h.due_date DueDate
+                          h.assigned_date AssignedDate
                       FROM homework h
                       LEFT JOIN subjects sub ON sub.subject_id = h.subject_id
                       LEFT JOIN classes  c   ON c.class_id     = h.class_id
                       WHERE h.school_id = @schoolId AND h.status = 'Active'
-                        AND h.due_date >= CAST(GETDATE() AS DATE)
-                      ORDER BY h.due_date",
+                      ORDER BY h.assigned_date DESC, h.homework_id DESC",
                     new { schoolId });
 
                 // ── 7. Active announcements count ─────────────────────────────
@@ -131,7 +132,7 @@ namespace AscentSchools.Data.Repositories.School
                     MonthReceiptCount        = feeMonth.ReceiptCount,
                     Last6MonthsCollection    = last6,
                     RecentReceipts           = recentReceipts,
-                    UpcomingHomework         = upcomingHw,
+                    RecentHomework           = recentHw,
                     ActiveAnnouncementsCount = announcementsCount,
                 };
             }

@@ -24,7 +24,7 @@
     { "name": "stannsasf",    "mode": "stannsasf",    "schoolRemote": "/stannsasf.edu-care.in/httpdocs",    "parentRemote": "/parent.stannsasf.edu-care.in/httpdocs" },
     { "name": "demo",         "mode": "demo",         "schoolRemote": "/demo.edu-care.in/httpdocs",         "parentRemote": "" },
     { "name": "depaulemyv",   "mode": "depaulemyv",   "schoolRemote": "/depaulemyv.edu-care.in/httpdocs",   "parentRemote": "/parent.depaulemyv.edu-care.in/httpdocs" },
-    { "name": "holyspiritjm", "mode": "holyspiritjm", "schoolRemote": "/holyspiritjm.edu-care.in/httpdocs", "parentRemote": "/parent.holyspiritjm.edu-care.in/httpdocs" },
+    { "name": "holyspiritjm", "mode": "holyspiritjm", "schoolRemote": "/holyspiritjm.edu-care.in/httpdocs", "parentRemote": "/parent.holyspirit-jm.edu-care.in/httpdocs" },
     { "name": "stannsbng",    "mode": "stannsbng",    "schoolRemote": "/stannsbng.edu-care.in/httpdocs",    "parentRemote": "/parent.stannsbng.edu-care.in/httpdocs" }
   ]
 }

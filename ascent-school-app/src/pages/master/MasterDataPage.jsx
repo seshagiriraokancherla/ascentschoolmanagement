@@ -10,6 +10,7 @@ import SubjectsTab       from './SubjectsTab'
 import PaymentModesTab   from './PaymentModesTab'
 import FeePeriodsTab     from './FeePeriodsTab'
 import ExamTypesTab      from './ExamTypesTab'
+import ClassTeachersTab  from './ClassTeachersTab'
 
 const items = [
   { key: 'academic-years',  label: 'Academic Years',  children: <AcademicYearsTab /> },
@@ -17,6 +18,7 @@ const items = [
   { key: 'fee-categories',  label: 'Fee Categories',  children: <FeeCategoriesTab /> },
   { key: 'classes',         label: 'Classes',         children: <ClassesTab /> },
   { key: 'sections',        label: 'Sections',        children: <SectionsTab /> },
+  { key: 'class-teachers',  label: 'Class Teachers',  children: <ClassTeachersTab /> },
   { key: 'fee-types',       label: 'Fee Types',       children: <FeeTypesTab /> },
   { key: 'terms',           label: 'Terms',           children: <TermsTab /> },
   { key: 'fee-periods',     label: 'Fee Periods',     children: <FeePeriodsTab /> },

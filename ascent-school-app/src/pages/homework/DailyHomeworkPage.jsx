@@ -46,9 +46,14 @@ export default function DailyHomeworkPage() {
     if (!cid || !secId || !d) { setTexts({}); return }
     setLoading(true)
     try {
-      const r = await api.get(`/school/homework?classId=${cid}`)
-      const rows = (r.data?.data || []).filter(h =>
-        h.sectionId === secId && dayjs(h.assignedDate).isSame(d, 'day'))
+      const params = new URLSearchParams({
+        classId:      cid,
+        sectionId:    secId,
+        assignedDate: dayjs(d).format('YYYY-MM-DD'),
+        pageSize:     200,
+      })
+      const r = await api.get(`/school/homework?${params}`)
+      const rows = r.data?.data?.items || []
       const map = {}
       rows.forEach(h => { if (h.subjectId) map[h.subjectId] = h.description || '' })
       setTexts(map)

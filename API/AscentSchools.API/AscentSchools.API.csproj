@@ -204,12 +204,17 @@
     <Compile Include="Controllers\Mobile\MobileStudentController.cs" />
     <Compile Include="Controllers\Mobile\MobileFeesController.cs" />
     <Compile Include="Controllers\Mobile\MobileAppConfigController.cs" />
+    <Compile Include="Controllers\Mobile\MobileNotificationsController.cs" />
+    <Compile Include="Controllers\Mobile\MobileMessagesController.cs" />
+    <Compile Include="Controllers\Mobile\MobileTeacherMessagesController.cs" />
     <Compile Include="Controllers\School\AttendanceController.cs" />
     <Compile Include="Controllers\School\DashboardController.cs" />
     <Compile Include="Controllers\School\TransportController.cs" />
     <Compile Include="Controllers\School\MarksController.cs" />
     <Compile Include="Controllers\School\HomeworkController.cs" />
     <Compile Include="Controllers\School\AnnouncementsController.cs" />
+    <Compile Include="Controllers\School\ClassTeachersController.cs" />
+    <Compile Include="Controllers\School\MessageReportsController.cs" />
     <Compile Include="Filters\ControlAuthAttribute.cs" />
     <Compile Include="Filters\MobileTeacherAuthAttribute.cs" />
     <Compile Include="Filters\RequireModuleAttribute.cs" />
@@ -222,6 +227,10 @@
     <Compile Include="Helpers\RazorpayGatewayService.cs" />
     <Compile Include="Helpers\GatewayServiceFactory.cs" />
     <Compile Include="Helpers\SmsHelper.cs" />
+    <Compile Include="Helpers\R2Service.cs" />
+    <Compile Include="Helpers\FcmPushService.cs" />
+    <Compile Include="Helpers\PushNotifier.cs" />
+    <Compile Include="Controllers\School\UploadsController.cs" />
     <Compile Include="Middleware\ControlContext.cs" />
     <Compile Include="Middleware\MobileContext.cs" />
     <Compile Include="Middleware\TeacherContext.cs" />
@@ -244,6 +253,7 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
+    <Content Include="App_Data\firebase-service-account.json" />
     <None Include="Properties\PublishProfiles\FolderProfile.pubxml" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />

@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("com.google.gms.google-services")
 }
 
 // Release signing credentials live in keystore.properties at the project root
@@ -23,8 +24,8 @@ android {
         applicationId = "in.educare.mobile"   // overridden by each flavor
         minSdk        = 24
         targetSdk     = 35
-        versionCode   = 19
-        versionName   = "1.8"
+        versionCode   = 29
+        versionName   = "2.9"
     }
 
     // ── White-label school flavors ────────────────────────────────────────────
@@ -155,4 +156,13 @@ dependencies {
 
     // Coil — image loading for Compose (AsyncImage)
     implementation("io.coil-kt:coil-compose:2.6.0")
+
+    // Google Play In-App Updates — replaces the old app_config versionCode gate.
+    // Asks Play directly whether a newer build is available to this device.
+    implementation("com.google.android.play:app-update:2.1.0")
+    implementation("com.google.android.play:app-update-ktx:2.1.0")
+
+    // Firebase Cloud Messaging — push notifications (Feature 3).
+    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
+    implementation("com.google.firebase:firebase-messaging")
 }

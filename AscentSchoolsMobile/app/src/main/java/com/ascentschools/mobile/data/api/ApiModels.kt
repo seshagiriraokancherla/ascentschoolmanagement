@@ -29,6 +29,7 @@ data class TeacherLoginRequest(val username: String, val password: String)
 
 data class TeacherAuthResponse(
     val accessToken: String,
+    val refreshToken: String?,
     val tokenType: String,
     val fullName: String?,
     val userId: Int,
@@ -78,7 +79,7 @@ data class TeacherHomeworkDto(
     val subjectName : String?,
     val className   : String?,
     val assignedDate: String,
-    val dueDate     : String,
+    val dueDate     : String?,   // retired — null for new homework
     val status      : String?,
     val createdBy   : String?
 )
@@ -87,8 +88,37 @@ data class TeacherCreateHomeworkRequest(
     val classId     : Int,
     val title       : String,
     val description : String?,
-    val assignedDate: String,
-    val dueDate     : String
+    val assignedDate: String
+)
+
+// Mirrors School AnnouncementDto from backend (createdAt is an ISO string from Gson)
+data class TeacherAnnouncementDto(
+    val announcementId : Int,
+    val title          : String,
+    val description    : String?,
+    val scope          : String?,
+    val classId        : Int?,
+    val className      : String?,
+    val sectionId      : Int?,
+    val sectionName    : String?,
+    val isPinned       : Boolean,
+    val createdBy      : String?,
+    val createdAt      : String
+)
+
+data class TeacherCreateAnnouncementRequest(
+    val classId     : Int,
+    val sectionId   : Int?,   // null = whole class
+    val title       : String,
+    val description : String?
+)
+
+// ── Push notifications (FCM) ────────────────────────────────────────────────────
+
+data class RegisterPushTokenRequest(
+    val fcmToken      : String,
+    val applicationId : String,
+    val platform      : String = "android"
 )
 
 // ── Auth — Parent ─────────────────────────────────────────────────────────────
@@ -105,6 +135,7 @@ data class SelectChildRequest(val linkId: Int)
 
 data class AuthResponse(
     val accessToken: String,
+    val refreshToken: String?,
     val tokenType: String,
     val fullName: String?,
     val className: String?,
@@ -201,13 +232,23 @@ data class HomeworkDto(
     val assignedDate  : String?,
     val dueDate       : String?,
     val attachmentUrl : String?,
-    val attachments   : List<AttachmentDto>?
+    val attachments   : List<AttachmentDto>?,
+    val media         : List<MediaUploadDto>? = null   // R2 uploads (Phase B)
 )
 
 data class AttachmentDto(
     val attachmentId: Int,
     val fileName: String,
     val filePath: String,
+    val fileSizeKb: Int?
+)
+
+// R2-uploaded file for homework / announcement / event
+data class MediaUploadDto(
+    val uploadId  : Long,
+    val fileName  : String?,
+    val fileUrl   : String?,
+    val fileType  : String?,   // image | doc | audio | video
     val fileSizeKb: Int?
 )
 
@@ -220,8 +261,9 @@ data class AnnouncementDto(
     val description    : String?,
     val scope          : String?,
     val isPinned       : Boolean,
-    val attachmentUrl  : String?,   // optional PDF/doc URL
-    val createdAt      : String?
+    val attachmentUrl  : String?,   // optional PDF/doc URL (legacy)
+    val createdAt      : String?,
+    val media          : List<MediaUploadDto>? = null   // R2 uploads (Phase B)
 )
 
 // ── Events ────────────────────────────────────────────────────────────────────
@@ -232,11 +274,12 @@ data class SchoolEventDto(
     val description   : String?,
     val eventDate     : String?,   // ISO date: "2025-08-15"
     val mediaType     : String?,   // "image" | "video"
-    val mediaUrl      : String?,
+    val mediaUrl      : String?,   // optional YouTube URL
     val thumbnailUrl  : String?,
-    val attachmentUrl : String?,   // optional PDF/doc URL
+    val attachmentUrl : String?,   // optional PDF/doc URL (legacy)
     val scope         : String?,
-    val isPinned      : Boolean
+    val isPinned      : Boolean,
+    val media         : List<MediaUploadDto>? = null   // R2 uploads (Phase B)
 )
 
 // ── Fee ───────────────────────────────────────────────────────────────────────
@@ -359,4 +402,59 @@ data class AppVersionStatusDto(
     val latestVersionCode       : Int     = 0,
     val message                 : String? = null,
     val storeUrl                : String? = null
+)
+
+// ── Messaging (parent <-> teacher) ─────────────────────────────────────────
+
+data class MessageDto(
+    val messageId  : Int,
+    val threadId   : Int,
+    val senderType : String,   // parent | teacher
+    val senderId   : Int,
+    val senderName : String?,
+    val body       : String,
+    val status     : String,   // Active | Removed
+    val readAt     : String?,
+    val createdAt  : String
+)
+
+/** Parent chat: availability + who it reaches + the conversation, in one call. */
+data class ParentThreadViewDto(
+    val canMessage    : Boolean,
+    val reason        : String?,        // why not, when canMessage = false
+    val teachers      : List<String>?,  // recipient display names
+    val threadId      : Int?,           // null until the first message
+    val status        : String?,        // Active | Blocked
+    val blockedByType : String?,        // parent | teacher
+    val messages      : List<MessageDto>?
+)
+
+/** One conversation in the teacher's thread list. */
+data class MessageThreadDto(
+    val threadId        : Int,
+    val studentUniqueId : Int,
+    val parentId        : Int,
+    val studentName     : String?,
+    val admissionNo     : String?,
+    val className       : String?,
+    val sectionName     : String?,
+    val status          : String?,
+    val blockedByType   : String?,
+    val blockedAt       : String?,
+    val lastMessageBody : String?,
+    val lastMessageAt   : String?,
+    val unreadCount     : Int,
+    val createdAt       : String
+)
+
+data class MessageThreadDetailDto(
+    val thread   : MessageThreadDto?,
+    val messages : List<MessageDto>?
+)
+
+data class SendMessageRequest(val body: String)
+
+data class ReportMessageRequest(
+    val messageId : Int,
+    val reason    : String?
 )

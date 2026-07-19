@@ -31,8 +31,53 @@ namespace AscentSchools.Data.Repositories.School
                       WHERE h.school_id = @schoolId
                         AND h.status    != 'Cancelled'
                         AND (@classId IS NULL OR h.class_id = @classId)
-                      ORDER BY h.due_date DESC",
+                      ORDER BY h.assigned_date DESC, h.homework_id DESC",
                     new { schoolId, classId });
+        }
+
+        /// <summary>
+        /// Server-paged homework list for the web admin screen. Optional sectionId /
+        /// assignedDate filters let the Daily Homework page fetch one class+section+date
+        /// precisely instead of pulling the whole history and filtering client-side.
+        /// Returns the page of rows plus the total count (for the pager).
+        /// </summary>
+        public (IEnumerable<HomeworkDto> Items, int Total) GetHomeworkPaged(
+            string tenantDbName, int schoolId, int? classId, int? sectionId,
+            DateTime? assignedDate, int page, int pageSize)
+        {
+            if (page < 1) page = 1;
+            if (pageSize < 1) pageSize = 20;
+            if (pageSize > 200) pageSize = 200;
+            var skip = (page - 1) * pageSize;
+
+            const string where =
+                @"WHERE h.school_id = @schoolId
+                    AND h.status    != 'Cancelled'
+                    AND (@classId      IS NULL OR h.class_id     = @classId)
+                    AND (@sectionId    IS NULL OR h.section_id   = @sectionId)
+                    AND (@assignedDate IS NULL OR h.assigned_date = @assignedDate)";
+
+            var args = new { schoolId, classId, sectionId, assignedDate, skip, take = pageSize };
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+            {
+                var total = conn.ExecuteScalar<int>($"SELECT COUNT(*) FROM homework h {where}", args);
+                var items = conn.Query<HomeworkDto>(
+                    $@"SELECT h.homework_id HomeworkId, h.title Title, h.description Description,
+                              h.subject_id SubjectId, sub.subject_name SubjectName,
+                              h.class_id ClassId, c.class_name ClassName,
+                              h.section_id SectionId, sec.section_name SectionName,
+                              h.assigned_date AssignedDate, h.due_date DueDate,
+                              h.attachment_url AttachmentUrl,
+                              h.status Status, h.created_by CreatedBy, h.created_at CreatedAt
+                       FROM homework h
+                       LEFT JOIN subjects  sub ON sub.subject_id  = h.subject_id
+                       LEFT JOIN classes   c   ON c.class_id      = h.class_id
+                       LEFT JOIN sections  sec ON sec.section_id  = h.section_id
+                       {where}
+                       ORDER BY h.assigned_date DESC, h.homework_id DESC
+                       OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY", args).ToList();
+                return (items, total);
+            }
         }
 
         public int CreateHomework(string tenantDbName, int schoolId, string createdBy, SaveHomeworkRequest req)
@@ -91,7 +136,7 @@ namespace AscentSchools.Data.Repositories.School
                                 req.ClassId,
                                 req.SectionId,
                                 req.AssignedDate,
-                                dueDate      = req.AssignedDate,   // legacy form: H.W. date = due date
+                                dueDate      = (DateTime?)null,   // due date retired
                                 schoolId,
                                 createdBy,
                             }, tx);

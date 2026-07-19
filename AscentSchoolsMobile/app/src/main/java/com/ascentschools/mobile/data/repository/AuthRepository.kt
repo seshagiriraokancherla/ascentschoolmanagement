@@ -48,6 +48,7 @@ class AuthRepository(
             val body = resp.bodyOrError()
             if (!body.success || body.data == null) error(body.message ?: "Login failed")
             tokenStore.accessToken = body.data.accessToken
+            body.data.refreshToken?.let { tokenStore.refreshToken = it }
             tokenStore.tokenType   = body.data.tokenType
             tokenStore.studentName = body.data.fullName
             tokenStore.userType    = "teacher"
@@ -76,6 +77,7 @@ class AuthRepository(
             val body = resp.bodyOrError()
             if (!body.success || body.data == null) error(body.message ?: "Invalid or expired OTP")
             tokenStore.accessToken = body.data.accessToken
+            body.data.refreshToken?.let { tokenStore.refreshToken = it }
             tokenStore.tokenType   = body.data.tokenType
             tokenStore.studentName = body.data.fullName
             tokenStore.userType    = "parent"
@@ -91,6 +93,7 @@ class AuthRepository(
             val body = resp.bodyOrError()
             if (!body.success || body.data == null) error(body.message ?: "Login failed")
             tokenStore.accessToken = body.data.accessToken
+            body.data.refreshToken?.let { tokenStore.refreshToken = it }
             tokenStore.tokenType   = body.data.tokenType
             tokenStore.studentName = body.data.fullName
             body.data
@@ -137,10 +140,13 @@ class AuthRepository(
 
     suspend fun silentRefresh(): Result<Unit> {
         return runCatching {
-            val resp = api.refreshParentToken()
+            val stored = tokenStore.refreshToken ?: ""
+            val resp = api.refreshParentToken(stored)
             val body = resp.bodyOrError()
             if (!body.success || body.data == null) error(body.message ?: "Session expired")
             tokenStore.accessToken = body.data.accessToken
+            // Server rotates the refresh token on every refresh — save the new one.
+            body.data.refreshToken?.let { tokenStore.refreshToken = it }
             tokenStore.tokenType   = body.data.tokenType
             body.data.fullName?.let { tokenStore.studentName = it }
         }
@@ -148,10 +154,12 @@ class AuthRepository(
 
     suspend fun silentRefreshTeacher(): Result<Unit> {
         return runCatching {
-            val resp = api.refreshTeacherToken()
+            val stored = tokenStore.refreshToken ?: ""
+            val resp = api.refreshTeacherToken(stored)
             val body = resp.bodyOrError()
             if (!body.success || body.data == null) error(body.message ?: "Session expired")
             tokenStore.accessToken = body.data.accessToken
+            body.data.refreshToken?.let { tokenStore.refreshToken = it }
             body.data.fullName?.let { tokenStore.studentName = it }
         }
     }

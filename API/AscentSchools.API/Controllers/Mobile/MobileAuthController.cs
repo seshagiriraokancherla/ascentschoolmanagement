@@ -129,7 +129,7 @@ namespace AscentSchools.API.Controllers.Mobile
         [HttpPost, Route("student/refresh"), AllowAnonymous]
         public HttpResponseMessage StudentRefresh()
         {
-            var rawToken = GetRefreshCookie("studentRefreshToken");
+            var rawToken = ResolveRefreshToken("studentRefreshToken");
             if (string.IsNullOrWhiteSpace(rawToken))
                 return Fail(HttpStatusCode.Unauthorized, "No refresh token.");
 
@@ -154,7 +154,7 @@ namespace AscentSchools.API.Controllers.Mobile
             var newRaw  = JwtHelper.GenerateRefreshToken();
             var newHash = JwtHelper.HashRefreshToken(newRaw);
             _studentAuth.RevokeRefreshToken(tenant.DbName, record.TokenId, newHash);
-            _studentAuth.CreateRefreshToken(tenant.DbName, record.AccountId, newHash, JwtHelper.RefreshTokenExpiry());
+            _studentAuth.CreateRefreshToken(tenant.DbName, record.AccountId, newHash, JwtHelper.MobileRefreshTokenExpiry());
 
             return BuildStudentAuthResponse(tenant, record.AccountId, student, schoolId, isLogin: false, rawRefresh: newRaw);
         }
@@ -291,7 +291,7 @@ namespace AscentSchools.API.Controllers.Mobile
         [HttpPost, Route("parent/refresh"), AllowAnonymous]
         public HttpResponseMessage ParentRefresh()
         {
-            var rawToken = GetRefreshCookie("parentRefreshToken");
+            var rawToken = ResolveRefreshToken("parentRefreshToken");
             if (string.IsNullOrWhiteSpace(rawToken))
                 return Fail(HttpStatusCode.Unauthorized, "No refresh token.");
 
@@ -308,7 +308,7 @@ namespace AscentSchools.API.Controllers.Mobile
             var newRaw  = JwtHelper.GenerateRefreshToken();
             var newHash = JwtHelper.HashRefreshToken(newRaw);
             _parentAuth.RevokeRefreshToken(record.TokenId, newHash);
-            _parentAuth.CreateRefreshToken(record.ParentId, newHash, JwtHelper.RefreshTokenExpiry());
+            _parentAuth.CreateRefreshToken(record.ParentId, newHash, JwtHelper.MobileRefreshTokenExpiry());
 
             return BuildParentAuthResponse(record.ParentId, parent.FullName, isLogin: false, rawRefresh: newRaw);
         }
@@ -626,19 +626,20 @@ namespace AscentSchools.API.Controllers.Mobile
             {
                 rawRefresh = JwtHelper.GenerateRefreshToken();
                 _studentAuth.CreateRefreshToken(tenant.DbName, accountId,
-                    JwtHelper.HashRefreshToken(rawRefresh), JwtHelper.RefreshTokenExpiry());
+                    JwtHelper.HashRefreshToken(rawRefresh), JwtHelper.MobileRefreshTokenExpiry());
 
                 if (isLogin) _studentAuth.UpdateLastLogin(tenant.DbName, accountId);
             }
 
             var response = Request.CreateResponse(HttpStatusCode.OK, ApiResponse<MobileAuthResponse>.Ok(new MobileAuthResponse
             {
-                AccessToken = accessToken,
-                TokenType   = "student",
-                FullName    = student.StudentName?.Trim(),
-                ClassName   = student.ClassName,
-                AdmissionNo = student.AdmissionNo,
-                StudentId   = student.StudentId,
+                AccessToken  = accessToken,
+                RefreshToken = rawRefresh,
+                TokenType    = "student",
+                FullName     = student.StudentName?.Trim(),
+                ClassName    = student.ClassName,
+                AdmissionNo  = student.AdmissionNo,
+                StudentId    = student.StudentId,
             }));
 
             SetCookie(response, "studentRefreshToken", rawRefresh, "/");
@@ -659,15 +660,16 @@ namespace AscentSchools.API.Controllers.Mobile
             {
                 rawRefresh = JwtHelper.GenerateRefreshToken();
                 _parentAuth.CreateRefreshToken(parentId,
-                    JwtHelper.HashRefreshToken(rawRefresh), JwtHelper.RefreshTokenExpiry());
+                    JwtHelper.HashRefreshToken(rawRefresh), JwtHelper.MobileRefreshTokenExpiry());
             }
 
             var response = Request.CreateResponse(HttpStatusCode.OK, ApiResponse<MobileAuthResponse>.Ok(new MobileAuthResponse
             {
-                AccessToken = accessToken,
-                TokenType   = "parent",
-                FullName    = fullName,
-                ParentId    = parentId,
+                AccessToken  = accessToken,
+                RefreshToken = rawRefresh,
+                TokenType    = "parent",
+                FullName     = fullName,
+                ParentId     = parentId,
             }));
 
             SetCookie(response, "parentRefreshToken", rawRefresh, "/");
@@ -681,7 +683,7 @@ namespace AscentSchools.API.Controllers.Mobile
                 HttpOnly = true,
                 Secure   = false,
                 Path     = path,
-                Expires  = DateTimeOffset.UtcNow.AddDays(7)
+                Expires  = DateTimeOffset.UtcNow.AddDays(JwtHelper.MobileRefreshDays)
             };
             response.Headers.AddCookies(new[] { cookie });
         }
@@ -702,6 +704,23 @@ namespace AscentSchools.API.Controllers.Mobile
             var cookies = Request.Headers.GetCookies(name);
             if (cookies == null || cookies.Count == 0) return null;
             return cookies[0][name].Value;
+        }
+
+        // Mobile apps store the refresh token themselves and send it in the
+        // X-Refresh-Token header (the HttpOnly cookie is unreliable across app
+        // kill on Android). Web clients don't send the header, so they fall back
+        // to the cookie. Header wins when present: the app-held token is the
+        // reliable copy — a stale cookie could otherwise be rotated out from under
+        // the app and cause a false 401.
+        private string ResolveRefreshToken(string cookieName)
+        {
+            IEnumerable<string> vals;
+            if (Request.Headers.TryGetValues("X-Refresh-Token", out vals))
+            {
+                var header = vals.FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(header)) return header;
+            }
+            return GetRefreshCookie(cookieName);
         }
 
         private HttpResponseMessage Fail(HttpStatusCode status, string message)

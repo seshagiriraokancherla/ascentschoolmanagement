@@ -115,6 +115,8 @@ export const PATH_PERM = {
   '/settings/users':            P.USER_MANAGE,
   '/settings/payment-gateway':  P.SETTINGS_MANAGE,
   '/settings/sms-gateway':      P.SETTINGS_MANAGE,
+  '/settings/message-reports':  P.SETTINGS_MANAGE,
+  '/settings/r2-storage':       P.SETTINGS_MANAGE,
 }
 
 /** True if the user (via hasPermission) may access the given absolute path. */

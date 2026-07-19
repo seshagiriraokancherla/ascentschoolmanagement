@@ -226,6 +226,11 @@ private fun EventCard(event: SchoolEventDto) {
                     }
                 }
 
+                if (event.media?.isNotEmpty() == true) {
+                    Spacer(Modifier.height(8.dp))
+                    com.ascentschools.mobile.ui.components.MediaAttachments(event.media)
+                }
+
                 Spacer(Modifier.height(8.dp))
                 Row(
                     Modifier.fillMaxWidth(),

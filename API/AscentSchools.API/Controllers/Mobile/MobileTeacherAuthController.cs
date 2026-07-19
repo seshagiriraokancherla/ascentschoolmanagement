@@ -70,7 +70,7 @@ namespace AscentSchools.API.Controllers.Mobile
         [HttpPost, Route("refresh"), AllowAnonymous]
         public HttpResponseMessage Refresh()
         {
-            var rawToken = GetRefreshCookie("teacherRefreshToken");
+            var rawToken = ResolveRefreshToken("teacherRefreshToken");
             if (string.IsNullOrWhiteSpace(rawToken))
                 return Fail(HttpStatusCode.Unauthorized, "No refresh token.");
 
@@ -93,7 +93,7 @@ namespace AscentSchools.API.Controllers.Mobile
             var newRaw  = JwtHelper.GenerateRefreshToken();
             var newHash = JwtHelper.HashRefreshToken(newRaw);
             _auth.RevokeRefreshToken(tenant.DbName, record.TokenId, newHash);
-            _auth.CreateRefreshToken(tenant.DbName, record.UserId, newHash, JwtHelper.RefreshTokenExpiry());
+            _auth.CreateRefreshToken(tenant.DbName, record.UserId, newHash, JwtHelper.MobileRefreshTokenExpiry());
 
             return BuildTeacherAuthResponse(tenant, user.UserId, user.FullName, schoolId, newRaw);
         }
@@ -130,17 +130,18 @@ namespace AscentSchools.API.Controllers.Mobile
             {
                 rawRefresh = JwtHelper.GenerateRefreshToken();
                 var hash   = JwtHelper.HashRefreshToken(rawRefresh);
-                _auth.CreateRefreshToken(tenant.DbName, userId, hash, JwtHelper.RefreshTokenExpiry());
+                _auth.CreateRefreshToken(tenant.DbName, userId, hash, JwtHelper.MobileRefreshTokenExpiry());
             }
 
             var response = Request.CreateResponse(HttpStatusCode.OK,
                 ApiResponse<TeacherAuthResponse>.Ok(new TeacherAuthResponse
                 {
-                    AccessToken = accessToken,
-                    TokenType   = "Bearer",
-                    FullName    = fullName,
-                    UserId      = userId,
-                    SchoolId    = schoolId,
+                    AccessToken  = accessToken,
+                    RefreshToken = rawRefresh,
+                    TokenType    = "Bearer",
+                    FullName     = fullName,
+                    UserId       = userId,
+                    SchoolId     = schoolId,
                 }));
 
             SetCookie(response, "teacherRefreshToken", rawRefresh, "/");
@@ -198,6 +199,18 @@ namespace AscentSchools.API.Controllers.Mobile
             return null;
         }
 
+        // X-Refresh-Token header first (mobile app holds the token itself — the
+        // HttpOnly cookie is unreliable across app kill), then the cookie (web).
+        private string ResolveRefreshToken(string cookieName)
+        {
+            if (Request.Headers.TryGetValues("X-Refresh-Token", out var vals))
+            {
+                var header = vals.FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(header)) return header;
+            }
+            return GetRefreshCookie(cookieName);
+        }
+
         private void SetCookie(HttpResponseMessage response, string name, string value, string path)
         {
             var cookie = new CookieHeaderValue(name, value)
@@ -205,7 +218,7 @@ namespace AscentSchools.API.Controllers.Mobile
                 HttpOnly = true,
                 Secure   = false, // true in production
                 Path     = path,
-                Expires  = DateTimeOffset.UtcNow.AddDays(7),
+                Expires  = DateTimeOffset.UtcNow.AddDays(JwtHelper.MobileRefreshDays),
             };
             response.Headers.AddCookies(new[] { cookie });
         }
@@ -236,6 +249,9 @@ namespace AscentSchools.API.Controllers.Mobile
     public class TeacherAuthResponse
     {
         public string AccessToken { get; set; }
+        // Raw refresh token — stored by the mobile app and sent back explicitly
+        // on refresh (see MobileAuthResponse.RefreshToken).
+        public string RefreshToken { get; set; }
         public string TokenType   { get; set; }
         public string FullName    { get; set; }
         public int    UserId      { get; set; }

@@ -217,7 +217,7 @@ export default function StudentsPage() {
       width:     60,
       render:    (path) =>
         path
-          ? <Avatar src={`${API_BASE}${path}`} size={40} />
+          ? <Avatar src={/^https?:\/\//.test(path) ? path : `${API_BASE}${path}`} size={40} />
           : <Avatar icon={<UserOutlined />} size={40} />,
     },
     {

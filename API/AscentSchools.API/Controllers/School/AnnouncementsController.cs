@@ -1,3 +1,4 @@
+using AscentSchools.API.Helpers;
 using AscentSchools.Core.DTOs.School.Announcements;
 using AscentSchools.Data.ConnectionFactory;
 using AscentSchools.Data.Repositories.School;
@@ -32,6 +33,13 @@ namespace AscentSchools.API.Controllers.School
                 return BadRequest("Class is required when scope is Class.");
 
             var id = _repo.CreateAnnouncement(Tenant.TenantDbName, Tenant.SchoolId, Tenant.FullName, request);
+
+            new PushNotifier().NotifyClass(
+                Tenant.TenantDbName, Tenant.GroupId, Tenant.SchoolId,
+                request.Scope == "Class" ? request.ClassId : null,
+                request.Scope == "Class" ? request.SectionId : null,
+                "New Announcement", request.Title, "announcement", id);
+
             return Created(id, "Announcement created.");
         }
 

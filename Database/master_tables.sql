@@ -451,3 +451,35 @@ VALUES
     ('in.educare.depaulemyv', 'android', 1, 12),
     ('in.educare.demo',       'android', 1, 12);
 GO
+
+
+-- ============================================================
+-- 17. device_push_tokens
+--     FCM registration tokens for push notifications (Feature 3).
+--     One row per device install. A parent OR a teacher may own a
+--     token (a device that switches user re-binds via upsert on
+--     fcm_token). Teacher tokens carry the tenant db_name so future
+--     teacher-targeted pushes can resolve the branch.
+-- ============================================================
+CREATE TABLE device_push_tokens (
+    token_id        INT             NOT NULL IDENTITY(1,1),
+    fcm_token       VARCHAR(4000)   NOT NULL,
+    user_type       VARCHAR(10)     NOT NULL,            -- 'parent' | 'teacher'
+    parent_id       INT             NULL,                -- parent_accounts.parent_id (parent)
+    teacher_user_id INT             NULL,                -- tenant users.user_id (teacher)
+    group_id        INT             NULL,
+    school_id       INT             NULL,
+    db_name         VARCHAR(100)    NULL,                -- tenant DB (teacher token resolution)
+    application_id  VARCHAR(100)    NULL,                -- e.g. 'in.educare.stannsasf'
+    platform        VARCHAR(10)     NOT NULL DEFAULT 'android',
+    created_at      DATETIME        NOT NULL DEFAULT GETDATE(),
+    updated_at      DATETIME        NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT PK_device_push_tokens PRIMARY KEY (token_id)
+);
+GO
+-- One row per FCM token (upsert target when a device re-registers / switches user)
+CREATE UNIQUE INDEX UQ_device_push_tokens_token ON device_push_tokens (fcm_token);
+GO
+-- Fast lookup when fanning out to a parent's devices
+CREATE INDEX IX_device_push_tokens_parent ON device_push_tokens (parent_id) WHERE parent_id IS NOT NULL;
+GO

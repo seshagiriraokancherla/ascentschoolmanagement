@@ -21,6 +21,17 @@ namespace AscentSchools.API.Helpers
         private static int    AccessMins  => int.Parse(ConfigurationManager.AppSettings["Jwt:AccessTokenMins"]);
         private static int    RefreshDays => int.Parse(ConfigurationManager.AppSettings["Jwt:RefreshTokenDays"]);
 
+        // Mobile app sessions live much longer than web (avoids re-OTP → SMS cost).
+        // Defaults to 365 days when the config key is absent.
+        public  static int    MobileRefreshDays
+        {
+            get
+            {
+                var v = ConfigurationManager.AppSettings["Jwt:MobileRefreshTokenDays"];
+                return int.TryParse(v, out var d) && d > 0 ? d : 365;
+            }
+        }
+
         private static SymmetricSecurityKey SigningKey =>
             new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Secret));
 
@@ -125,6 +136,9 @@ namespace AscentSchools.API.Helpers
 
         public static DateTime RefreshTokenExpiry() =>
             DateTime.UtcNow.AddDays(RefreshDays);
+
+        public static DateTime MobileRefreshTokenExpiry() =>
+            DateTime.UtcNow.AddDays(MobileRefreshDays);
 
         // ── Control App Token ─────────────────────────────────────────────
 

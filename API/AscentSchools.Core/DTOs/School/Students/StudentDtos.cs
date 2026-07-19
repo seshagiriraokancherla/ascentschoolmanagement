@@ -117,6 +117,41 @@ namespace AscentSchools.Core.DTOs.School.Students
         public string    SpareField1            { get; set; }
         public string    SpareField2            { get; set; }
         public int       SchoolId               { get; set; }
+        public string    CreatedBy              { get; set; }
+        public System.DateTime? CreatedAt       { get; set; }
+        public string    UpdatedBy              { get; set; }
+        public System.DateTime? UpdatedAt       { get; set; }
+    }
+
+    // One snapshot from the students temporal history (Phase 79).
+    public class StudentHistoryDto
+    {
+        public System.DateTime  ValidFrom    { get; set; }  // when this version became current (UTC)
+        public System.DateTime  ValidTo      { get; set; }  // when superseded (max for the live row)
+        public string    CreatedBy    { get; set; }
+        public string    UpdatedBy    { get; set; }
+        public System.DateTime? UpdatedAt { get; set; }
+        public string    AdmissionNo  { get; set; }
+        public string    StudentName  { get; set; }
+        public string    Gender       { get; set; }
+        public System.DateTime? DateOfBirth { get; set; }
+        public string    BloodGroup   { get; set; }
+        public string    Status       { get; set; }
+        public string    AcademicYear { get; set; }
+        public string    ClassName    { get; set; }
+        public string    SectionName  { get; set; }
+        public string    RollNo       { get; set; }
+        public string    FatherName   { get; set; }
+        public string    FatherMobile { get; set; }
+        public string    MotherName   { get; set; }
+        public string    MotherMobile { get; set; }
+        public string    Email        { get; set; }
+        public string    AadharNo     { get; set; }
+    }
+
+    public class SavePhotoUrlRequest
+    {
+        public string PhotoUrl { get; set; }   // R2 public URL of the uploaded photo
     }
 
     public class SaveStudentRequest

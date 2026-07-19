@@ -41,6 +41,8 @@ import com.ascentschools.mobile.ui.homework.HomeworkScreen
 import com.ascentschools.mobile.ui.homework.HomeworkViewModel
 import com.ascentschools.mobile.ui.marks.MarksScreen
 import com.ascentschools.mobile.ui.marks.MarksViewModel
+import com.ascentschools.mobile.ui.messages.MessagesScreen
+import com.ascentschools.mobile.ui.messages.MessagesViewModel
 import com.ascentschools.mobile.ui.profile.ProfileScreen
 import com.ascentschools.mobile.ui.profile.ProfileViewModel
 import com.ascentschools.mobile.ui.theme.NavyBlue
@@ -54,7 +56,8 @@ private val navItems = listOf(
     BottomNavItem("Fees",       Icons.Default.Payments,      3),
     BottomNavItem("Homework",   Icons.Default.MenuBook,      4),
     BottomNavItem("Notices",    Icons.Default.Notifications, 5),
-    BottomNavItem("Events",     Icons.Default.PhotoLibrary,  6)
+    BottomNavItem("Events",     Icons.Default.PhotoLibrary,  6),
+    BottomNavItem("Messages",   Icons.Default.Chat,          7)
 )
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -92,6 +95,7 @@ fun HomeScreen(
     val homeworkVm      = remember { HomeworkViewModel(repo) }
     val announcementsVm = remember { AnnouncementsViewModel(repo) }
     val eventsVm        = remember { EventsViewModel(repo) }
+    val messagesVm      = remember { MessagesViewModel(repo) }
 
     Scaffold(
         topBar = {
@@ -112,7 +116,7 @@ fun HomeScreen(
                         // Global refresh — reload every tab's data.
                         profileVm.load(); attendanceVm.load(); marksVm.load()
                         homeworkVm.load(); announcementsVm.load(); eventsVm.load()
-                        feeVm.loadFees()
+                        messagesVm.load(); feeVm.loadFees()
                     }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                     }
@@ -186,6 +190,7 @@ fun HomeScreen(
                 4 -> PullToRefresh(onRefresh = { homeworkVm.load() })      { HomeworkScreen(viewModel = homeworkVm) }
                 5 -> PullToRefresh(onRefresh = { announcementsVm.load() }) { AnnouncementsScreen(viewModel = announcementsVm) }
                 6 -> PullToRefresh(onRefresh = { eventsVm.load() })        { EventsScreen(viewModel = eventsVm) }
+                7 -> MessagesScreen(viewModel = messagesVm)
             }
         }
     }

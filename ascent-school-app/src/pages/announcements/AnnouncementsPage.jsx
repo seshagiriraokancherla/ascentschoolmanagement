@@ -6,6 +6,7 @@ import {
 import { PlusOutlined, EditOutlined, DeleteOutlined, PushpinOutlined, PaperClipOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import api from '../../api/axiosInstance'
+import MediaUploader from '../../components/MediaUploader'
 
 const { Title, Text } = Typography
 const { TextArea } = Input
@@ -16,6 +17,7 @@ export default function AnnouncementsPage() {
 
   const [announcements, setAnnouncements] = useState([])
   const [classes,       setClasses]       = useState([])
+  const [sections,      setSections]      = useState([])
   const [loading,       setLoading]       = useState(false)
   const [modal,         setModal]         = useState({ open: false, editing: null })
   const [saving,        setSaving]        = useState(false)
@@ -36,10 +38,19 @@ export default function AnnouncementsPage() {
     load()
   }, [])
 
+  const loadSections = async (classId) => {
+    if (!classId) { setSections([]); return }
+    try {
+      const r = await api.get(`/school/master/sections?classId=${classId}`)
+      setSections(r.data.data || [])
+    } catch { setSections([]) }
+  }
+
   const openCreate = () => {
     form.resetFields()
     form.setFieldsValue({ scope: 'School', isPinned: false })
     setScope('School')
+    setSections([])
     setModal({ open: true, editing: null })
   }
 
@@ -49,10 +60,12 @@ export default function AnnouncementsPage() {
       description:   record.description,
       scope:         record.scope,
       classId:       record.classId,
+      sectionId:     record.sectionId,
       isPinned:      record.isPinned,
       attachmentUrl: record.attachmentUrl,
     })
     setScope(record.scope)
+    loadSections(record.classId)
     setModal({ open: true, editing: record })
   }
 
@@ -63,11 +76,13 @@ export default function AnnouncementsPage() {
       if (modal.editing) {
         await api.put(`/school/announcements/${modal.editing.announcementId}`, values)
         message.success('Announcement updated.')
+        setModal({ open: false, editing: null })
       } else {
-        await api.post('/school/announcements', values)
-        message.success('Announcement created.')
+        const res = await api.post('/school/announcements', values)
+        const newId = res.data?.data
+        message.success('Announcement created — you can attach files below.')
+        setModal({ open: true, editing: { announcementId: newId, ...values } })  // stay open in edit mode
       }
-      setModal({ open: false, editing: null })
       load()
     } catch (e) {
       message.error(e.message || 'Failed to save announcement.')
@@ -112,8 +127,10 @@ export default function AnnouncementsPage() {
       title: 'Scope',
       dataIndex: 'scope',
       key: 'scope',
-      width: 100,
-      render: (s, r) => s === 'Class' ? <Tag color="blue">{r.className || 'Class'}</Tag> : <Tag>School</Tag>,
+      width: 130,
+      render: (s, r) => s === 'Class'
+        ? <Tag color="blue">{r.className || 'Class'}{r.sectionName ? ` · ${r.sectionName}` : ''}</Tag>
+        : <Tag>School</Tag>,
     },
     {
       title: 'Date',
@@ -190,29 +207,49 @@ export default function AnnouncementsPage() {
               ]}
               onChange={v => {
                 setScope(v)
-                if (v === 'School') form.setFieldValue('classId', null)
+                if (v === 'School') {
+                  form.setFieldsValue({ classId: null, sectionId: null })
+                  setSections([])
+                }
               }}
             />
           </Form.Item>
           {scope === 'Class' && (
-            <Form.Item name="classId" label="Class" rules={[{ required: true }]}>
-              <Select
-                placeholder="Select class"
-                options={classes.map(c => ({ label: c.className, value: c.classId }))}
-              />
-            </Form.Item>
+            <>
+              <Form.Item name="classId" label="Class" rules={[{ required: true }]}>
+                <Select
+                  placeholder="Select class"
+                  options={classes.map(c => ({ label: c.className, value: c.classId }))}
+                  onChange={v => {
+                    form.setFieldValue('sectionId', null)
+                    loadSections(v)
+                  }}
+                />
+              </Form.Item>
+              <Form.Item name="sectionId" label="Section" tooltip="Leave blank to reach the whole class (all sections).">
+                <Select
+                  placeholder="All Sections (whole class)"
+                  allowClear
+                  options={sections.map(s => ({ label: s.sectionName, value: s.sectionId }))}
+                />
+              </Form.Item>
+            </>
           )}
           <Form.Item name="isPinned" label="Pin to top" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Form.Item
-            name="attachmentUrl"
-            label="Attachment URL (optional)"
-            extra="Google Drive or Cloudinary link to a PDF/doc. Users can download and view it."
-          >
-            <Input placeholder="https://drive.google.com/file/d/..." />
-          </Form.Item>
         </Form>
+
+        <div style={{ marginTop: 8 }}>
+          <Text strong>Attachments</Text>
+          {modal.editing
+            ? <div style={{ marginTop: 8 }}>
+                <MediaUploader entityType="announcement" entityId={modal.editing.announcementId} classes={['image', 'doc', 'audio']} max={3} />
+              </div>
+            : <div style={{ marginTop: 4 }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>Save the announcement first, then edit it to upload files.</Text>
+              </div>}
+        </div>
       </Modal>
     </div>
   )

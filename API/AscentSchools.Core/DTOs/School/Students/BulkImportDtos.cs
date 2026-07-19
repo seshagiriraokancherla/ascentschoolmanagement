@@ -40,9 +40,10 @@ namespace AscentSchools.Core.DTOs.School.Students
 
     public class StudentBulkRow
     {
-        public int    RowNumber     { get; set; }
-        public string AdmissionNo   { get; set; }
-        public string StudentName   { get; set; }
+        public int    RowNumber       { get; set; }
+        public int?   StudentUniqueId { get; set; }  // stable cross-year id (legacy StuUnqID); NULL for web CSV import
+        public string AdmissionNo     { get; set; }
+        public string StudentName     { get; set; }
         public string Gender        { get; set; }  // Male / Female / Other
         public string DateOfBirth   { get; set; }  // dd/MM/yyyy or yyyy-MM-dd
         public string AcademicYear  { get; set; }  // e.g. "2024-25"
@@ -61,15 +62,44 @@ namespace AscentSchools.Core.DTOs.School.Students
         public string JoiningClass  { get; set; }
         public string MotherTongue  { get; set; }
         public string Status        { get; set; }  // Active / Inactive (default Active)
+
+        // Extended fields carried by the sync tool from legacy (all optional; NULL for web CSV).
+        public string   JoinType             { get; set; }
+        public string   FatherOccupation     { get; set; }
+        public string   FatherEmploymentType { get; set; }
+        public string   MotherOccupation     { get; set; }
+        public string   DateOfJoining        { get; set; }  // dd/MM/yyyy
+        public string   Nationality          { get; set; }
+        public string   DoorNo               { get; set; }
+        public string   AddressArea          { get; set; }
+        public string   AddressCity          { get; set; }
+        public string   AddressState         { get; set; }
+        public string   PermanentAddress     { get; set; }
+        public string   Email                { get; set; }
+        public decimal? AnnualIncome         { get; set; }
+        public int?     FamilyChildrenCount  { get; set; }
+        public string   DobProofSubmitted    { get; set; }
+        public string   CasteCertSubmitted   { get; set; }
+        public string   TransportType        { get; set; }
+        public string   AdmissionDate        { get; set; }  // dd/MM/yyyy
+        public string   StudentType          { get; set; }
+        public string   BloodGroup           { get; set; }
+        public string   JoinTerm             { get; set; }
+        public string   FirstLanguage        { get; set; }
+        public string   ThirdLanguage        { get; set; }
+        public string   UdiseNo              { get; set; }
     }
 
     public class BulkStudentImportRequest
     {
         public List<StudentBulkRow> Rows { get; set; } = new List<StudentBulkRow>();
-        // When true: an existing (admission_no + academic_year) row is UPDATED (personal/contact
-        // fields only) instead of erroring. New students are still inserted. Default false keeps
-        // the strict insert-only behaviour used by the web-UI bulk import.
+        // When true: an existing (student_unique_id/admission_no + academic_year) row is UPDATED
+        // instead of erroring. New students are still inserted. Default false keeps the strict
+        // insert-only behaviour used by the web-UI bulk import.
         public bool Upsert { get; set; } = false;
+        // Who to stamp on created_by for inserted rows (e.g. "synctool"). Falls back to the
+        // authenticated user server-side when null. Never overwrites created_by on update.
+        public string CreatedBy { get; set; }
     }
 
     // ── Fee structure bulk import ─────────────────────────────────────────────

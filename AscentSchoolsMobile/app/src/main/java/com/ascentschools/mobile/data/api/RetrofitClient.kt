@@ -127,7 +127,8 @@ object RetrofitClient {
         OkHttpClient.Builder()
             .cookieJar(requireNotNull(_cookieJar))
             .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
             .build()
     }
 
@@ -143,22 +144,32 @@ object RetrofitClient {
         if (code.isNotBlank()) { b.header("X-School-Code", code); b.header("X-Subdomain", code) }
     }
 
-    private fun parseAccessToken(bodyStr: String?): String? =
-        bodyStr?.let { Gson().fromJson(it, JsonObject::class.java).getAsJsonObject("data")?.get("accessToken")?.asString }
+    private fun dataField(bodyStr: String?, field: String): String? =
+        bodyStr?.let { Gson().fromJson(it, JsonObject::class.java).getAsJsonObject("data")?.get(field)?.asString }
 
-    /** Calls the parent/teacher refresh endpoint with the persisted cookie; returns the
-     *  new access token, or null if refresh failed. For a parent, also re-selects the
-     *  last child so child-context endpoints keep working (refresh alone returns a
-     *  parent token with no child context). */
+    private fun parseAccessToken(bodyStr: String?): String? = dataField(bodyStr, "accessToken")
+
+    /** Calls the parent/teacher refresh endpoint, sending the app-held refresh token in
+     *  the X-Refresh-Token header (the HttpOnly cookie is unreliable across app kill).
+     *  Returns the new access token, or null if refresh failed. The server rotates the
+     *  refresh token — the new value is saved back to TokenStore. For a parent, also
+     *  re-selects the last child so child-context endpoints keep working (refresh alone
+     *  returns a parent token with no child context). */
     private fun refreshAccessToken(store: TokenStore): String? {
         val endpoint = if (store.userType == "teacher") "mobile/auth/teacher/refresh"
                        else "mobile/auth/parent/refresh"
         return runCatching {
             val refreshReq = Request.Builder().url(BASE_URL + endpoint)
-                .post(ByteArray(0).toRequestBody(null)).also { applySchoolHeaders(it, store) }.build()
+                .post(ByteArray(0).toRequestBody(null))
+                .header("X-Refresh-Token", store.refreshToken ?: "")
+                .also { applySchoolHeaders(it, store) }.build()
             var token = refreshClient.newCall(refreshReq).execute().use { resp ->
                 if (!resp.isSuccessful) return null
-                parseAccessToken(resp.body?.string())
+                val bodyStr = resp.body?.string()
+                // Persist the rotated refresh token so the next refresh doesn't reuse a
+                // revoked one.
+                dataField(bodyStr, "refreshToken")?.let { store.refreshToken = it }
+                parseAccessToken(bodyStr)
             } ?: return null
 
             // Parent: re-establish child context with the refreshed token.
@@ -219,8 +230,13 @@ object RetrofitClient {
                 chain.proceed(builder.build())
             }
             .addInterceptor(loggingInterceptor)
+            // Longer read timeout: request-otp blocks on the SMS gateway (smslogin.mobi),
+            // which is sometimes slow. Must stay > the API's gateway timeout (45s) so the
+            // server returns a real result/error before the app gives up.
             .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .callTimeout(75, TimeUnit.SECONDS)
             .build()
     }
 

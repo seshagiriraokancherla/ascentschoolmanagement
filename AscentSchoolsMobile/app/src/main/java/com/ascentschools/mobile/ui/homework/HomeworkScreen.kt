@@ -77,8 +77,6 @@ private fun HomeworkCard(hw: HomeworkDto) {
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                     }
                 }
-                Text("Due: ${hw.dueDate ?: ""}", fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }
 
             if (!hw.description.isNullOrBlank()) {
@@ -117,6 +115,11 @@ private fun HomeworkCard(hw: HomeworkDto) {
                         Text(att.fileName, fontSize = 12.sp, maxLines = 1)
                     }
                 }
+            }
+
+            if (hw.media?.isNotEmpty() == true) {
+                Spacer(Modifier.height(8.dp))
+                com.ascentschools.mobile.ui.components.MediaAttachments(hw.media)
             }
 
             Spacer(Modifier.height(6.dp))

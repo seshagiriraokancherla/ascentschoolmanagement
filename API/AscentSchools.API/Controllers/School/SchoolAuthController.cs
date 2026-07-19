@@ -1,4 +1,6 @@
+using AscentSchools.API.Filters;
 using AscentSchools.API.Helpers;
+using AscentSchools.API.Middleware;
 using AscentSchools.Core.DTOs.Auth;
 using AscentSchools.Core.Models;
 using AscentSchools.Data.ConnectionFactory;
@@ -155,6 +157,27 @@ namespace AscentSchools.API.Controllers.School
             var response = Request.CreateResponse(HttpStatusCode.OK, ApiResponse.Ok("Logged out."));
             ClearRefreshCookie(response);
             return response;
+        }
+
+        // POST school/auth/change-password — self-service (any authenticated school user).
+        [HttpPost, Route("change-password"), SchoolAuth]
+        public HttpResponseMessage ChangePassword([FromBody] ChangePasswordRequest request)
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.CurrentPassword) || string.IsNullOrWhiteSpace(request.NewPassword))
+                return Request.CreateResponse(HttpStatusCode.BadRequest, ApiResponse.Fail("Current and new password are required."));
+            if (request.NewPassword.Length < 6)
+                return Request.CreateResponse(HttpStatusCode.BadRequest, ApiResponse.Fail("New password must be at least 6 characters."));
+
+            var tenant = TenantContext.Current;   // populated (SchoolAuth guarantees non-null)
+            var user   = _auth.GetById(tenant.TenantDbName, tenant.UserId);
+            if (user == null)
+                return Request.CreateResponse(HttpStatusCode.Unauthorized, ApiResponse.Fail("User not found."));
+
+            if (user.PasswordHash != JwtHelper.HashRefreshToken(request.CurrentPassword))
+                return Request.CreateResponse(HttpStatusCode.BadRequest, ApiResponse.Fail("Current password is incorrect."));
+
+            _auth.UpdatePassword(tenant.TenantDbName, tenant.UserId, JwtHelper.HashRefreshToken(request.NewPassword));
+            return Request.CreateResponse(HttpStatusCode.OK, ApiResponse.Ok("Password changed. Please log in again."));
         }
 
         // ── Helpers ───────────────────────────────────────────────────────

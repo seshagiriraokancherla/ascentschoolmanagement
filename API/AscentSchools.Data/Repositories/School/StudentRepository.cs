@@ -172,7 +172,9 @@ namespace AscentSchools.Data.Repositories.School
                         s.third_language ThirdLanguage,
                         s.reference_name ReferenceName, s.remarks Remarks,
                         s.spare_field_1 SpareField1, s.spare_field_2 SpareField2,
-                        s.school_id SchoolId
+                        s.school_id SchoolId,
+                        s.created_by CreatedBy, s.created_at CreatedAt,
+                        s.updated_by UpdatedBy, s.updated_at UpdatedAt
                     FROM students s
                     LEFT JOIN classes        c   ON c.class_id         = s.class_id
                     LEFT JOIN sections      sec ON sec.section_id      = s.section_id
@@ -182,9 +184,35 @@ namespace AscentSchools.Data.Repositories.School
                     new { studentId, schoolId });
         }
 
+        // ── History (temporal audit trail, Phase 79) ──────────────────────
+        // Returns every version of the student row (current + history), newest first.
+        public System.Collections.Generic.IEnumerable<StudentHistoryDto> GetHistory(
+            string tenantDbName, int schoolId, long studentId)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.Query<StudentHistoryDto>(
+                    @"SELECT
+                        s.valid_from ValidFrom, s.valid_to ValidTo,
+                        s.created_by CreatedBy, s.updated_by UpdatedBy, s.updated_at UpdatedAt,
+                        s.admission_no AdmissionNo, s.student_name StudentName,
+                        s.gender Gender, s.date_of_birth DateOfBirth, s.blood_group BloodGroup,
+                        s.status Status, ay.academic_year AcademicYear,
+                        c.class_name ClassName, sec.section_name SectionName, s.roll_no RollNo,
+                        s.father_name FatherName, s.father_mobile FatherMobile,
+                        s.mother_name MotherName, s.mother_mobile MotherMobile,
+                        s.email Email, s.aadhar_no AadharNo
+                      FROM students FOR SYSTEM_TIME ALL AS s
+                      LEFT JOIN classes        c   ON c.class_id         = s.class_id
+                      LEFT JOIN sections       sec ON sec.section_id     = s.section_id
+                      LEFT JOIN academic_years ay  ON ay.academic_year_id = s.academic_year_id
+                      WHERE s.student_id = @studentId AND s.school_id = @schoolId
+                      ORDER BY s.valid_from DESC",
+                    new { studentId, schoolId });
+        }
+
         // ── Create ────────────────────────────────────────────────────────
 
-        public long Create(string tenantDbName, int schoolId, SaveStudentRequest r)
+        public long Create(string tenantDbName, int schoolId, SaveStudentRequest r, string createdBy = null)
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 return conn.QuerySingle<long>(
@@ -211,7 +239,7 @@ namespace AscentSchools.Data.Repositories.School
                         scholarship_status, scholarship_description,
                         mother_tongue, first_language, second_language, third_language,
                         reference_name, remarks, spare_field_1, spare_field_2,
-                        school_id
+                        school_id, created_by
                       ) VALUES (
                         (SELECT ISNULL(MAX(student_unique_id), 0) + 1 FROM students WHERE school_id = @schoolId),
                         @AdmissionNo, @SchoolUniqueId, @StudentName, @ShortName, @JoinType,
@@ -235,7 +263,7 @@ namespace AscentSchools.Data.Repositories.School
                         @ScholarshipStatus, @ScholarshipDescription,
                         @MotherTongue, @FirstLanguage, @SecondLanguage, @ThirdLanguage,
                         @ReferenceName, @Remarks, @SpareField1, @SpareField2,
-                        @schoolId
+                        @schoolId, @createdBy
                       );
                       SELECT CAST(SCOPE_IDENTITY() AS BIGINT)",
                     new
@@ -261,13 +289,13 @@ namespace AscentSchools.Data.Repositories.School
                         r.ScholarshipStatus, r.ScholarshipDescription,
                         r.MotherTongue, r.FirstLanguage, r.SecondLanguage, r.ThirdLanguage,
                         r.ReferenceName, r.Remarks, r.SpareField1, r.SpareField2,
-                        schoolId
+                        schoolId, createdBy
                     });
         }
 
         // ── Update ────────────────────────────────────────────────────────
 
-        public void Update(string tenantDbName, int schoolId, long studentId, SaveStudentRequest r)
+        public void Update(string tenantDbName, int schoolId, long studentId, SaveStudentRequest r, string updatedBy = null)
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 conn.Execute(
@@ -309,7 +337,8 @@ namespace AscentSchools.Data.Repositories.School
                         first_language = @FirstLanguage, second_language = @SecondLanguage,
                         third_language = @ThirdLanguage,
                         reference_name = @ReferenceName, remarks = @Remarks,
-                        spare_field_1 = @SpareField1, spare_field_2 = @SpareField2
+                        spare_field_1 = @SpareField1, spare_field_2 = @SpareField2,
+                        updated_by = @updatedBy, updated_at = GETDATE()
                       WHERE student_id = @studentId AND school_id = @schoolId",
                     new
                     {
@@ -334,7 +363,7 @@ namespace AscentSchools.Data.Repositories.School
                         r.ScholarshipStatus, r.ScholarshipDescription,
                         r.MotherTongue, r.FirstLanguage, r.SecondLanguage, r.ThirdLanguage,
                         r.ReferenceName, r.Remarks, r.SpareField1, r.SpareField2,
-                        studentId, schoolId
+                        studentId, schoolId, updatedBy
                     });
         }
 
@@ -483,12 +512,18 @@ namespace AscentSchools.Data.Repositories.School
 
         // ── Bulk import ───────────────────────────────────────────────────────
 
-        public BulkImportResult BulkCreate(string tenantDbName, int schoolId, BulkStudentImportRequest request)
+        public BulkImportResult BulkCreate(string tenantDbName, int schoolId, BulkStudentImportRequest request, string createdBy = null)
         {
             var result = new BulkImportResult { Total = request.Rows.Count };
+            bool isSync = string.Equals(createdBy, "synctool", System.StringComparison.OrdinalIgnoreCase);
 
             using (var conn = _db.GetTenantConnection(tenantDbName))
             {
+                // Default fee category for sync inserts ('General'; NULL if the school has none)
+                var generalFeeCategoryId = conn.ExecuteScalar<int?>(
+                    "SELECT TOP 1 fee_category_id FROM fee_categories WHERE category_name = 'General' AND school_id = @schoolId ORDER BY fee_category_id",
+                    new { schoolId });
+
                 // Build lookup maps once
                 var years    = conn.Query<BulkLookup>("SELECT academic_year_id AS Id, academic_year AS Name FROM academic_years WHERE school_id = @schoolId", new { schoolId });
                 var classes  = conn.Query<BulkLookup>("SELECT class_id AS Id, class_name AS Name FROM classes WHERE school_id = @schoolId", new { schoolId });
@@ -566,6 +601,13 @@ namespace AscentSchools.Data.Repositories.School
                         { AddError(result, row, row.AdmissionNo, $"Fee category '{row.FeeCategory}' not found"); continue; }
                         feeCategoryId = fcid;
                     }
+                    // Sync inserts with no explicit category default to 'General' (NULL if none exists).
+                    if (isSync && feeCategoryId == null)
+                        feeCategoryId = generalFeeCategoryId;
+
+                    // Extended optional dates (lenient — unparseable → NULL, row not failed)
+                    System.DateTime? doj     = TryParseDate(row.DateOfJoining);
+                    System.DateTime? admDate = TryParseDate(row.AdmissionDate);
 
                     // ── Parse optional date ───────────────────────────────────
                     System.DateTime? dob = null;
@@ -582,34 +624,76 @@ namespace AscentSchools.Data.Repositories.School
 
                     var status = string.IsNullOrWhiteSpace(row.Status) ? "Active" : row.Status.Trim();
 
-                    // ── Upsert: update existing (admission_no + academic_year) row ──
-                    // Personal/contact fields only — year-specific fields (class, section,
-                    // roll, fee category, status) are left untouched (managed elsewhere).
+                    // ── Upsert: update existing row for this student + academic year ──
+                    // Match on the STABLE student_unique_id + academic_year when the caller
+                    // provides it (sync tool) — this catches students whose admission_no
+                    // changed on promotion in the legacy system (UKG→1st etc.), which the
+                    // old admission_no match missed → duplicate inserts. When no unique id is
+                    // supplied (web CSV import), fall back to admission_no + academic_year.
+                    // On match we update personal/contact fields AND admission_no (it may have
+                    // changed); year-specific fields (class, section, roll, fee category,
+                    // status) are left untouched (managed elsewhere).
                     if (request.Upsert)
                     {
-                        var existingId = conn.ExecuteScalar<long?>(
-                            @"SELECT TOP 1 student_id FROM students
-                              WHERE admission_no = @admNo AND academic_year_id = @yearId AND school_id = @schoolId",
-                            new { admNo = row.AdmissionNo.Trim(), yearId = academicYearId, schoolId });
+                        long? existingId;
+                        if (row.StudentUniqueId.HasValue)
+                            existingId = conn.ExecuteScalar<long?>(
+                                @"SELECT TOP 1 student_id FROM students
+                                  WHERE student_unique_id = @uniqueId AND academic_year_id = @yearId AND school_id = @schoolId
+                                  ORDER BY student_id",
+                                new { uniqueId = row.StudentUniqueId.Value, yearId = academicYearId, schoolId });
+                        else
+                            existingId = conn.ExecuteScalar<long?>(
+                                @"SELECT TOP 1 student_id FROM students
+                                  WHERE admission_no = @admNo AND academic_year_id = @yearId AND school_id = @schoolId
+                                  ORDER BY student_id",
+                                new { admNo = row.AdmissionNo.Trim(), yearId = academicYearId, schoolId });
 
                         if (existingId.HasValue)
                         {
                             conn.Execute(@"
                                 UPDATE students SET
-                                    student_name  = @studentName,
-                                    gender        = @gender,
-                                    date_of_birth = @dob,
-                                    father_name   = @fatherName,
-                                    mother_name   = @motherName,
-                                    father_mobile = @fatherMobile,
-                                    mother_mobile = @motherMobile,
-                                    aadhar_no     = @aadharNo,
-                                    caste         = @caste,
-                                    caste_code    = @casteCode,
-                                    religion      = @religion,
-                                    mother_tongue = @motherTongue
+                                    admission_no           = @admissionNo,
+                                    student_name           = @studentName,
+                                    gender                 = @gender,
+                                    date_of_birth          = @dob,
+                                    father_name            = @fatherName,
+                                    mother_name            = @motherName,
+                                    father_mobile          = @fatherMobile,
+                                    mother_mobile          = @motherMobile,
+                                    aadhar_no              = @aadharNo,
+                                    caste                  = @caste,
+                                    caste_code             = @casteCode,
+                                    religion               = @religion,
+                                    mother_tongue          = @motherTongue,
+                                    join_type              = @joinType,
+                                    father_occupation      = @fatherOccupation,
+                                    father_employment_type = @fatherEmploymentType,
+                                    mother_occupation      = @motherOccupation,
+                                    date_of_joining        = @doj,
+                                    fee_category_id        = @feeCategoryId,
+                                    nationality            = @nationality,
+                                    door_no                = @doorNo,
+                                    address_area           = @addressArea,
+                                    address_city           = @addressCity,
+                                    address_state          = @addressState,
+                                    permanent_address      = @permanentAddress,
+                                    email                  = @email,
+                                    annual_income          = @annualIncome,
+                                    family_children_count  = @familyChildrenCount,
+                                    dob_proof_submitted    = @dobProofSubmitted,
+                                    caste_cert_submitted   = @casteCertSubmitted,
+                                    transport_type         = @transportType,
+                                    admission_date         = @admDate,
+                                    student_type           = @studentType,
+                                    blood_group            = @bloodGroup,
+                                    join_term              = @joinTerm,
+                                    first_language         = @firstLanguage,
+                                    third_language         = @thirdLanguage,
+                                    udise_no               = @udiseNo
                                 WHERE student_id = @existingId AND school_id = @schoolId",
                                 new {
+                                    admissionNo  = row.AdmissionNo.Trim(),
                                     studentName  = row.StudentName.Trim(),
                                     gender       = row.Gender,
                                     dob,
@@ -622,6 +706,31 @@ namespace AscentSchools.Data.Repositories.School
                                     casteCode    = row.CasteCode,
                                     religion     = row.Religion,
                                     motherTongue = row.MotherTongue,
+                                    joinType             = row.JoinType,
+                                    fatherOccupation     = row.FatherOccupation,
+                                    fatherEmploymentType = row.FatherEmploymentType,
+                                    motherOccupation     = row.MotherOccupation,
+                                    doj,
+                                    feeCategoryId,
+                                    nationality          = row.Nationality,
+                                    doorNo               = row.DoorNo,
+                                    addressArea          = row.AddressArea,
+                                    addressCity          = row.AddressCity,
+                                    addressState         = row.AddressState,
+                                    permanentAddress     = row.PermanentAddress,
+                                    email                = row.Email,
+                                    annualIncome         = row.AnnualIncome,
+                                    familyChildrenCount  = row.FamilyChildrenCount,
+                                    dobProofSubmitted    = row.DobProofSubmitted,
+                                    casteCertSubmitted   = row.CasteCertSubmitted,
+                                    transportType        = row.TransportType,
+                                    admDate,
+                                    studentType          = row.StudentType,
+                                    bloodGroup           = row.BloodGroup,
+                                    joinTerm             = row.JoinTerm,
+                                    firstLanguage        = row.FirstLanguage,
+                                    thirdLanguage        = row.ThirdLanguage,
+                                    udiseNo              = row.UdiseNo,
                                     existingId   = existingId.Value,
                                     schoolId
                                 });
@@ -639,22 +748,36 @@ namespace AscentSchools.Data.Repositories.School
                              fee_category_id, father_name, mother_name,
                              father_mobile, mother_mobile,
                              aadhar_no, caste, caste_code, religion,
-                             joining_class, mother_tongue, status)
+                             joining_class, mother_tongue, status,
+                             join_type, father_occupation, father_employment_type, mother_occupation,
+                             date_of_joining, nationality, door_no, address_area, address_city, address_state,
+                             permanent_address, email, annual_income, family_children_count,
+                             dob_proof_submitted, caste_cert_submitted, transport_type, admission_date,
+                             student_type, blood_group, join_term, first_language, third_language, udise_no,
+                             created_by)
                         VALUES
-                            (ISNULL(
-                                 (SELECT TOP 1 su.student_unique_id FROM students su
-                                  WHERE su.admission_no = @admissionNo AND su.school_id = @schoolId
-                                    AND su.student_unique_id IS NOT NULL
-                                  ORDER BY su.academic_year_id DESC),
-                                 (SELECT ISNULL(MAX(student_unique_id), 0) + 1 FROM students WHERE school_id = @schoolId)),
+                            (ISNULL(@providedUniqueId,
+                                 ISNULL(
+                                     (SELECT TOP 1 su.student_unique_id FROM students su
+                                      WHERE su.admission_no = @admissionNo AND su.school_id = @schoolId
+                                        AND su.student_unique_id IS NOT NULL
+                                      ORDER BY su.academic_year_id DESC),
+                                     (SELECT ISNULL(MAX(student_unique_id), 0) + 1 FROM students WHERE school_id = @schoolId))),
                              @schoolId, @admissionNo, @studentName, @gender, @dob,
                              @academicYearId, @classId, @sectionId, @rollNo,
                              @feeCategoryId, @fatherName, @motherName,
                              @fatherMobile, @motherMobile,
                              @aadharNo, @caste, @casteCode, @religion,
-                             @joiningClass, @motherTongue, @status)",
+                             @joiningClass, @motherTongue, @status,
+                             @joinType, @fatherOccupation, @fatherEmploymentType, @motherOccupation,
+                             @doj, @nationality, @doorNo, @addressArea, @addressCity, @addressState,
+                             @permanentAddress, @email, @annualIncome, @familyChildrenCount,
+                             @dobProofSubmitted, @casteCertSubmitted, @transportType, @admDate,
+                             @studentType, @bloodGroup, @joinTerm, @firstLanguage, @thirdLanguage, @udiseNo,
+                             @createdBy)",
                         new {
                             schoolId,
+                            providedUniqueId = row.StudentUniqueId,
                             admissionNo   = row.AdmissionNo.Trim(),
                             studentName   = row.StudentName.Trim(),
                             gender        = row.Gender,
@@ -674,6 +797,31 @@ namespace AscentSchools.Data.Repositories.School
                             religion      = row.Religion,
                             joiningClass  = row.JoiningClass,
                             motherTongue  = row.MotherTongue,
+                            joinType             = row.JoinType,
+                            fatherOccupation     = row.FatherOccupation,
+                            fatherEmploymentType = row.FatherEmploymentType,
+                            motherOccupation     = row.MotherOccupation,
+                            doj,
+                            nationality          = row.Nationality,
+                            doorNo               = row.DoorNo,
+                            addressArea          = row.AddressArea,
+                            addressCity          = row.AddressCity,
+                            addressState         = row.AddressState,
+                            permanentAddress     = row.PermanentAddress,
+                            email                = row.Email,
+                            annualIncome         = row.AnnualIncome,
+                            familyChildrenCount  = row.FamilyChildrenCount,
+                            dobProofSubmitted    = row.DobProofSubmitted,
+                            casteCertSubmitted   = row.CasteCertSubmitted,
+                            transportType        = row.TransportType,
+                            admDate,
+                            studentType          = row.StudentType,
+                            bloodGroup           = row.BloodGroup,
+                            joinTerm             = row.JoinTerm,
+                            firstLanguage        = row.FirstLanguage,
+                            thirdLanguage        = row.ThirdLanguage,
+                            udiseNo              = row.UdiseNo,
+                            createdBy,
                             status
                         });
 
@@ -738,6 +886,16 @@ namespace AscentSchools.Data.Repositories.School
                 Identifier  = admNo,
                 Reason      = reason
             });
+        }
+
+        // Lenient date parse for optional extended date fields — NULL when blank/unparseable.
+        private static System.DateTime? TryParseDate(string s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return null;
+            string[] formats = { "dd/MM/yyyy", "yyyy-MM-dd", "dd-MM-yyyy", "MM/dd/yyyy" };
+            return System.DateTime.TryParseExact(s.Trim(), formats,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var d) ? d : (System.DateTime?)null;
         }
     }
 

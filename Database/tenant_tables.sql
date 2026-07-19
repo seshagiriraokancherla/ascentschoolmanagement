@@ -675,6 +675,8 @@ CREATE TABLE students (
     school_id                   INT             NOT NULL,
     created_by                  VARCHAR(25)     NULL,
     created_at                  DATETIME        NOT NULL DEFAULT GETDATE(),
+    updated_by                  VARCHAR(25)     NULL,
+    updated_at                  DATETIME        NULL,
     machine_id                  VARCHAR(25)     NULL,
     deleted_by                  VARCHAR(60)     NULL,
     section_id                  INT             NULL,
@@ -690,6 +692,19 @@ CREATE TABLE students (
     CONSTRAINT FK_students_bus              FOREIGN KEY (bus_id)           REFERENCES buses(bus_id),
     CONSTRAINT FK_students_hostel           FOREIGN KEY (hostel_id)        REFERENCES hostels(hostel_id)
 );
+GO
+
+-- students → system-versioned temporal table (full-row audit trail in students_history).
+-- Every change from any path is snapshotted automatically; each history row carries
+-- updated_by/updated_at. Requires SQL Server 2016+. Query with FOR SYSTEM_TIME.
+ALTER TABLE students ADD
+    valid_from DATETIME2 GENERATED ALWAYS AS ROW START HIDDEN NOT NULL
+        CONSTRAINT DF_students_valid_from DEFAULT SYSUTCDATETIME(),
+    valid_to   DATETIME2 GENERATED ALWAYS AS ROW END   HIDDEN NOT NULL
+        CONSTRAINT DF_students_valid_to   DEFAULT CONVERT(DATETIME2, '9999-12-31 23:59:59.9999999'),
+    PERIOD FOR SYSTEM_TIME (valid_from, valid_to);
+GO
+ALTER TABLE students SET (SYSTEM_VERSIONING = ON (HISTORY_TABLE = dbo.students_history));
 GO
 
 
@@ -919,7 +934,7 @@ CREATE TABLE homework (
     class_id        INT             NULL,
     section_id      INT             NULL,       -- NULL = class-wide; set for section-specific homework
     assigned_date   DATE            NOT NULL DEFAULT CAST(GETDATE() AS DATE),
-    due_date        DATE            NOT NULL,
+    due_date        DATE            NULL,          -- retired; kept nullable for legacy rows
     school_id       INT             NOT NULL,
     status          VARCHAR(10)     NOT NULL DEFAULT 'Active',
     created_by      VARCHAR(100)    NOT NULL,
@@ -932,7 +947,10 @@ CREATE TABLE homework (
     CONSTRAINT FK_homework_class    FOREIGN KEY (class_id)   REFERENCES classes(class_id),
     CONSTRAINT FK_homework_section  FOREIGN KEY (section_id) REFERENCES sections(section_id)
 );
-CREATE INDEX IX_homework_class_due ON homework (class_id, due_date, school_id);
+-- Supports the paged web list (school-scoped, newest first) and the mobile feed
+-- (class + section + newest first). Ordered by assigned_date since due_date is retired.
+CREATE INDEX IX_homework_school_assigned ON homework (school_id, assigned_date DESC, homework_id DESC);
+CREATE INDEX IX_homework_class_assigned  ON homework (class_id, school_id, status, assigned_date DESC);
 GO
 
 
@@ -960,6 +978,7 @@ CREATE TABLE announcements (
     description     NVARCHAR(MAX)   NULL,
     scope           VARCHAR(10)     NOT NULL DEFAULT 'School',
     class_id        INT             NULL,
+    section_id      INT             NULL,       -- optional; NULL = whole class (all sections)
     is_pinned       BIT             NOT NULL DEFAULT 0,
     school_id       INT             NOT NULL,
     status          VARCHAR(10)     NOT NULL DEFAULT 'Active',
@@ -969,7 +988,8 @@ CREATE TABLE announcements (
     updated_at      DATETIME        NULL,
     attachment_url  VARCHAR(4000)   NULL,       -- optional PDF/doc link (Google Drive, Cloudinary)
     CONSTRAINT PK_announcements         PRIMARY KEY (announcement_id),
-    CONSTRAINT FK_announcements_class   FOREIGN KEY (class_id) REFERENCES classes(class_id)
+    CONSTRAINT FK_announcements_class   FOREIGN KEY (class_id) REFERENCES classes(class_id),
+    CONSTRAINT FK_announcements_section FOREIGN KEY (section_id) REFERENCES sections(section_id)
 );
 CREATE INDEX IX_announcements_school_date ON announcements (school_id, created_at DESC);
 GO
@@ -1002,7 +1022,7 @@ CREATE TABLE school_events (
     description     VARCHAR(1000)   NULL,
     event_date      DATE            NOT NULL,
     media_type      VARCHAR(10)     NOT NULL DEFAULT 'image',  -- image / video
-    media_url       VARCHAR(4000)   NOT NULL,                   -- Cloudinary URL or YouTube URL
+    media_url       VARCHAR(4000)   NULL,                       -- optional YouTube URL (R2 uploads live in media_uploads)
     thumbnail_url   VARCHAR(4000)   NULL,                       -- optional override thumbnail
     attachment_url  VARCHAR(4000)   NULL,                       -- optional PDF/doc link
     scope           VARCHAR(10)     NOT NULL DEFAULT 'School',  -- School / Class
@@ -1365,4 +1385,160 @@ CREATE TABLE exam_master (
     CONSTRAINT FK_exam_master_subject    FOREIGN KEY (subject_id)       REFERENCES subjects(subject_id),
     CONSTRAINT FK_exam_master_grade_type FOREIGN KEY (grade_type_id)    REFERENCES grade_types(id)
 );
+GO
+
+
+-- ============================================================
+-- 47. r2_configs
+--     Per-school Cloudflare R2 (S3-compatible) storage credentials.
+--     secret_access_key is never returned by the GET endpoint.
+--     One bucket per school; folders: student-images/, homeworks/{year}/{id}/,
+--     announcements/{id}/, events/{id}/.
+-- ============================================================
+CREATE TABLE r2_configs (
+    config_id         INT           NOT NULL IDENTITY(1,1),
+    school_id         INT           NOT NULL,
+    account_id        VARCHAR(100)  NOT NULL,   -- Cloudflare account id (S3 endpoint host)
+    access_key_id     VARCHAR(200)  NOT NULL,
+    secret_access_key VARCHAR(500)  NOT NULL,   -- never returned by GET
+    bucket_name       VARCHAR(100)  NOT NULL,
+    public_base_url   VARCHAR(300)  NOT NULL,   -- e.g. https://pub-xxx.r2.dev (no trailing slash)
+    is_enabled        BIT           NOT NULL DEFAULT 1,
+    created_by        VARCHAR(150)  NULL,
+    updated_at        DATETIME      NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT PK_r2_configs        PRIMARY KEY (config_id),
+    CONSTRAINT UQ_r2_configs_school UNIQUE (school_id)
+);
+GO
+
+
+-- ============================================================
+-- 48. media_uploads
+--     Generic R2-uploaded files for homework / announcements / events.
+--     file_url is the R2 public URL; shown to parents in the mobile app.
+-- ============================================================
+CREATE TABLE media_uploads (
+    upload_id    INT           NOT NULL IDENTITY(1,1),
+    entity_type  VARCHAR(20)   NOT NULL,     -- homework | announcement | event
+    entity_id    BIGINT        NOT NULL,
+    file_name    VARCHAR(300)  NOT NULL,
+    file_url     VARCHAR(1000) NOT NULL,     -- R2 public URL
+    file_type    VARCHAR(20)   NULL,         -- image | doc | audio | video
+    file_size_kb INT           NULL,
+    school_id    INT           NOT NULL,
+    created_by   VARCHAR(150)  NULL,
+    created_at   DATETIME      NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT PK_media_uploads PRIMARY KEY (upload_id)
+);
+CREATE INDEX IX_media_uploads_entity ON media_uploads (entity_type, entity_id);
+GO
+
+-- ============================================================
+-- 49. class_teacher_assignments
+--     Maps a class (+ optional section) to its teacher(s) for an academic year.
+--     section_id NULL = the assignment covers the whole class (all sections).
+--     Several teachers may share one class+section; any of them can reply to a
+--     parent's message. Unassigning is a hard DELETE — message history is kept
+--     on the messages rows themselves, not here.
+-- ============================================================
+CREATE TABLE class_teacher_assignments (
+    assignment_id    INT          NOT NULL IDENTITY(1,1),
+    academic_year_id INT          NOT NULL,
+    class_id         INT          NOT NULL,
+    section_id       INT          NULL,        -- NULL = whole class (all sections)
+    user_id          INT          NOT NULL,    -- teacher login (users.user_id)
+    school_id        INT          NOT NULL,
+    created_by       VARCHAR(150) NULL,
+    created_at       DATETIME     NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT PK_class_teacher_assignments PRIMARY KEY (assignment_id),
+    CONSTRAINT FK_cta_academic_year FOREIGN KEY (academic_year_id) REFERENCES academic_years(academic_year_id),
+    CONSTRAINT FK_cta_class         FOREIGN KEY (class_id)         REFERENCES classes(class_id),
+    CONSTRAINT FK_cta_section       FOREIGN KEY (section_id)       REFERENCES sections(section_id),
+    CONSTRAINT FK_cta_user          FOREIGN KEY (user_id)          REFERENCES users(user_id)
+);
+GO
+-- One row per teacher per class+section. TWO filtered indexes, not one: SQL Server
+-- treats NULLs as distinct in a plain unique index, so a single index would let the
+-- same teacher be assigned to the same class twice whenever section_id IS NULL.
+CREATE UNIQUE INDEX UQ_cta_section ON class_teacher_assignments
+    (school_id, academic_year_id, class_id, section_id, user_id) WHERE section_id IS NOT NULL;
+GO
+CREATE UNIQUE INDEX UQ_cta_class ON class_teacher_assignments
+    (school_id, academic_year_id, class_id, user_id) WHERE section_id IS NULL;
+GO
+CREATE INDEX IX_cta_lookup ON class_teacher_assignments (school_id, academic_year_id, class_id, section_id);
+GO
+
+-- ============================================================
+-- 50. message_threads
+--     One continuous parent <-> teacher conversation per child.
+--     Keyed on student_unique_id (STABLE across promotions), NOT student_id,
+--     which is a fresh IDENTITY row each academic year.
+--     parent_id points at ascent_master.parent_accounts — cross-DB, so no FK.
+--     Which teachers see a thread is resolved LIVE from the student's current
+--     class+section via class_teacher_assignments, so promotion re-routes it.
+-- ============================================================
+CREATE TABLE message_threads (
+    thread_id         INT          NOT NULL IDENTITY(1,1),
+    student_unique_id INT          NOT NULL,   -- stable cross-year student id
+    parent_id         INT          NOT NULL,   -- master DB parent_accounts.parent_id (no FK: other DB)
+    status            VARCHAR(10)  NOT NULL DEFAULT 'Active',  -- Active | Blocked
+    blocked_by_type   VARCHAR(10)  NULL,       -- parent | teacher
+    blocked_by_id     INT          NULL,
+    blocked_at        DATETIME     NULL,
+    last_message_at   DATETIME     NULL,
+    school_id         INT          NOT NULL,
+    created_at        DATETIME     NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT PK_message_threads PRIMARY KEY (thread_id),
+    CONSTRAINT UQ_message_threads_student_parent UNIQUE (school_id, student_unique_id, parent_id)
+);
+CREATE INDEX IX_message_threads_recent ON message_threads (school_id, last_message_at DESC);
+GO
+
+-- ============================================================
+-- 51. messages
+--     sender_id is a parent_accounts.parent_id OR a users.user_id depending on
+--     sender_type — no FK for that reason. sender_name is a display snapshot so
+--     history survives a staff member leaving.
+--     status Removed = hidden by an admin after a report (Play UGC requirement).
+-- ============================================================
+CREATE TABLE messages (
+    message_id  INT           NOT NULL IDENTITY(1,1),
+    thread_id   INT           NOT NULL,
+    sender_type VARCHAR(10)   NOT NULL,   -- parent | teacher
+    sender_id   INT           NOT NULL,   -- parent_id or users.user_id (per sender_type)
+    sender_name VARCHAR(150)  NULL,       -- display snapshot at send time
+    body        VARCHAR(2000) NOT NULL,
+    status      VARCHAR(10)   NOT NULL DEFAULT 'Active',  -- Active | Removed
+    read_at     DATETIME      NULL,       -- when the OTHER side first read it
+    school_id   INT           NOT NULL,
+    created_at  DATETIME      NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT PK_messages        PRIMARY KEY (message_id),
+    CONSTRAINT FK_messages_thread FOREIGN KEY (thread_id) REFERENCES message_threads(thread_id)
+);
+CREATE INDEX IX_messages_thread ON messages (thread_id, created_at);
+GO
+
+-- ============================================================
+-- 52. message_reports
+--     Play Store UGC requirement: either party can report a message, and an
+--     admin must have a path to review and remove it (school web app).
+-- ============================================================
+CREATE TABLE message_reports (
+    report_id        INT          NOT NULL IDENTITY(1,1),
+    message_id       INT          NOT NULL,
+    thread_id        INT          NOT NULL,
+    reported_by_type VARCHAR(10)  NOT NULL,   -- parent | teacher
+    reported_by_id   INT          NOT NULL,
+    reason           VARCHAR(500) NULL,
+    status           VARCHAR(10)  NOT NULL DEFAULT 'Open',  -- Open | Reviewed | Removed
+    reviewed_by      VARCHAR(150) NULL,
+    reviewed_at      DATETIME     NULL,
+    school_id        INT          NOT NULL,
+    created_at       DATETIME     NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT PK_message_reports         PRIMARY KEY (report_id),
+    CONSTRAINT FK_message_reports_message FOREIGN KEY (message_id) REFERENCES messages(message_id),
+    CONSTRAINT FK_message_reports_thread  FOREIGN KEY (thread_id)  REFERENCES message_threads(thread_id)
+);
+CREATE INDEX IX_message_reports_open ON message_reports (school_id, status, created_at DESC);
 GO

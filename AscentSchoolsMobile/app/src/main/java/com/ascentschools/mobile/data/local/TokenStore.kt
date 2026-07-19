@@ -28,8 +28,16 @@ class TokenStore(context: Context) {
         get()      = prefs.getString(KEY_ACCESS_TOKEN, null)
         set(value) = prefs.edit().putString(KEY_ACCESS_TOKEN, value).apply()
 
-    // Refresh token is stored as an HttpOnly cookie by the server.
-    // We store only the session metadata here.
+    /**
+     * Raw refresh token, held by the app and sent explicitly in the X-Refresh-Token
+     * header on refresh. This is the load-bearing session-persistence mechanism —
+     * the server's HttpOnly cookie is unreliable across app kill on Android.
+     * The server ROTATES this on every refresh, so it must be re-saved from each
+     * refresh/login response. Cleared on logout.
+     */
+    var refreshToken: String?
+        get()      = prefs.getString(KEY_REFRESH_TOKEN, null)
+        set(value) = prefs.edit().putString(KEY_REFRESH_TOKEN, value).apply()
 
     var tokenType: String?
         get()      = prefs.getString(KEY_TOKEN_TYPE, null)
@@ -120,6 +128,7 @@ class TokenStore(context: Context) {
 
     companion object {
         private const val KEY_ACCESS_TOKEN  = "access_token"
+        private const val KEY_REFRESH_TOKEN = "refresh_token"
         private const val KEY_TOKEN_TYPE    = "token_type"
         private const val KEY_USER_TYPE     = "user_type"
         private const val KEY_STUDENT_NAME  = "student_name"

@@ -43,6 +43,8 @@ import SMSPage                    from './pages/sms/SMSPage'
 import FeeConcessionPage          from './pages/fee/FeeConcessionPage'
 import SchoolSettingsPage         from './pages/settings/SchoolSettingsPage'
 import SmsGatewayPage             from './pages/settings/SmsGatewayPage'
+import MessageReportsPage         from './pages/settings/MessageReportsPage'
+import R2StoragePage              from './pages/settings/R2StoragePage'
 import NoAccess                   from './pages/NoAccess'
 import { PATH_PERM }              from './config/permissions'
 
@@ -192,6 +194,8 @@ function App() {
               <Route path="settings/users"           element={<Protected path="/settings/users"><UsersPage /></Protected>} />
               <Route path="settings/payment-gateway" element={<Protected path="/settings/payment-gateway"><GatewaySettingsPage /></Protected>} />
               <Route path="settings/sms-gateway"     element={<Protected path="/settings/sms-gateway"><SmsGatewayPage /></Protected>} />
+              <Route path="settings/message-reports" element={<Protected path="/settings/message-reports"><MessageReportsPage /></Protected>} />
+              <Route path="settings/r2-storage"      element={<Protected path="/settings/r2-storage"><R2StoragePage /></Protected>} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

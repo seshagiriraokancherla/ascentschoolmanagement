@@ -39,7 +39,12 @@ namespace AscentSyncTool.Data
                     @"SELECT StuAmnNo, StuName, StuGender, StuDOB, StuAcdYear, StuClassNam,
                              StuSect, StuClassRolNo, StuFatherName, StuMotherName,
                              StuMobile1, StuMobile2, StuAdarNo, StuCaste, StuCasteCode,
-                             StuReligion, StuStartClass, MothrLang, StuStatus, CrtDat
+                             StuReligion, StuStartClass, MothrLang, StuStatus, StuUnqID,
+                             StuJoinTyp, StuFatherOccup, StuFatherEmpTyp, StuMotherOccup, StuDOJ,
+                             StuNationlity, StuDoorNo, StuAddrArea, StuAddrCity, StuAddrState,
+                             StuAddrPerminent, StuMailID, StuAnnualIncome, StuFamilyChildres,
+                             StuDOBStat, StuCasteStat, StuTransportTyp, AdminDate, StudentType,
+                             BloodGrp, JoinTerm, StuFirstLang, StuThirdLang, StuUdiseNo, CrtDat
                       FROM SAS_StudentMaster
                       WHERE CrtDat >= @from AND CrtDat < @toExclusive
                       ORDER BY CrtDat",

@@ -92,21 +92,20 @@ export default function SubjectHomeworkReport() {
 
       autoTable(doc, {
         startY: y,
-        head:   [['Due Date', 'Class', 'Title', 'Description', 'Assigned Date', 'By']],
+        head:   [['Class', 'Title', 'Description', 'Assigned Date', 'By']],
         body:   group.map(r => [
-          r.dueDate, r.className, r.title,
+          r.className, r.title,
           r.description || '',
           r.assignedDate, r.assignedBy,
         ]),
         styles:     { fontSize: 8, cellPadding: 2 },
         headStyles: { fillColor: [230, 240, 255], textColor: 0, fontStyle: 'bold' },
         columnStyles: {
-          0: { cellWidth: 20 },
-          1: { cellWidth: 22 },
-          2: { cellWidth: 40 },
-          3: { cellWidth: 58 },
-          4: { cellWidth: 20 },
-          5: { cellWidth: 20 },
+          0: { cellWidth: 24 },
+          1: { cellWidth: 44 },
+          2: { cellWidth: 62 },
+          3: { cellWidth: 24 },
+          4: { cellWidth: 24 },
         },
         margin: { left: 14, right: 14 },
       })
@@ -123,9 +122,9 @@ export default function SubjectHomeworkReport() {
   const handleCsv = () => {
     if (!rows?.length) { message.warning('No data to export.'); return }
     exportCsv({
-      columns: ['Subject', 'Due Date', 'Assigned Date', 'Class', 'Title', 'Description', 'Assigned By'],
+      columns: ['Subject', 'Assigned Date', 'Class', 'Title', 'Description', 'Assigned By'],
       rows:    rows.map(r => [
-        r.subjectName, r.dueDate, r.assignedDate,
+        r.subjectName, r.assignedDate,
         r.className, r.title, r.description || '', r.assignedBy,
       ]),
       fileName: 'subject_homework_report.csv',
@@ -135,7 +134,6 @@ export default function SubjectHomeworkReport() {
   // ── Table columns (inside each subject group) ──────────────────────────────
 
   const columns = [
-    { title: 'Due Date',     dataIndex: 'dueDate',     width: 100 },
     { title: 'Class',        dataIndex: 'className',   width: 100 },
     { title: 'Title',        dataIndex: 'title',       width: 200, ellipsis: true },
     { title: 'Description',  dataIndex: 'description', ellipsis: true,
@@ -153,7 +151,7 @@ export default function SubjectHomeworkReport() {
             format="DD-MM-YYYY"
             value={dates}
             onChange={v => { setDates(v); setRows(null) }}
-            placeholder={['Due From *', 'Due To *']}
+            placeholder={['From *', 'To *']}
             allowClear
           />
         </Col>

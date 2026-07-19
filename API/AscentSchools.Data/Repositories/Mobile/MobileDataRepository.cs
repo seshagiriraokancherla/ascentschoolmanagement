@@ -1,9 +1,11 @@
 using AscentSchools.Core.DTOs.Mobile.Data;
 using AscentSchools.Core.DTOs.School.Events;
+using AscentSchools.Core.DTOs.School.Media;
 using AscentSchools.Data.ConnectionFactory;
 using Dapper;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 
 namespace AscentSchools.Data.Repositories.Mobile
@@ -155,7 +157,7 @@ namespace AscentSchools.Data.Repositories.Mobile
                         AND h.school_id = @schoolId
                         AND h.status    = 'Active'
                         AND (h.section_id IS NULL OR h.section_id = @sectionId)
-                      ORDER BY h.due_date DESC",
+                      ORDER BY h.assigned_date DESC, h.homework_id DESC",
                     new { classId, sectionId, schoolId, count }).ToList();
 
                 if (!homeworks.Any()) return new List<HomeworkDto>();
@@ -167,6 +169,7 @@ namespace AscentSchools.Data.Repositories.Mobile
                       FROM homework_attachments
                       WHERE homework_id IN @ids",
                     new { ids }).ToLookup(a => a.HomeworkId);
+                var media = LoadMedia(conn, "homework", ids.Select(i => (long)i));
 
                 return homeworks.Select(h => new HomeworkDto
                 {
@@ -183,7 +186,8 @@ namespace AscentSchools.Data.Repositories.Mobile
                         FileName     = a.FileName,
                         FilePath     = a.FilePath,
                         FileSizeKb   = a.FileSizeKb
-                    }).ToList()
+                    }).ToList(),
+                    Media         = media[h.HomeworkId].ToList()
                 }).ToList();
             }
         }
@@ -193,7 +197,8 @@ namespace AscentSchools.Data.Repositories.Mobile
         public IEnumerable<SchoolEventDto> GetEvents(string tenantDbName, int schoolId, int? classId, int count = 50)
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
-                return conn.Query<SchoolEventDto>(
+            {
+                var events = conn.Query<SchoolEventDto>(
                     @"SELECT TOP (@count)
                         event_id      EventId,
                         title         Title,
@@ -210,29 +215,54 @@ namespace AscentSchools.Data.Repositories.Mobile
                         AND status    = 'Active'
                         AND (scope = 'School' OR (scope = 'Class' AND class_id = @classId))
                       ORDER BY is_pinned DESC, event_date DESC",
-                    new { schoolId, classId, count });
+                    new { schoolId, classId, count }).ToList();
+
+                var media = LoadMedia(conn, "event", events.Select(e => (long)e.EventId));
+                foreach (var e in events) e.Media = media[e.EventId].ToList();
+                return events;
+            }
         }
 
         // ── Announcements ─────────────────────────────────────────────────
 
-        public IEnumerable<AnnouncementDto> GetAnnouncements(string tenantDbName, int schoolId, int? classId, int count = 30)
+        public IEnumerable<AnnouncementDto> GetAnnouncements(string tenantDbName, int schoolId, int? classId, int? sectionId = null, int count = 30)
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
-                return conn.Query<AnnouncementDto>(
+            {
+                var anns = conn.Query<AnnouncementDto>(
                     @"SELECT TOP (@count)
                         announcement_id AnnouncementId,
                         title           Title,
                         description     Description,
                         scope           Scope,
                         is_pinned       IsPinned,
-                        attachment_url  AttachmentUrl,
                         created_at      CreatedAt
                       FROM announcements
                       WHERE school_id = @schoolId
                         AND status    = 'Active'
                         AND (scope = 'School' OR (scope = 'Class' AND class_id = @classId))
+                        AND (section_id IS NULL OR section_id = @sectionId)
                       ORDER BY is_pinned DESC, created_at DESC",
-                    new { schoolId, classId, count });
+                    new { schoolId, classId, sectionId, count }).ToList();
+
+                var media = LoadMedia(conn, "announcement", anns.Select(a => (long)a.AnnouncementId));
+                foreach (var a in anns) a.Media = media[a.AnnouncementId].ToList();
+                return anns;
+            }
+        }
+
+        // R2 uploads (media_uploads) for a set of entity ids, grouped by entity_id.
+        private static ILookup<long, MediaUploadDto> LoadMedia(IDbConnection conn, string entityType, IEnumerable<long> ids)
+        {
+            var list = ids?.Distinct().ToList() ?? new List<long>();
+            if (list.Count == 0) return Enumerable.Empty<MediaUploadDto>().ToLookup(m => m.EntityId);
+            return conn.Query<MediaUploadDto>(
+                @"SELECT upload_id UploadId, entity_type EntityType, entity_id EntityId,
+                         file_name FileName, file_url FileUrl, file_type FileType, file_size_kb FileSizeKb
+                  FROM media_uploads
+                  WHERE entity_type = @entityType AND entity_id IN @ids
+                  ORDER BY upload_id",
+                new { entityType, ids = list }).ToLookup(m => m.EntityId);
         }
 
         // ── Internal row types ────────────────────────────────────────────
@@ -256,8 +286,8 @@ namespace AscentSchools.Data.Repositories.Mobile
             public string   Title         { get; set; }
             public string   Description   { get; set; }
             public string   SubjectName   { get; set; }
-            public DateTime AssignedDate  { get; set; }
-            public DateTime DueDate       { get; set; }
+            public DateTime  AssignedDate  { get; set; }
+            public DateTime? DueDate       { get; set; }   // retired — may be NULL
             public string   AttachmentUrl { get; set; }
         }
 
