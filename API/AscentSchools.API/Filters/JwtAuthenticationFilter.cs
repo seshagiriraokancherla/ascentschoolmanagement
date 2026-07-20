@@ -60,7 +60,15 @@ namespace AscentSchools.API.Filters
             var principal = JwtHelper.ValidateAccessToken(auth.Parameter);
             if (principal == null)
             {
-                context.ErrorResult = new UnauthorizedResult(request, "Invalid or expired token.");
+                // Token present but invalid/expired. Do NOT reject here.
+                // This is an authentication filter and runs on EVERY request, including
+                // [AllowAnonymous] endpoints. The mobile/web refresh endpoints are
+                // AllowAnonymous and are called on cold start with the just-expired access
+                // token still attached by the HTTP client — rejecting here made every
+                // silent-refresh 401 → forced daily OTP re-login (real SMS cost).
+                // Treat an invalid token like "no token": leave the principal unset and let
+                // each endpoint's auth attribute (SchoolAuth/MobileAuth/…) return 401 if it
+                // actually requires a valid token.
                 return;
             }
 
@@ -139,7 +147,8 @@ namespace AscentSchools.API.Filters
             var claims = JwtHelper.ExtractClaims(principal);
             if (claims == null)
             {
-                context.ErrorResult = new UnauthorizedResult(request, "Invalid or expired token.");
+                // Same rule as above: don't short-circuit here. Leave TenantContext unset
+                // and let the endpoint's auth attribute return 401 if it requires a valid token.
                 return;
             }
 

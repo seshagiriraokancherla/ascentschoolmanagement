@@ -305,12 +305,13 @@ namespace AscentSchools.API.Controllers.Mobile
             if (parent == null || !parent.IsActive)
                 return Fail(HttpStatusCode.Unauthorized, "Account inactive.");
 
-            var newRaw  = JwtHelper.GenerateRefreshToken();
-            var newHash = JwtHelper.HashRefreshToken(newRaw);
-            _parentAuth.RevokeRefreshToken(record.TokenId, newHash);
-            _parentAuth.CreateRefreshToken(record.ParentId, newHash, JwtHelper.MobileRefreshTokenExpiry());
+            // Do NOT rotate the mobile refresh token — keep it stable for its full 365-day
+            // life and just slide the expiry forward (sliding window). Rotation revokes the
+            // old token on every refresh; if a device ever fails to persist the rotated value
+            // it gets logged out. A stable token removes that entire failure class.
+            _parentAuth.ExtendRefreshToken(record.TokenId, JwtHelper.MobileRefreshTokenExpiry());
 
-            return BuildParentAuthResponse(record.ParentId, parent.FullName, isLogin: false, rawRefresh: newRaw);
+            return BuildParentAuthResponse(record.ParentId, parent.FullName, isLogin: false, rawRefresh: rawToken);
         }
 
         // POST mobile/auth/parent/logout

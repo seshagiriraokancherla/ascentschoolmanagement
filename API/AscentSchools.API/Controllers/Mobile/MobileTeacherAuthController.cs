@@ -89,13 +89,12 @@ namespace AscentSchools.API.Controllers.Mobile
 
             var schoolId = GetSchoolId(tenant.DbName);
 
-            // Rotate
-            var newRaw  = JwtHelper.GenerateRefreshToken();
-            var newHash = JwtHelper.HashRefreshToken(newRaw);
-            _auth.RevokeRefreshToken(tenant.DbName, record.TokenId, newHash);
-            _auth.CreateRefreshToken(tenant.DbName, record.UserId, newHash, JwtHelper.MobileRefreshTokenExpiry());
+            // Stable refresh token — slide the expiry forward instead of rotating, so a
+            // device that fails to persist a rotated token is never logged out (matches the
+            // parent flow). The web school app still rotates (it uses a different endpoint).
+            _auth.ExtendRefreshToken(tenant.DbName, record.TokenId, JwtHelper.MobileRefreshTokenExpiry());
 
-            return BuildTeacherAuthResponse(tenant, user.UserId, user.FullName, schoolId, newRaw);
+            return BuildTeacherAuthResponse(tenant, user.UserId, user.FullName, schoolId, rawToken);
         }
 
         // POST mobile/auth/teacher/logout

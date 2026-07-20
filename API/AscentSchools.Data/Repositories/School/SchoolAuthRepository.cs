@@ -102,6 +102,16 @@ namespace AscentSchools.Data.Repositories.School
                     "UPDATE refresh_tokens SET revoked_at = GETDATE(), replaced_by = @replacedByHash WHERE token_id = @tokenId",
                     new { tokenId, replacedByHash });
         }
+
+        /// <summary>Slides the expiry forward without rotating (stable mobile teacher refresh token).
+        /// Only used by the teacher mobile refresh path — the web school app still rotates.</summary>
+        public void ExtendRefreshToken(string tenantDbName, int tokenId, DateTime expiresAt)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                conn.Execute(
+                    "UPDATE refresh_tokens SET expires_at = @expiresAt WHERE token_id = @tokenId AND revoked_at IS NULL",
+                    new { tokenId, expiresAt });
+        }
     }
 
     public class SchoolRefreshTokenRecord

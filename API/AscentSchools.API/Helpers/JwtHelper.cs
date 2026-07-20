@@ -32,6 +32,19 @@ namespace AscentSchools.API.Helpers
             }
         }
 
+        // Mobile access token lifetime — separate from the web/control access token
+        // (Jwt:AccessTokenMins) so staff/admin web sessions stay short (revocable) while
+        // the mobile app carries a long-lived access token. Defaults to 15 days (21600 min)
+        // when the config key is absent.
+        private static int    MobileAccessMins
+        {
+            get
+            {
+                var v = ConfigurationManager.AppSettings["Jwt:MobileAccessTokenMins"];
+                return int.TryParse(v, out var m) && m > 0 ? m : 21600;
+            }
+        }
+
         private static SymmetricSecurityKey SigningKey =>
             new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Secret));
 
@@ -182,7 +195,7 @@ namespace AscentSchools.API.Helpers
                 new Claim("admissionNo", claims.AdmissionNo ?? ""),
             };
 
-            return BuildToken(claimsList, AccessMins);
+            return BuildToken(claimsList, MobileAccessMins);
         }
 
         /// <summary>Issues a parent-init token (tokenType=parent) with no child context yet.</summary>
@@ -202,7 +215,7 @@ namespace AscentSchools.API.Helpers
                 new Claim("admissionNo", claims.AdmissionNo ?? ""),
             };
 
-            return BuildToken(claimsList, AccessMins);
+            return BuildToken(claimsList, MobileAccessMins);
         }
 
         public static MobileStudentClaims ExtractMobileStudentClaims(ClaimsPrincipal principal)
@@ -262,7 +275,7 @@ namespace AscentSchools.API.Helpers
                 new Claim("dbName",    dbName   ?? ""),
                 new Claim("fullName",  fullName ?? ""),
             };
-            return BuildToken(claimsList, AccessMins);
+            return BuildToken(claimsList, MobileAccessMins);
         }
 
         private static string BuildToken(List<Claim> claims, int expiryMinutes)
