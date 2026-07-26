@@ -16,4 +16,6 @@
 SCHOOL_CODE =
 APP_DISPLAY_NAME = CHAK IN
 PRODUCT_BUNDLE_IDENTIFIER = in.educare.app
-ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon
+// Per-flavor icon set added in Assets.xcassets (Step 2a). If the set is missing
+// this build will fail the asset-catalog step — create `AppIcon-Chakin` first.
+ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon-Chakin
