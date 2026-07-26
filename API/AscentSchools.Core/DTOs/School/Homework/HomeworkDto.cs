@@ -14,8 +14,8 @@ namespace AscentSchools.Core.DTOs.School.Homework
         public string   ClassName     { get; set; }
         public int?     SectionId     { get; set; }
         public string   SectionName   { get; set; }
-        public DateTime AssignedDate  { get; set; }
-        public DateTime DueDate       { get; set; }
+        public DateTime  AssignedDate  { get; set; }
+        public DateTime? DueDate       { get; set; }   // retired — null for new homework
         public string   Status        { get; set; }
         public string   AttachmentUrl { get; set; }
         public string   CreatedBy     { get; set; }
@@ -29,8 +29,8 @@ namespace AscentSchools.Core.DTOs.School.Homework
         public int?     SubjectId     { get; set; }
         public int?     ClassId       { get; set; }
         public int?     SectionId     { get; set; }
-        public DateTime AssignedDate  { get; set; }
-        public DateTime DueDate       { get; set; }
+        public DateTime  AssignedDate  { get; set; }
+        public DateTime? DueDate       { get; set; }   // retired — clients no longer send it
         public string   AttachmentUrl { get; set; }
     }
 

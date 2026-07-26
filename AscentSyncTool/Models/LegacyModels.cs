@@ -42,6 +42,32 @@ namespace AscentSyncTool.Models
         public string    StuStartClass  { get; set; }
         public string    MothrLang      { get; set; }
         public string    StuStatus      { get; set; }   // A / D
+        public double?   StuUnqID       { get; set; }   // stable cross-year id (float in legacy) → student_unique_id
+        // Extended fields (→ new-DB columns via the bulk API)
+        public string    StuJoinTyp        { get; set; }
+        public string    StuFatherOccup    { get; set; }
+        public string    StuFatherEmpTyp   { get; set; }
+        public string    StuMotherOccup    { get; set; }
+        public DateTime? StuDOJ            { get; set; }
+        public string    StuNationlity     { get; set; }
+        public string    StuDoorNo         { get; set; }
+        public string    StuAddrArea       { get; set; }
+        public string    StuAddrCity       { get; set; }
+        public string    StuAddrState      { get; set; }
+        public string    StuAddrPerminent  { get; set; }
+        public string    StuMailID         { get; set; }
+        public decimal?  StuAnnualIncome   { get; set; }
+        public string    StuFamilyChildres { get; set; }
+        public string    StuDOBStat        { get; set; }
+        public string    StuCasteStat      { get; set; }
+        public string    StuTransportTyp   { get; set; }
+        public DateTime? AdminDate         { get; set; }
+        public string    StudentType       { get; set; }
+        public string    BloodGrp          { get; set; }
+        public string    JoinTerm          { get; set; }
+        public string    StuFirstLang      { get; set; }
+        public string    StuThirdLang      { get; set; }
+        public string    StuUdiseNo        { get; set; }
         public DateTime? CrtDat         { get; set; }
     }
 }

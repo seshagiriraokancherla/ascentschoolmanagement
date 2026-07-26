@@ -755,7 +755,6 @@ namespace AscentSchools.Data.Repositories.School
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 return conn.Query<HomeworkStatementRowDto>(
                     @"SELECT
-                        CONVERT(VARCHAR(10), h.due_date,      105) DueDate,
                         CONVERT(VARCHAR(10), h.assigned_date, 105) AssignedDate,
                         ISNULL(c.class_name, '-')    ClassName,
                         ISNULL(sub.subject_name, '-') SubjectName,
@@ -767,10 +766,10 @@ namespace AscentSchools.Data.Repositories.School
                       LEFT JOIN subjects sub ON sub.subject_id = h.subject_id
                       WHERE h.school_id = @schoolId
                         AND h.status   != 'Cancelled'
-                        AND h.due_date BETWEEN @dateFrom AND @dateTo
+                        AND h.assigned_date BETWEEN @dateFrom AND @dateTo
                         AND (@classId   IS NULL OR h.class_id   = @classId)
                         AND (@subjectId IS NULL OR h.subject_id = @subjectId)
-                      ORDER BY sub.subject_name, h.due_date, c.class_name",
+                      ORDER BY sub.subject_name, h.assigned_date, c.class_name",
                     new { schoolId, dateFrom, dateTo, classId, subjectId });
         }
 

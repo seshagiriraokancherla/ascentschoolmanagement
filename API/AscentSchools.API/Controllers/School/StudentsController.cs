@@ -57,7 +57,7 @@ namespace AscentSchools.API.Controllers.School
             if (request == null || string.IsNullOrWhiteSpace(request.StudentName))
                 return BadRequest("Student name is required.");
 
-            var studentId = _repo.Create(Tenant.TenantDbName, Tenant.SchoolId, request);
+            var studentId = _repo.Create(Tenant.TenantDbName, Tenant.SchoolId, request, Tenant.FullName);
             var student   = _repo.GetById(Tenant.TenantDbName, Tenant.SchoolId, studentId);
             return Created(student, "Student registered.");
         }
@@ -69,9 +69,17 @@ namespace AscentSchools.API.Controllers.School
             if (request == null || string.IsNullOrWhiteSpace(request.StudentName))
                 return BadRequest("Student name is required.");
 
-            _repo.Update(Tenant.TenantDbName, Tenant.SchoolId, id, request);
+            _repo.Update(Tenant.TenantDbName, Tenant.SchoolId, id, request, Tenant.FullName);
             var student = _repo.GetById(Tenant.TenantDbName, Tenant.SchoolId, id);
             return Ok(student);
+        }
+
+        // GET school/students/{id}/history — temporal audit trail (all versions)
+        [HttpGet, Route("{id:long}/history")]
+        public HttpResponseMessage GetStudentHistory(long id)
+        {
+            var history = _repo.GetHistory(Tenant.TenantDbName, Tenant.SchoolId, id);
+            return Ok(history);
         }
 
         // PUT school/students/{id}/section
@@ -122,6 +130,20 @@ namespace AscentSchools.API.Controllers.School
             return Ok(new { photoPath });
         }
 
+        // PUT school/students/{id}/photo — save the R2 public URL after a direct presigned upload.
+        [HttpPut, Route("{id:long}/photo")]
+        public HttpResponseMessage SavePhotoUrl(long id, [FromBody] SavePhotoUrlRequest request)
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.PhotoUrl))
+                return BadRequest("photoUrl is required.");
+
+            var student = _repo.GetById(Tenant.TenantDbName, Tenant.SchoolId, id);
+            if (student == null) return NotFound("Student not found.");
+
+            _repo.UpdatePhotoPath(Tenant.TenantDbName, Tenant.SchoolId, id, request.PhotoUrl.Trim());
+            return Ok(new { photoPath = request.PhotoUrl.Trim() });
+        }
+
         // POST school/students/bulk
         [HttpPost, Route("bulk")]
         public HttpResponseMessage BulkImport([FromBody] BulkStudentImportRequest request)
@@ -135,7 +157,10 @@ namespace AscentSchools.API.Controllers.School
             for (int i = 0; i < request.Rows.Count; i++)
                 request.Rows[i].RowNumber = i + 2;
 
-            var result = _repo.BulkCreate(Tenant.TenantDbName, Tenant.SchoolId, request);
+            // created_by: caller-supplied tag (sync tool sends "synctool"), else the logged-in user.
+            var createdBy = string.IsNullOrWhiteSpace(request.CreatedBy) ? Tenant.FullName : request.CreatedBy.Trim();
+
+            var result = _repo.BulkCreate(Tenant.TenantDbName, Tenant.SchoolId, request, createdBy);
             return Ok(result);
         }
 

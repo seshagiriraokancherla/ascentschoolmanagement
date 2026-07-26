@@ -1,3 +1,4 @@
+using AscentSchools.API.Helpers;
 using AscentSchools.Core.DTOs.School.Events;
 using AscentSchools.Data.ConnectionFactory;
 using AscentSchools.Data.Repositories.School;
@@ -29,12 +30,17 @@ namespace AscentSchools.API.Controllers.School
                 return BadRequest("Title is required.");
             if (string.IsNullOrWhiteSpace(request.EventDate))
                 return BadRequest("Event date is required.");
-            if (string.IsNullOrWhiteSpace(request.MediaUrl))
-                return BadRequest("Media URL is required.");
+            // MediaUrl (YouTube) is optional now — event media can be R2 uploads (media_uploads).
             if (request.Scope == "Class" && request.ClassId == null)
                 return BadRequest("Class is required for class-scoped events.");
 
             var id = _repo.CreateEvent(Tenant.TenantDbName, Tenant.SchoolId, Tenant.FullName, request);
+
+            new PushNotifier().NotifyClass(
+                Tenant.TenantDbName, Tenant.GroupId, Tenant.SchoolId,
+                request.Scope == "Class" ? request.ClassId : null, null,
+                "New Event", request.Title, "event", id);
+
             return Created(id, "Event created.");
         }
 
@@ -44,8 +50,6 @@ namespace AscentSchools.API.Controllers.School
         {
             if (request == null || string.IsNullOrWhiteSpace(request.Title))
                 return BadRequest("Title is required.");
-            if (string.IsNullOrWhiteSpace(request.MediaUrl))
-                return BadRequest("Media URL is required.");
             if (request.Scope == "Class" && request.ClassId == null)
                 return BadRequest("Class is required for class-scoped events.");
 

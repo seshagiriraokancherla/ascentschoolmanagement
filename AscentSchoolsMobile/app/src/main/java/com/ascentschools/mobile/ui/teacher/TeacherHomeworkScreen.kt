@@ -1,8 +1,6 @@
 package com.ascentschools.mobile.ui.teacher
 
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,9 +16,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ascentschools.mobile.data.api.TeacherHomeworkDto
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -108,8 +103,8 @@ fun TeacherHomeworkScreen(
     if (showCreateSheet) {
         CreateHomeworkSheet(
             onDismiss = { showCreateSheet = false },
-            onSave    = { title, desc, dueDate ->
-                viewModel.createHomework(classId, title, desc, dueDate)
+            onSave    = { title, desc ->
+                viewModel.createHomework(classId, title, desc)
             },
             isLoading = isLoading
         )
@@ -118,33 +113,12 @@ fun TeacherHomeworkScreen(
 
 @Composable
 private fun HomeworkCard(hw: TeacherHomeworkDto) {
-    val dueDisplay = runCatching {
-        LocalDate.parse(hw.dueDate.take(10))
-            .format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
-    }.getOrDefault(hw.dueDate.take(10))
-
-    val isOverdue = runCatching {
-        LocalDate.parse(hw.dueDate.take(10)).isBefore(LocalDate.now())
-    }.getOrDefault(false)
-
     Card(
         shape  = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors()
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(
-                modifier              = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment     = Alignment.CenterVertically
-            ) {
-                Text(hw.title, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Text(
-                    "Due: $dueDisplay",
-                    fontSize = 11.sp,
-                    color = if (isOverdue) MaterialTheme.colorScheme.error
-                            else MaterialTheme.colorScheme.primary
-                )
-            }
+            Text(hw.title, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth())
             if (!hw.description.isNullOrBlank()) {
                 Text(
                     text     = hw.description,
@@ -165,17 +139,11 @@ private fun HomeworkCard(hw: TeacherHomeworkDto) {
 @Composable
 private fun CreateHomeworkSheet(
     onDismiss : () -> Unit,
-    onSave    : (title: String, description: String?, dueDate: String) -> Unit,
+    onSave    : (title: String, description: String?) -> Unit,
     isLoading : Boolean
 ) {
     var title       by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var dueDate     by remember { mutableStateOf("") }
-    var showDatePicker by remember { mutableStateOf(false) }
-
-    val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = System.currentTimeMillis()
-    )
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -204,24 +172,6 @@ private fun CreateHomeworkSheet(
                 maxLines      = 4
             )
 
-            OutlinedTextField(
-                value         = dueDate.ifBlank { "" },
-                onValueChange = {},
-                readOnly      = true,
-                label         = { Text("Due Date *") },
-                placeholder   = { Text("Tap to select") },
-                modifier      = Modifier
-                    .fillMaxWidth()
-                    .clickable { showDatePicker = true },
-                enabled       = false,
-                colors        = OutlinedTextFieldDefaults.colors(
-                    disabledTextColor         = MaterialTheme.colorScheme.onSurface,
-                    disabledBorderColor       = MaterialTheme.colorScheme.outline,
-                    disabledLabelColor        = MaterialTheme.colorScheme.onSurfaceVariant,
-                    disabledPlaceholderColor  = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            )
-
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(
                     onClick  = onDismiss,
@@ -229,8 +179,8 @@ private fun CreateHomeworkSheet(
                 ) { Text("Cancel") }
 
                 Button(
-                    onClick  = { onSave(title, description.takeIf { it.isNotBlank() }, dueDate) },
-                    enabled  = title.isNotBlank() && dueDate.isNotBlank() && !isLoading,
+                    onClick  = { onSave(title, description.takeIf { it.isNotBlank() }) },
+                    enabled  = title.isNotBlank() && !isLoading,
                     modifier = Modifier.weight(1f)
                 ) {
                     if (isLoading) CircularProgressIndicator(
@@ -243,25 +193,4 @@ private fun CreateHomeworkSheet(
             }
         }
     }
-
-    if (showDatePicker) {
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { millis ->
-                        dueDate = java.time.LocalDate.ofEpochDay(millis / 86400_000L)
-                            .format(DateTimeFormatter.ISO_LOCAL_DATE)
-                    }
-                    showDatePicker = false
-                }) { Text("OK") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
-            }
-        ) { DatePicker(state = datePickerState) }
-    }
 }
-
-private fun Modifier.clickable(onClick: () -> Unit) =
-    this.pointerInput(onClick) { detectTapGestures(onTap = { onClick() }) }

@@ -197,7 +197,6 @@ namespace AscentSchools.Core.DTOs.School.Reports
 
     public class HomeworkStatementRowDto
     {
-        public string DueDate      { get; set; }
         public string AssignedDate { get; set; }
         public string ClassName    { get; set; }
         public string SubjectName  { get; set; }

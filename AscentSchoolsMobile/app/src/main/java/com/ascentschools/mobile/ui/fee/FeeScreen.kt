@@ -401,8 +401,10 @@ private fun FeeItemCard(
             // Label column
             Column(Modifier.weight(1f)) {
                 Text(item.feeTypeName ?: "Fee", fontWeight = FontWeight.Medium)
-                if (!item.termName.isNullOrBlank()) {
-                    Text(item.termName, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                // Term for term-based items; fee period label for Monthly items.
+                val subLabel = item.termName?.takeIf { it.isNotBlank() } ?: item.periodLabel
+                if (!subLabel.isNullOrBlank()) {
+                    Text(subLabel, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 }
             }
 

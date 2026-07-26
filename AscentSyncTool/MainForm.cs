@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -14,6 +15,8 @@ namespace AscentSyncTool
 {
     public class MainForm : Form
     {
+        public const string Version = "1.1";
+
         private readonly LegacyDb _legacy = new LegacyDb();
 
         // Lazy — the API client reads ApiKey from config; constructing it eagerly would
@@ -32,21 +35,59 @@ namespace AscentSyncTool
 
         public MainForm()
         {
-            Text = "Ascent Sync Tool";
+            Text = "Ascent Sync Tool  v" + Version;
             Width = 1000;
             Height = 640;
             StartPosition = FormStartPosition.CenterScreen;
 
+            var header = new Label
+            {
+                Text = "Ascent Sync Tool  v" + Version,
+                Dock = DockStyle.Top,
+                Height = 46,
+                Font = new Font("Segoe UI", 18F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(0, 51, 102),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(12, 0, 0, 0)
+            };
+
             var tabs = new TabControl { Dock = DockStyle.Fill };
+            tabs.TabPages.Add(MakePage("Export Students",   _tabStudents));
             tabs.TabPages.Add(MakePage("Download Receipts", _tabDownload));
             tabs.TabPages.Add(MakePage("Export Receipts",   _tabReceipts));
-            tabs.TabPages.Add(MakePage("Export Students",   _tabStudents));
-            
+
+            // The academic-year filter applies only to the legacy-source tabs.
+            _tabStudents.ShowAcademicYearFilter = true;
+            _tabReceipts.ShowAcademicYearFilter = true;
+
             Controls.Add(tabs);
+            Controls.Add(header);   // added after tabs so Dock=Top sits above the fill
 
             WireExportReceipts();
             WireExportStudents();
             WireDownloadReceipts();
+
+            Load += (s, e) => LoadAcademicYears();
+        }
+
+        private void LoadAcademicYears()
+        {
+            try
+            {
+                var years = _legacy.GetAcademicYears();
+                _tabStudents.SetAcademicYears(years);   // latest selected by default
+                _tabReceipts.SetAcademicYears(years);
+                if (years.Count == 0)
+                {
+                    _tabStudents.SetStatus("No academic years found in SAS_AcdYear.");
+                    _tabReceipts.SetStatus("No academic years found in SAS_AcdYear.");
+                }
+            }
+            catch (Exception ex)
+            {
+                _tabStudents.SetStatus("Could not load academic years: " + ex.Message);
+                _tabReceipts.SetStatus("Could not load academic years: " + ex.Message);
+            }
         }
 
         private static TabPage MakePage(string title, Control content)
@@ -61,7 +102,8 @@ namespace AscentSyncTool
         {
             _tabReceipts.OnShow = async (from, to) =>
             {
-                _exportReceipts = await Task.Run(() => _legacy.GetReceipts(from, to));
+                var acdYear = _tabReceipts.SelectedAcademicYear;
+                _exportReceipts = await Task.Run(() => _legacy.GetReceipts(from, to, acdYear));
                 _tabReceipts.Grid.DataSource = _exportReceipts;
                 return _exportReceipts.Count;
             };
@@ -87,7 +129,8 @@ namespace AscentSyncTool
         {
             _tabStudents.OnShow = async (from, to) =>
             {
-                _exportStudents = await Task.Run(() => _legacy.GetStudents(from, to));
+                var acdYear = _tabStudents.SelectedAcademicYear;
+                _exportStudents = await Task.Run(() => _legacy.GetStudents(from, to, acdYear));
                 _tabStudents.Grid.DataSource = _exportStudents;
                 return _exportStudents.Count;
             };

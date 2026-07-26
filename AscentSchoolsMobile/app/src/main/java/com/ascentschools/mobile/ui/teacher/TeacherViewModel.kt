@@ -54,6 +54,19 @@ class TeacherViewModel(private val repo: TeacherRepository) : ViewModel() {
     private val _homework = MutableStateFlow<List<TeacherHomeworkDto>>(emptyList())
     val homework = _homework.asStateFlow()
 
+    // ── Announcements ─────────────────────────────────────────────────────────
+
+    private val _announcements = MutableStateFlow<List<TeacherAnnouncementDto>>(emptyList())
+    val announcements = _announcements.asStateFlow()
+
+    // ── Messaging ─────────────────────────────────────────────────────────────
+
+    private val _threads = MutableStateFlow<List<MessageThreadDto>>(emptyList())
+    val threads = _threads.asStateFlow()
+
+    private val _thread = MutableStateFlow<MessageThreadDetailDto?>(null)
+    val thread = _thread.asStateFlow()
+
     // ── Shared UI state ───────────────────────────────────────────────────────
 
     private val _uiState = MutableStateFlow<TeacherUiState>(TeacherUiState.Idle)
@@ -175,9 +188,8 @@ class TeacherViewModel(private val repo: TeacherRepository) : ViewModel() {
         }
     }
 
-    fun createHomework(classId: Int, title: String, description: String?, dueDate: String) {
+    fun createHomework(classId: Int, title: String, description: String?) {
         if (title.isBlank()) { _uiState.value = TeacherUiState.Error("Title is required"); return }
-        if (dueDate.isBlank()) { _uiState.value = TeacherUiState.Error("Due date is required"); return }
 
         viewModelScope.launch {
             _isLoading.value = true
@@ -186,8 +198,7 @@ class TeacherViewModel(private val repo: TeacherRepository) : ViewModel() {
                 classId     = classId,
                 title       = title,
                 description = description?.takeIf { it.isNotBlank() },
-                assignedDate = today,
-                dueDate     = dueDate
+                assignedDate = today
             ))
                 .onSuccess {
                     _uiState.value = TeacherUiState.Success("Homework created.")
@@ -197,6 +208,108 @@ class TeacherViewModel(private val repo: TeacherRepository) : ViewModel() {
             _isLoading.value = false
         }
     }
+
+    fun loadAnnouncements(classId: Int) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            repo.getAnnouncements(classId)
+                .onSuccess { _announcements.value = it }
+                .onFailure { _uiState.value = TeacherUiState.Error(it.message ?: "Failed to load announcements") }
+            _isLoading.value = false
+        }
+    }
+
+    fun createAnnouncement(classId: Int, sectionId: Int?, title: String, description: String?) {
+        if (title.isBlank()) { _uiState.value = TeacherUiState.Error("Title is required"); return }
+
+        viewModelScope.launch {
+            _isLoading.value = true
+            repo.createAnnouncement(TeacherCreateAnnouncementRequest(
+                classId     = classId,
+                sectionId   = sectionId,
+                title       = title.trim(),
+                description = description?.takeIf { it.isNotBlank() }
+            ))
+                .onSuccess {
+                    _uiState.value = TeacherUiState.Success("Announcement posted.")
+                    loadAnnouncements(classId)
+                }
+                .onFailure { _uiState.value = TeacherUiState.Error(it.message ?: "Post failed") }
+            _isLoading.value = false
+        }
+    }
+
+    // ── Messaging ─────────────────────────────────────────────────────────────
+
+    fun loadThreads() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            repo.getThreads()
+                .onSuccess { _threads.value = it }
+                .onFailure { _uiState.value = TeacherUiState.Error(it.message ?: "Failed to load messages") }
+            _isLoading.value = false
+        }
+    }
+
+    fun loadThread(threadId: Int) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            repo.getThread(threadId)
+                .onSuccess {
+                    _thread.value = it
+                    // Opening the conversation marks the parent's messages read.
+                    repo.markThreadRead(threadId)
+                }
+                .onFailure { _uiState.value = TeacherUiState.Error(it.message ?: "Failed to load conversation") }
+            _isLoading.value = false
+        }
+    }
+
+    /** Refresh without the spinner — used after a reply so the chat doesn't flash. */
+    private fun reloadThread(threadId: Int) {
+        viewModelScope.launch {
+            repo.getThread(threadId).onSuccess { _thread.value = it }
+        }
+    }
+
+    fun reply(threadId: Int, text: String) {
+        if (text.isBlank()) return
+        viewModelScope.launch {
+            _isLoading.value = true
+            repo.reply(threadId, text.trim())
+                .onSuccess { reloadThread(threadId) }
+                .onFailure { _uiState.value = TeacherUiState.Error(it.message ?: "Reply failed") }
+            _isLoading.value = false
+        }
+    }
+
+    fun reportMessage(threadId: Int, messageId: Int, reason: String?) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            repo.reportMessage(threadId, messageId, reason)
+                .onSuccess { _uiState.value = TeacherUiState.Success("Reported. The school will review this message.") }
+                .onFailure { _uiState.value = TeacherUiState.Error(it.message ?: "Report failed") }
+            _isLoading.value = false
+        }
+    }
+
+    fun setThreadBlocked(threadId: Int, blocked: Boolean) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            val result = if (blocked) repo.blockThread(threadId) else repo.unblockThread(threadId)
+            result
+                .onSuccess {
+                    _uiState.value = TeacherUiState.Success(
+                        if (blocked) "Conversation blocked." else "Conversation unblocked.")
+                    reloadThread(threadId)
+                }
+                .onFailure { _uiState.value = TeacherUiState.Error(it.message ?: "Failed") }
+            _isLoading.value = false
+        }
+    }
+
+    /** Clears the open conversation so a stale one never flashes on the next open. */
+    fun clearThread() { _thread.value = null }
 
     fun clearUiState() { _uiState.value = TeacherUiState.Idle }
 

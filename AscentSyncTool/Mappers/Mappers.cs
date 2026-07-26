@@ -43,6 +43,7 @@ namespace AscentSyncTool.Mappers
         {
             return new StudentBulkRow
             {
+                StudentUniqueId = s.StuUnqID.HasValue ? (int?)(int)s.StuUnqID.Value : null,
                 AdmissionNo  = Trim(s.StuAmnNo),
                 StudentName  = Trim(s.StuName),
                 Gender       = Trim(s.StuGender),
@@ -63,6 +64,32 @@ namespace AscentSyncTool.Mappers
                 JoiningClass = Trim(s.StuStartClass),
                 MotherTongue = Trim(s.MothrLang),
                 Status       = MapStudentStatus(s.StuStatus),
+
+                // Extended fields (fee_category_id defaulted to 'General' server-side for sync)
+                JoinType             = Trim(s.StuJoinTyp),
+                FatherOccupation     = Trim(s.StuFatherOccup),
+                FatherEmploymentType = Trim(s.StuFatherEmpTyp),
+                MotherOccupation     = Trim(s.StuMotherOccup),
+                DateOfJoining        = s.StuDOJ?.ToString("dd/MM/yyyy"),
+                Nationality          = Trim(s.StuNationlity),
+                DoorNo               = Trim(s.StuDoorNo),
+                AddressArea          = Trim(s.StuAddrArea),
+                AddressCity          = Trim(s.StuAddrCity),
+                AddressState         = Trim(s.StuAddrState),
+                PermanentAddress     = Trim(s.StuAddrPerminent),
+                Email                = Trim(s.StuMailID),
+                AnnualIncome         = s.StuAnnualIncome,
+                FamilyChildrenCount  = int.TryParse(s.StuFamilyChildres?.Trim(), out var fcc) ? (int?)fcc : null,
+                DobProofSubmitted    = Trim(s.StuDOBStat),
+                CasteCertSubmitted   = Trim(s.StuCasteStat),
+                TransportType        = Trim(s.StuTransportTyp),
+                AdmissionDate        = s.AdminDate?.ToString("dd/MM/yyyy"),
+                StudentType          = Trim(s.StudentType),
+                BloodGroup           = Trim(s.BloodGrp),
+                JoinTerm             = Trim(s.JoinTerm),
+                FirstLanguage        = Trim(s.StuFirstLang),
+                ThirdLanguage        = Trim(s.StuThirdLang),
+                UdiseNo              = Trim(s.StuUdiseNo),
             };
         }
 

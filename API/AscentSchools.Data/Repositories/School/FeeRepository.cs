@@ -364,6 +364,9 @@ namespace AscentSchools.Data.Repositories.School
         {
             var items = conn.Query<FeeLineItemDto>(
                 @"SELECT t.term_id TermId, t.term_name TermName, t.order_no OrderNo,
+                         fp.fee_period_id FeePeriodId, fp.period_label PeriodLabel,
+                         fp.sequence_no PeriodSequenceNo,
+                         bfs.payment_type PaymentType,
                          bfs.amount StructureAmount,
                          br.route_id BusRouteId,
                          br.route_name FeeTypeName,
@@ -372,7 +375,8 @@ namespace AscentSchools.Data.Repositories.School
                              FROM fee_receipt_items fri
                              INNER JOIN fee_receipts fr ON fr.receipt_id = fri.receipt_id
                              WHERE fri.bus_route_id = bfs.route_id
-                               AND fri.term_id      = bfs.term_id
+                               AND ISNULL(fri.term_id, 0)       = ISNULL(bfs.term_id, 0)
+                               AND ISNULL(fri.fee_period_id, 0) = ISNULL(bfs.fee_period_id, 0)
                                AND fr.student_id    = @studentId
                                AND fr.status        = 'Active'
                                AND fri.school_id    = @schoolId
@@ -383,7 +387,8 @@ namespace AscentSchools.Data.Repositories.School
                              WHERE fc.student_id   = @studentId
                                AND fc.bus_route_id = bfs.route_id
                                AND fc.school_id    = @schoolId
-                               AND ISNULL(fc.term_id, 0) = bfs.term_id
+                               AND ISNULL(fc.term_id, 0)       = ISNULL(bfs.term_id, 0)
+                               AND ISNULL(fc.fee_period_id, 0) = ISNULL(bfs.fee_period_id, 0)
                                AND fc.status       = 'Active'
                          ), 0) ConcessionAmount,
                          (
@@ -391,7 +396,8 @@ namespace AscentSchools.Data.Repositories.School
                              FROM fee_receipt_items fri
                              INNER JOIN fee_receipts fr ON fr.receipt_id = fri.receipt_id
                              WHERE fri.bus_route_id = bfs.route_id
-                               AND fri.term_id      = bfs.term_id
+                               AND ISNULL(fri.term_id, 0)       = ISNULL(bfs.term_id, 0)
+                               AND ISNULL(fri.fee_period_id, 0) = ISNULL(bfs.fee_period_id, 0)
                                AND fr.student_id    = @studentId
                                AND fr.status        = 'Active'
                                AND fri.school_id    = @schoolId
@@ -401,19 +407,22 @@ namespace AscentSchools.Data.Repositories.School
                              FROM fee_receipt_items fri
                              INNER JOIN fee_receipts fr ON fr.receipt_id = fri.receipt_id
                              WHERE fri.bus_route_id = bfs.route_id
-                               AND fri.term_id      = bfs.term_id
+                               AND ISNULL(fri.term_id, 0)       = ISNULL(bfs.term_id, 0)
+                               AND ISNULL(fri.fee_period_id, 0) = ISNULL(bfs.fee_period_id, 0)
                                AND fr.student_id    = @studentId
                                AND fr.status        = 'Active'
                                AND fri.school_id    = @schoolId
                              ORDER BY fri.receipt_id DESC
                          ) CreatedBy
                   FROM bus_fee_structures bfs
-                  INNER JOIN terms      t  ON t.term_id   = bfs.term_id
                   INNER JOIN bus_routes br ON br.route_id = bfs.route_id
+                  LEFT  JOIN terms      t  ON t.term_id       = bfs.term_id
+                  LEFT  JOIN fee_periods fp ON fp.fee_period_id = bfs.fee_period_id
                   WHERE bfs.route_id         = @busRouteId
                     AND bfs.academic_year_id = @academicYearId
                     AND bfs.school_id        = @schoolId
-                  ORDER BY t.order_no",
+                  ORDER BY ISNULL(t.order_no, 9999), t.term_name,
+                           ISNULL(fp.sequence_no, 9999), fp.period_label",
                 new { schoolId, studentId, busRouteId, academicYearId }).ToList();
 
             foreach (var li in items)
@@ -578,13 +587,14 @@ namespace AscentSchools.Data.Repositories.School
                                 (receipt_no, student_id, student_unique_id, academic_year_id,
                                  payment_date, total_amount, payment_mode_id,
                                  cheque_no, cheque_date, bank_name, remarks,
-                                 status, source, school_id, created_by)
+                                 status, source, school_id, created_by, created_at)
                               VALUES
                                 (@receiptNo, @StudentId, @studentUniqueId, @AcademicYearId,
-                                 ISNULL(@PaymentDate, CAST(GETDATE() AS DATE)),
+                                 ISNULL(@PaymentDate, CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'India Standard Time' AS DATE)),
                                  @total, @PaymentModeId,
                                  @ChequeNo, @ChequeDate, @BankName, @Remarks,
-                                 'Active', 'webapp', @schoolId, @createdBy);
+                                 'Active', 'webapp', @schoolId, @createdBy,
+                                 CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'India Standard Time' AS DATETIME));
                               SELECT CAST(SCOPE_IDENTITY() AS INT)",
                             new
                             {
@@ -628,7 +638,8 @@ namespace AscentSchools.Data.Repositories.School
         public IEnumerable<FeeReceiptListDto> GetReceipts(
             string tenantDbName, int schoolId,
             string search, DateTime? dateFrom, DateTime? dateTo, string status,
-            DateTime? createdAfter = null, string source = null, DateTime? createdBefore = null)
+            DateTime? createdAfter = null, string source = null, DateTime? createdBefore = null,
+            int? paymentModeId = null)
         {
             var where = "r.school_id = @schoolId";
             if (!string.IsNullOrWhiteSpace(search))
@@ -639,6 +650,7 @@ namespace AscentSchools.Data.Repositories.School
             if (createdAfter.HasValue)  where += " AND r.created_at >= @createdAfter";
             if (createdBefore.HasValue) where += " AND r.created_at <= @createdBefore";
             if (!string.IsNullOrWhiteSpace(source)) where += " AND r.source = @source";
+            if (paymentModeId.HasValue) where += " AND r.payment_mode_id = @paymentModeId";
 
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 return conn.Query<FeeReceiptListDto>(
@@ -655,7 +667,7 @@ namespace AscentSchools.Data.Repositories.School
                        LEFT  JOIN payment_modes pm ON pm.payment_mode_id= r.payment_mode_id
                        WHERE {where}
                        ORDER BY r.receipt_id DESC",
-                    new { schoolId, search = $"%{search}%", dateFrom, dateTo, status, createdAfter, source, createdBefore });
+                    new { schoolId, search = $"%{search}%", dateFrom, dateTo, status, createdAfter, source, createdBefore, paymentModeId });
         }
 
         /// <summary>Ownership guard for the mobile receipt-print endpoint: true if the
@@ -703,14 +715,18 @@ namespace AscentSchools.Data.Repositories.School
                              ISNULL(ft.fee_type_name, '') FeeTypeName,
                              ISNULL(br.route_name, '')    RouteName,
                              ISNULL(h.hostel_name, '')    HostelName,
-                             ISNULL(t.term_name, '')      TermName,
+                             -- Term-based items use term_name; Monthly items (term_id NULL,
+                             -- fee_period_id set) fall back to the fee period label so the
+                             -- period round-trips to legacy PaymentTyp on EOD sync download.
+                             ISNULL(t.term_name, ISNULL(fp.period_label, '')) TermName,
                              ri.amount Amount, ri.concession_amount ConcessionAmount,
                              ri.net_amount NetAmount
                       FROM fee_receipt_items ri
-                      LEFT JOIN fee_types  ft ON ft.fee_type_id = ri.fee_type_id
-                      LEFT JOIN terms      t  ON t.term_id      = ri.term_id
-                      LEFT JOIN bus_routes br ON br.route_id    = ri.bus_route_id
-                      LEFT JOIN hostels    h  ON h.hostel_id    = ri.hostel_id
+                      LEFT JOIN fee_types   ft ON ft.fee_type_id   = ri.fee_type_id
+                      LEFT JOIN terms       t  ON t.term_id        = ri.term_id
+                      LEFT JOIN fee_periods fp ON fp.fee_period_id = ri.fee_period_id
+                      LEFT JOIN bus_routes  br ON br.route_id      = ri.bus_route_id
+                      LEFT JOIN hostels     h  ON h.hostel_id      = ri.hostel_id
                       WHERE ri.receipt_id = @receiptId",
                     new { receiptId }).ToList();
 

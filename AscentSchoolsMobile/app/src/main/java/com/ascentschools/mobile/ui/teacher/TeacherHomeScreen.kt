@@ -1,28 +1,41 @@
 package com.ascentschools.mobile.ui.teacher
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ascentschools.mobile.data.api.TeacherClassDto
 import com.ascentschools.mobile.data.api.TeacherSectionDto
+import com.ascentschools.mobile.data.local.TokenStore
+import com.ascentschools.mobile.ui.home.IconTile
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TeacherHomeScreen(
     teacherName    : String,
     viewModel      : TeacherViewModel,
+    tokenStore     : TokenStore,
     onAttendance   : (classId: Int, sectionId: Int) -> Unit,
     onHomework     : (classId: Int) -> Unit,
+    onAnnouncements: (classId: Int) -> Unit,
+    onMessages     : () -> Unit,
     onLogout       : () -> Unit
 ) {
     val classes  by viewModel.classes.collectAsState()
@@ -33,6 +46,8 @@ fun TeacherHomeScreen(
     var selectedSection by remember { mutableStateOf<TeacherSectionDto?>(null) }
     var classExpanded   by remember { mutableStateOf(false) }
     var sectionExpanded by remember { mutableStateOf(false) }
+    var tilesView       by remember { mutableStateOf(tokenStore.tilesView) }
+    var menuExpanded    by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { viewModel.loadClasses() }
 
@@ -52,8 +67,32 @@ fun TeacherHomeScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onLogout) {
-                        Icon(Icons.Default.Logout, contentDescription = "Logout")
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Menu")
+                    }
+                    DropdownMenu(
+                        expanded         = menuExpanded,
+                        onDismissRequest = { menuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text        = { Text(if (tilesView) "List view" else "Tile view") },
+                            leadingIcon = {
+                                Icon(
+                                    if (tilesView) Icons.Default.ViewList else Icons.Default.GridView,
+                                    contentDescription = null
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                tilesView    = !tilesView
+                                tokenStore.tilesView = tilesView
+                            }
+                        )
+                        DropdownMenuItem(
+                            text        = { Text("Logout") },
+                            leadingIcon = { Icon(Icons.Default.Logout, contentDescription = null) },
+                            onClick     = { menuExpanded = false; onLogout() }
+                        )
                     }
                 }
             )
@@ -63,6 +102,7 @@ fun TeacherHomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .verticalScroll(rememberScrollState())
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -134,26 +174,87 @@ fun TeacherHomeScreen(
 
             Spacer(Modifier.height(8.dp))
 
-            // Action cards — shown only when selection is complete
             val cls = selectedClass
             val sec = selectedSection
 
-            if (cls != null) {
-                // Attendance needs section; homework needs only class
+            if (tilesView) {
+                // ── Tile dashboard ──────────────────────────────────────────────
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    IconTile(
+                        label     = "Attendance",
+                        icon      = Icons.Default.CalendarToday,
+                        gradient  = Color(0xFF0E7490) to Color(0xFF06B6D4),
+                        enabled   = cls != null && sec != null,
+                        modifier  = Modifier.weight(1f),
+                        onClick   = { onAttendance(cls!!.classId, sec!!.sectionId) }
+                    )
+                    IconTile(
+                        label     = "Homework",
+                        icon      = Icons.Default.Book,
+                        gradient  = Color(0xFF047857) to Color(0xFF10B981),
+                        enabled   = cls != null,
+                        modifier  = Modifier.weight(1f),
+                        onClick   = { onHomework(cls!!.classId) }
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    IconTile(
+                        label     = "Announcements",
+                        icon      = Icons.Default.Campaign,
+                        gradient  = Color(0xFFBE123C) to Color(0xFFF43F5E),
+                        enabled   = cls != null,
+                        modifier  = Modifier.weight(1f),
+                        onClick   = { onAnnouncements(cls!!.classId) }
+                    )
+                    IconTile(
+                        label     = "Messages",
+                        icon      = Icons.Default.Chat,
+                        gradient  = Color(0xFF0369A1) to Color(0xFF0EA5E9),
+                        enabled   = true,
+                        modifier  = Modifier.weight(1f),
+                        onClick   = onMessages
+                    )
+                }
+                if (cls == null) {
+                    Text(
+                        "Select a class to enable Attendance, Homework and Announcements.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+            } else {
+                // ── Classic list of action cards ────────────────────────────────
+                if (cls != null) {
+                    ActionCard(
+                        title    = "Take Attendance",
+                        subtitle = if (sec != null) "${cls.className} · Section ${sec.sectionName}" else "Select a section to continue",
+                        icon     = Icons.Default.CalendarToday,
+                        enabled  = sec != null,
+                        onClick  = { onAttendance(cls.classId, sec!!.sectionId) }
+                    )
+                    ActionCard(
+                        title    = "Homework",
+                        subtitle = cls.className,
+                        icon     = Icons.Default.Book,
+                        enabled  = true,
+                        onClick  = { onHomework(cls.classId) }
+                    )
+                    ActionCard(
+                        title    = "Announcements",
+                        subtitle = cls.className,
+                        icon     = Icons.Default.Campaign,
+                        enabled  = true,
+                        onClick  = { onAnnouncements(cls.classId) }
+                    )
+                }
+                // Messages spans every class this teacher is assigned to, so it needs
+                // no class picker and stays available before one is selected.
                 ActionCard(
-                    title       = "Take Attendance",
-                    subtitle    = if (sec != null) "${cls.className} · Section ${sec.sectionName}" else "Select a section to continue",
-                    icon        = Icons.Default.CalendarToday,
-                    enabled     = sec != null,
-                    onClick     = { onAttendance(cls.classId, sec!!.sectionId) }
-                )
-
-                ActionCard(
-                    title   = "Homework",
-                    subtitle = cls.className,
-                    icon    = Icons.Default.Book,
-                    enabled = true,
-                    onClick = { onHomework(cls.classId) }
+                    title    = "Messages",
+                    subtitle = "Parents of your classes",
+                    icon     = Icons.Default.Chat,
+                    enabled  = true,
+                    onClick  = onMessages
                 )
             }
         }

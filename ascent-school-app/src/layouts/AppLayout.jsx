@@ -1,8 +1,8 @@
 /* global __APP_VERSION__, __BUILD_DATE__ */
-import { useState } from 'react'
-import { Layout, Menu, Avatar, Dropdown, Typography } from 'antd'
+import { useState, useEffect } from 'react'
+import { Layout, Menu, Avatar, Dropdown, Typography, Modal, Form, Input, App as AntApp } from 'antd'
 import {
-  UserOutlined, LogoutOutlined, TeamOutlined,
+  UserOutlined, LogoutOutlined, TeamOutlined, KeyOutlined,
   SafetyOutlined, SettingOutlined, DatabaseOutlined, SolutionOutlined,
   DollarOutlined, FormOutlined, BookOutlined, NotificationOutlined,
   CalendarOutlined, CarOutlined, VideoCameraOutlined, BarChartOutlined,
@@ -127,6 +127,8 @@ const NAV_ITEMS = [
       { key: '/settings/users',          icon: <TeamOutlined />,    label: 'User Management' },
       { key: '/settings/payment-gateway',                            label: 'Payment Gateway' },
       { key: '/settings/sms-gateway',                                label: 'SMS Gateway' },
+      { key: '/settings/message-reports',                            label: 'Reported Messages' },
+      { key: '/settings/r2-storage',                                 label: 'R2 Storage' },
     ],
   },
 ]
@@ -163,6 +165,18 @@ export default function AppLayout() {
   const headerBg   = branding.headerBgColor  || '#001529'
   const headerText = branding.navTextColor   || '#ffffff'
   const [collapsed, setCollapsed] = useState(false)
+  const [apiInfo,   setApiInfo]   = useState(null)   // { version, buildDate }
+
+  useEffect(() => {
+    api.get('/version')
+      .then(r => setApiInfo(r.data?.data || null))
+      .catch(() => {})
+  }, [])
+
+  const { message } = AntApp.useApp()
+  const [pwdForm]   = Form.useForm()
+  const [pwdOpen,   setPwdOpen]   = useState(false)
+  const [pwdSaving, setPwdSaving] = useState(false)
 
   const handleLogout = async () => {
     try { await api.post('/school/auth/logout') } catch (_) {}
@@ -171,7 +185,31 @@ export default function AppLayout() {
     navigate('/login', { replace: true })
   }
 
+  const handleChangePassword = async () => {
+    const v = await pwdForm.validateFields()
+    setPwdSaving(true)
+    try {
+      await api.post('/school/auth/change-password', {
+        currentPassword: v.currentPassword,
+        newPassword:     v.newPassword,
+      })
+      message.success('Password changed. Please log in again.')
+      setPwdOpen(false)
+      pwdForm.resetFields()
+      // Tokens were revoked server-side — force re-login.
+      localStorage.removeItem('schoolId')
+      logout()
+      navigate('/login', { replace: true })
+    } catch (e) {
+      message.error(e?.response?.data?.message || 'Failed to change password.')
+    } finally {
+      setPwdSaving(false)
+    }
+  }
+
   const userMenuItems = [
+    { key: 'change-password', icon: <KeyOutlined />, label: 'Change Password',
+      onClick: () => { pwdForm.resetFields(); setPwdOpen(true) } },
     { key: 'logout', icon: <LogoutOutlined />, label: 'Logout', onClick: handleLogout },
   ]
 
@@ -236,10 +274,48 @@ export default function AppLayout() {
           </Content>
           <Footer style={{ textAlign: 'center', padding: '12px 24px', background: '#f0f2f5', color: '#8c8c8c', fontSize: 12 }}>
             Powered by Ascent Info Solutions
-            {' · '}v{__APP_VERSION__} ({__BUILD_DATE__})
+            {' · '}UI v{__APP_VERSION__} ({__BUILD_DATE__})
+            {apiInfo && (
+              <>{' · '}API v{apiInfo.version}{apiInfo.buildDate ? ` (${apiInfo.buildDate})` : ''}</>
+            )}
           </Footer>
         </Layout>
       </Layout>
+
+      <Modal
+        title="Change Password"
+        open={pwdOpen}
+        onOk={handleChangePassword}
+        onCancel={() => setPwdOpen(false)}
+        confirmLoading={pwdSaving}
+        okText="Change Password"
+        destroyOnClose
+      >
+        <Form form={pwdForm} layout="vertical" style={{ marginTop: 12 }}>
+          <Form.Item name="currentPassword" label="Current Password" rules={[{ required: true, message: 'Enter your current password.' }]}>
+            <Input.Password autoComplete="current-password" />
+          </Form.Item>
+          <Form.Item name="newPassword" label="New Password"
+            rules={[{ required: true }, { min: 6, message: 'At least 6 characters.' }]}>
+            <Input.Password autoComplete="new-password" />
+          </Form.Item>
+          <Form.Item name="confirmPassword" label="Confirm New Password" dependencies={['newPassword']}
+            rules={[
+              { required: true, message: 'Re-enter the new password.' },
+              ({ getFieldValue }) => ({
+                validator: (_, value) =>
+                  !value || getFieldValue('newPassword') === value
+                    ? Promise.resolve()
+                    : Promise.reject(new Error('Passwords do not match.')),
+              }),
+            ]}>
+            <Input.Password autoComplete="new-password" />
+          </Form.Item>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            You'll be logged out and need to sign in again with the new password.
+          </Typography.Text>
+        </Form>
+      </Modal>
     </Layout>
   )
 }

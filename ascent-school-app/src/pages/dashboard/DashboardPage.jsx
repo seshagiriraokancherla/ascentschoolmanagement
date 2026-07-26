@@ -44,7 +44,7 @@ export default function DashboardPage() {
     totalActiveStudents,
     attendanceMarkedToday, todayPresent, todayAbsent, todayLate, todayHalfDay, todayTotalMarked, attendancePct,
     todayCollection, monthCollection, monthReceiptCount,
-    last6MonthsCollection, recentReceipts, upcomingHomework, activeAnnouncementsCount,
+    last6MonthsCollection, recentReceipts, recentHomework, activeAnnouncementsCount,
   } = data
 
   // Fee trend max for bar scaling
@@ -60,6 +60,10 @@ export default function DashboardPage() {
     {
       title: 'Date', dataIndex: 'paymentDate', key: 'paymentDate', width: 100,
       render: d => dayjs(d).format('DD MMM'),
+    },
+    {
+      title: 'Type', dataIndex: 'paymentMode', key: 'paymentMode', width: 90,
+      render: m => m ? <Tag>{m}</Tag> : '—',
     },
     {
       title: 'Status', dataIndex: 'status', key: 'status', width: 80,
@@ -241,38 +245,32 @@ export default function DashboardPage() {
             title={
               <Space>
                 <BookOutlined />
-                <span>Upcoming Homework</span>
+                <span>Recent Homework</span>
               </Space>
             }
             extra={<Button type="link" size="small" onClick={() => navigate('/homework')}>Manage</Button>}
             style={{ marginBottom: 16 }}
           >
-            {upcomingHomework?.length > 0 ? (
+            {recentHomework?.length > 0 ? (
               <List
                 size="small"
-                dataSource={upcomingHomework}
-                renderItem={item => {
-                  const due    = dayjs(item.dueDate)
-                  const today  = dayjs()
-                  const isToday = due.isSame(today, 'day')
-                  const isPast  = due.isBefore(today, 'day')
-                  return (
-                    <List.Item style={{ padding: '6px 0' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 500, fontSize: 13 }}>{item.title}</div>
-                        <Text type="secondary" style={{ fontSize: 11 }}>
-                          {item.subjectName && `${item.subjectName} · `}{item.className}
-                        </Text>
-                      </div>
-                      <Tag color={isPast ? 'error' : isToday ? 'warning' : 'default'} style={{ flexShrink: 0 }}>
-                        {isToday ? 'Today' : due.format('DD MMM')}
-                      </Tag>
-                    </List.Item>
-                  )
-                }}
+                dataSource={recentHomework}
+                renderItem={item => (
+                  <List.Item style={{ padding: '6px 0' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 500, fontSize: 13 }}>{item.title}</div>
+                      <Text type="secondary" style={{ fontSize: 11 }}>
+                        {item.subjectName && `${item.subjectName} · `}{item.className}
+                      </Text>
+                    </div>
+                    <Tag style={{ flexShrink: 0 }}>
+                      {dayjs(item.assignedDate).format('DD MMM')}
+                    </Tag>
+                  </List.Item>
+                )}
               />
             ) : (
-              <Text type="secondary">No upcoming homework.</Text>
+              <Text type="secondary">No homework yet.</Text>
             )}
           </Card>
 

@@ -36,8 +36,9 @@ namespace AscentMigration.Migrators
                 var classMap       = await LoadClassMap(dest);
                 var feeTypeMap     = await LoadFeeTypeMap(dest);
                 var termMap        = await LoadTermMap(dest);           // key: "termName|academicYearId"
+                var feePeriodMap   = await LoadFeePeriodMap(dest);      // key: "periodLabel|academicYearId"
 
-                Log($"Lookups loaded — legacyCats:{legacyCatIdMap.Count} years:{acadYearMap.Count} categories:{feeCategoryMap.Count} classes:{classMap.Count} feeTypes:{feeTypeMap.Count} terms:{termMap.Count}");
+                Log($"Lookups loaded — legacyCats:{legacyCatIdMap.Count} years:{acadYearMap.Count} categories:{feeCategoryMap.Count} classes:{classMap.Count} feeTypes:{feeTypeMap.Count} terms:{termMap.Count} feePeriods:{feePeriodMap.Count}");
 
                 // 3. Handle Truncate vs Skip
                 var mode = Config.GetTableMode(Name);
@@ -60,6 +61,7 @@ namespace AscentMigration.Migrators
                                  ISNULL(fee_category_id,0) AS fee_category_id,
                                  ISNULL(fee_type_id,0)     AS fee_type_id,
                                  ISNULL(term_id,0)         AS term_id,
+                                 ISNULL(fee_period_id,0)   AS fee_period_id,
                                  ISNULL(academic_year_id,0)AS academic_year_id,
                                  ISNULL(admission_type,'') AS admission_type
                           FROM fee_structures WHERE school_id = @SchoolId",
@@ -67,7 +69,7 @@ namespace AscentMigration.Migrators
 
                     foreach (var e in existing)
                         existingKeys.Add(MakeKey(e.class_id, e.fee_category_id, e.fee_type_id,
-                                                  e.term_id, e.academic_year_id, e.admission_type));
+                                                  e.term_id, e.fee_period_id, e.academic_year_id, e.admission_type));
                 }
 
                 // Resolve fallback academic_year_id (config override or latest in dest)
@@ -135,22 +137,27 @@ namespace AscentMigration.Migrators
                             AddError(result, processed, $"fee_type '{feeTypeName}' not found in fee_types — fee_type_id set to NULL");
                     }
 
-                    // --- term_id: lookup by term_name|academic_year_id (error + NULL on miss) ---
-                    int? termId     = null;
-                    var nofPayments = row.NofPayments?.Trim();
+                    // --- term_id / fee_period_id: lookup by "{label}|academic_year_id" ---
+                    // Try terms first; if not found, fall back to fee_periods (Monthly rows).
+                    // A match in fee_periods sets fee_period_id and leaves term_id NULL.
+                    int? termId      = null;
+                    int? feePeriodId = null;
+                    var nofPayments  = row.NofPayments?.Trim();
                     if (!string.IsNullOrWhiteSpace(nofPayments))
                     {
-                        var termKey = $"{nofPayments}|{academicYearId}";
-                        if (termMap.TryGetValue(termKey, out var tId))
+                        var key = $"{nofPayments}|{academicYearId}";
+                        if (termMap.TryGetValue(key, out var tId))
                             termId = tId;
+                        else if (feePeriodMap.TryGetValue(key, out var pId))
+                            feePeriodId = pId;
                         else
-                            AddError(result, processed, $"term '{nofPayments}' (academic_year_id={academicYearId}) not found in terms — term_id set to NULL");
+                            AddError(result, processed, $"'{nofPayments}' (academic_year_id={academicYearId}) not found in terms or fee_periods — term_id & fee_period_id set to NULL");
                     }
 
                     // --- Skip check ---
                     if (mode == MigrationMode.Skip)
                     {
-                        var key = MakeKey(classId, feeCategoryId, feeTypeId, termId, academicYearId, row.AdmsnTyp?.Trim());
+                        var key = MakeKey(classId, feeCategoryId, feeTypeId, termId, feePeriodId, academicYearId, row.AdmsnTyp?.Trim());
                         if (existingKeys.Contains(key))
                         {
                             result.Skipped++;
@@ -165,12 +172,12 @@ namespace AscentMigration.Migrators
                             await dest.ExecuteAsync(@"
                                 INSERT INTO fee_structures
                                     (fee_category_id, class_id, fee_type_id, fee_type_name,
-                                     term_id, payment_type, amount, description, status,
+                                     term_id, fee_period_id, payment_type, amount, description, status,
                                      academic_year_id, admission_type,
                                      school_id, created_by, created_at)
                                 VALUES
                                     (@FeeCategoryId, @ClassId, @FeeTypeId, @FeeTypeName,
-                                     @TermId, @PaymentType, @Amount, @Description, @Status,
+                                     @TermId, @FeePeriodId, @PaymentType, @Amount, @Description, @Status,
                                      @AcademicYearId, @AdmissionType,
                                      @SchoolId, @CreatedBy, @CreatedAt)",
                                 new
@@ -180,6 +187,7 @@ namespace AscentMigration.Migrators
                                     FeeTypeId      = feeTypeId,
                                     FeeTypeName    = feeTypeName,
                                     TermId         = termId,
+                                    FeePeriodId    = feePeriodId,
                                     PaymentType    = row.PymntTyp?.Trim(),
                                     Amount         = row.Amt,
                                     Description    = row.Descrpt?.Trim(),
@@ -301,14 +309,31 @@ namespace AscentMigration.Migrators
             return map;
         }
 
+        private async Task<Dictionary<string, int>> LoadFeePeriodMap(SqlConnection dest)
+        {
+            // Composite key: "periodLabel|academicYearId" — mirrors LoadTermMap so a
+            // fee_structures NofPayments that isn't a term can fall back to a Monthly period.
+            var rows = await dest.QueryAsync<FeePeriodRow>(
+                "SELECT fee_period_id, period_label, academic_year_id FROM fee_periods WHERE school_id = @SchoolId",
+                new { Config.SchoolId });
+            var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var r in rows)
+            {
+                var key = $"{r.period_label?.Trim()}|{r.academic_year_id}";
+                if (!map.ContainsKey(key))
+                    map[key] = r.fee_period_id;
+            }
+            return map;
+        }
+
         // ---------------------------------------------------------------
         // Helpers
         // ---------------------------------------------------------------
 
         private static string MakeKey(int? classId, int? feeCategoryId, int? feeTypeId,
-                                       int? termId, int? academicYearId, string admissionType)
+                                       int? termId, int? feePeriodId, int? academicYearId, string admissionType)
         {
-            return $"{classId ?? 0}|{feeCategoryId ?? 0}|{feeTypeId ?? 0}|{termId ?? 0}|{academicYearId ?? 0}|{admissionType?.Trim() ?? ""}";
+            return $"{classId ?? 0}|{feeCategoryId ?? 0}|{feeTypeId ?? 0}|{termId ?? 0}|{feePeriodId ?? 0}|{academicYearId ?? 0}|{admissionType?.Trim() ?? ""}";
         }
 
         private static void AddError(MigrationResult result, int rowNo, string reason)
@@ -340,6 +365,7 @@ namespace AscentMigration.Migrators
         private class ClassRow       { public int class_id         { get; set; } public string class_name      { get; set; } }
         private class FeeTypeRow     { public int fee_type_id      { get; set; } public string fee_type_name   { get; set; } }
         private class TermRow        { public int term_id          { get; set; } public string term_name       { get; set; } public int? academic_year_id { get; set; } }
+        private class FeePeriodRow   { public int fee_period_id     { get; set; } public string period_label    { get; set; } public int? academic_year_id { get; set; } }
 
         private class FeeTypeEntry   { public int FeeTypeId { get; set; } public string FeeTypeName { get; set; } }
 
@@ -349,6 +375,7 @@ namespace AscentMigration.Migrators
             public int    fee_category_id  { get; set; }
             public int    fee_type_id      { get; set; }
             public int    term_id          { get; set; }
+            public int    fee_period_id    { get; set; }
             public int    academic_year_id { get; set; }
             public string admission_type   { get; set; }
         }

@@ -53,27 +53,35 @@ namespace AscentSchools.Core.DTOs.School.Transport
         public int     RouteId         { get; set; }
         public string  RouteName       { get; set; }
         public int     AcademicYearId  { get; set; }
+        public string  PaymentType     { get; set; }   // Term | Monthly
+        // One row per term (Term) or per fee period (Monthly), depending on PaymentType.
         public IEnumerable<BusFeeTermDto> Terms { get; set; }
     }
 
     public class BusFeeTermDto
     {
-        public int      TermId   { get; set; }
-        public string   TermName { get; set; }
-        public decimal? Amount   { get; set; }
+        public int?     TermId      { get; set; }
+        public string   TermName    { get; set; }
+        public int?     OrderNo     { get; set; }
+        public int?     FeePeriodId { get; set; }
+        public string   PeriodLabel { get; set; }
+        public int?     SequenceNo  { get; set; }
+        public decimal? Amount      { get; set; }
     }
 
     public class SaveBusFeeStructureRequest
     {
-        public int   RouteId        { get; set; }
-        public int   AcademicYearId { get; set; }
+        public int    RouteId        { get; set; }
+        public int    AcademicYearId { get; set; }
+        public string PaymentType    { get; set; }   // Term | Monthly
         public IEnumerable<BusFeeTermEntry> Items { get; set; }
     }
 
     public class BusFeeTermEntry
     {
-        public int     TermId { get; set; }
-        public decimal Amount { get; set; }
+        public int?     TermId      { get; set; }
+        public int?     FeePeriodId { get; set; }
+        public decimal  Amount      { get; set; }
     }
 
     // ── Student Transport ─────────────────────────────────────────────────────

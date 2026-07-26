@@ -31,8 +31,9 @@ namespace AscentMigration.Migrators
                 var destRouteIdMap     = await LoadDestRouteIdMap(dest);          // route_name → route_id (dest)
                 var acadYearMap        = await LoadAcadYearMap(dest);             // academic_year → academic_year_id
                 var termMap            = await LoadTermMap(dest);                 // "term_name|academic_year_id" → term_id
+                var feePeriodMap       = await LoadFeePeriodMap(dest);            // "period_label|academic_year_id" → fee_period_id
 
-                Log($"Lookups loaded — legacyRoutes:{legacyRouteNameMap.Count} destRoutes:{destRouteIdMap.Count} years:{acadYearMap.Count} terms:{termMap.Count}");
+                Log($"Lookups loaded — legacyRoutes:{legacyRouteNameMap.Count} destRoutes:{destRouteIdMap.Count} years:{acadYearMap.Count} terms:{termMap.Count} feePeriods:{feePeriodMap.Count}");
 
                 // 3. Handle Truncate vs Skip
                 var mode = Config.GetTableMode(Name);
@@ -53,11 +54,12 @@ namespace AscentMigration.Migrators
                     var existing = await dest.QueryAsync<BusFeeKey>(
                         @"SELECT ISNULL(route_id,0)        AS route_id,
                                  ISNULL(term_id,0)         AS term_id,
+                                 ISNULL(fee_period_id,0)   AS fee_period_id,
                                  ISNULL(academic_year_id,0)AS academic_year_id
                           FROM bus_fee_structures WHERE school_id = @SchoolId",
                         new { Config.SchoolId });
                     foreach (var e in existing)
-                        existingKeys.Add(MakeKey(e.route_id, e.term_id, e.academic_year_id));
+                        existingKeys.Add(MakeKey(e.route_id, e.term_id, e.fee_period_id, e.academic_year_id));
                 }
 
                 // 4. Migrate row by row
@@ -96,26 +98,43 @@ namespace AscentMigration.Migrators
                             AddError(result, row.BusMasterID, $"RouteID='{legacyRouteId}' not found in SAS_BusRoutes — route_id set to NULL");
                     }
 
-                    // --- term_id: lookup by "term_name|academic_year_id" ---
-                    int? termId = null;
+                    // --- payment_type + term_id / fee_period_id ---
+                    // Legacy PaymentTyp tells us whether TermDet is a term or a monthly period.
+                    // Resolve strictly in the matching table so payment_type always agrees with
+                    // which id column is populated (Term → term_id, Monthly → fee_period_id).
+                    var paymentType = string.Equals(row.PaymentTyp?.Trim(), "Monthly", StringComparison.OrdinalIgnoreCase)
+                        ? "Monthly" : "Term";
+
+                    int? termId      = null;
+                    int? feePeriodId = null;
                     var termDet = row.TermDet?.Trim();
                     if (!string.IsNullOrWhiteSpace(termDet) && academicYearId.HasValue)
                     {
-                        var termKey = $"{termDet}|{academicYearId}";
-                        if (termMap.TryGetValue(termKey, out var tId))
-                            termId = tId;
+                        var key = $"{termDet}|{academicYearId}";
+                        if (paymentType == "Monthly")
+                        {
+                            if (feePeriodMap.TryGetValue(key, out var pId))
+                                feePeriodId = pId;
+                            else
+                                AddError(result, row.BusMasterID, $"fee period '{termDet}' (academic_year_id={academicYearId}) not found in dest fee_periods — fee_period_id set to NULL");
+                        }
                         else
-                            AddError(result, row.BusMasterID, $"term '{termDet}' (academic_year_id={academicYearId}) not found in dest terms — term_id set to NULL");
+                        {
+                            if (termMap.TryGetValue(key, out var tId))
+                                termId = tId;
+                            else
+                                AddError(result, row.BusMasterID, $"term '{termDet}' (academic_year_id={academicYearId}) not found in dest terms — term_id set to NULL");
+                        }
                     }
                     else if (!string.IsNullOrWhiteSpace(termDet) && !academicYearId.HasValue)
                     {
-                        AddError(result, row.BusMasterID, $"term '{termDet}' cannot be resolved — academic_year_id is NULL — term_id set to NULL");
+                        AddError(result, row.BusMasterID, $"'{termDet}' cannot be resolved — academic_year_id is NULL — term_id & fee_period_id set to NULL");
                     }
 
                     // --- Skip check ---
                     if (mode == MigrationMode.Skip)
                     {
-                        var key = MakeKey(routeId, termId, academicYearId);
+                        var key = MakeKey(routeId, termId, feePeriodId, academicYearId);
                         if (existingKeys.Contains(key))
                         {
                             result.Skipped++;
@@ -129,12 +148,12 @@ namespace AscentMigration.Migrators
                         {
                             await dest.ExecuteAsync(@"
                                 INSERT INTO bus_fee_structures
-                                    (route_id, term_id, amount, academic_year_id,
+                                    (route_id, term_id, fee_period_id, payment_type, amount, academic_year_id,
                                      status, bus_name, category_name,
                                      school_id, created_by, created_at,
                                      machine_id, deleted_by)
                                 VALUES
-                                    (@RouteId, @TermId, @Amount, @AcademicYearId,
+                                    (@RouteId, @TermId, @FeePeriodId, @PaymentType, @Amount, @AcademicYearId,
                                      @Status, @BusName, @CategoryName,
                                      @SchoolId, @CreatedBy, @CreatedAt,
                                      @MachineId, @DeletedBy)",
@@ -142,6 +161,8 @@ namespace AscentMigration.Migrators
                                 {
                                     RouteId        = routeId,
                                     TermId         = termId,
+                                    FeePeriodId    = feePeriodId,
+                                    PaymentType    = paymentType,
                                     Amount         = row.Amt,
                                     AcademicYearId = academicYearId,
                                     Status         = MapStatus(row.TraStatus),
@@ -250,12 +271,27 @@ namespace AscentMigration.Migrators
             return map;
         }
 
+        // Composite key: "period_label|academic_year_id" — Monthly bus fees resolve here.
+        private async Task<Dictionary<string, int>> LoadFeePeriodMap(SqlConnection dest)
+        {
+            var rows = await dest.QueryAsync<FeePeriodRow>(
+                "SELECT fee_period_id, period_label, academic_year_id FROM fee_periods WHERE school_id = @SchoolId",
+                new { Config.SchoolId });
+            var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var r in rows)
+            {
+                var key = $"{r.period_label?.Trim()}|{r.academic_year_id}";
+                if (!map.ContainsKey(key)) map[key] = r.fee_period_id;
+            }
+            return map;
+        }
+
         // ---------------------------------------------------------------
         // Helpers
         // ---------------------------------------------------------------
 
-        private static string MakeKey(int? routeId, int? termId, int? academicYearId)
-            => $"{routeId ?? 0}|{termId ?? 0}|{academicYearId ?? 0}";
+        private static string MakeKey(int? routeId, int? termId, int? feePeriodId, int? academicYearId)
+            => $"{routeId ?? 0}|{termId ?? 0}|{feePeriodId ?? 0}|{academicYearId ?? 0}";
 
         private static void AddError(MigrationResult result, string rowId, string reason)
         {
@@ -284,6 +320,7 @@ namespace AscentMigration.Migrators
         private class DestRouteRow   { public int    route_id  { get; set; } public string route_name    { get; set; } public string status { get; set; } }
         private class AcadYearRow    { public int    academic_year_id { get; set; } public string academic_year { get; set; } }
         private class TermRow        { public int    term_id   { get; set; } public string term_name     { get; set; } public int? academic_year_id { get; set; } }
-        private class BusFeeKey      { public int    route_id  { get; set; } public int    term_id       { get; set; } public int  academic_year_id { get; set; } }
+        private class FeePeriodRow   { public int    fee_period_id { get; set; } public string period_label { get; set; } public int? academic_year_id { get; set; } }
+        private class BusFeeKey      { public int    route_id  { get; set; } public int    term_id       { get; set; } public int  fee_period_id { get; set; } public int  academic_year_id { get; set; } }
     }
 }

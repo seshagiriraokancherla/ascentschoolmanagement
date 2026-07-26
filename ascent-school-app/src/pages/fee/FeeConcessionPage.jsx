@@ -266,7 +266,7 @@ export default function FeeConcessionPage() {
         busRouteId:     concessionMode === 'transport' ? (values.busRouteId || null) : null,
         hostelId:       concessionMode === 'hostel'  ? (values.hostelId   || null) : null,
         termId:         values.termId         || null,
-        feePeriodId:    concessionMode !== 'transport' ? (values.feePeriodId || null) : null,
+        feePeriodId:    values.feePeriodId    || null,
         academicYearId: filterYear,
         concessionType: values.concessionType,
         amount:         values.amount,
@@ -336,8 +336,8 @@ export default function FeeConcessionPage() {
     if (concessionMode === 'transport' && !bulkBusRouteId) {
       message.warning('Please select a bus route'); return
     }
-    if (concessionMode === 'transport' && !bulkTermId) {
-      message.warning('Please select a term'); return
+    if (concessionMode === 'transport' && !bulkTermId && !bulkFeePeriodId) {
+      message.warning('Please select a term or fee period'); return
     }
     if (concessionMode === 'hostel' && !bulkHostelId) {
       message.warning('Please select a hostel'); return
@@ -360,7 +360,7 @@ export default function FeeConcessionPage() {
         busRouteId:     concessionMode === 'transport'  ? (bulkBusRouteId || null) : null,
         hostelId:       concessionMode === 'hostel'     ? (bulkHostelId   || null) : null,
         termId:         bulkTermId       || null,
-        feePeriodId:    concessionMode !== 'transport'  ? (bulkFeePeriodId || null) : null,
+        feePeriodId:    bulkFeePeriodId  || null,
         concessionType: bulkConcessionType,
         rows,
       })
@@ -659,17 +659,25 @@ export default function FeeConcessionPage() {
                         </Select>
                       </Form.Item>
 
-                      <Form.Item
-                        name="termId"
-                        label="Term"
-                        rules={[{ required: true, message: 'Select term' }]}
-                      >
-                        <Select placeholder="Select term">
-                          {terms.map((t) => (
-                            <Option key={t.termId} value={t.termId}>{t.termName}</Option>
-                          ))}
-                        </Select>
-                      </Form.Item>
+                      {terms.length > 0 && (
+                        <Form.Item name="termId" label="Term">
+                          <Select placeholder="Select term (if term-based)" allowClear>
+                            {terms.map((t) => (
+                              <Option key={t.termId} value={t.termId}>{t.termName}</Option>
+                            ))}
+                          </Select>
+                        </Form.Item>
+                      )}
+
+                      {feePeriods.length > 0 && (
+                        <Form.Item name="feePeriodId" label="Fee Period">
+                          <Select placeholder="Select period (if monthly)" allowClear>
+                            {feePeriods.map((p) => (
+                              <Option key={p.feePeriodId} value={p.feePeriodId}>{p.periodLabel}</Option>
+                            ))}
+                          </Select>
+                        </Form.Item>
+                      )}
                     </>
                   ) : isHostel ? (
                     <>
@@ -798,20 +806,40 @@ export default function FeeConcessionPage() {
                       ))}
                     </Select>
                   </Col>
-                  <Col>
-                    <Text strong>Term</Text>
-                    <br />
-                    <Select
-                      placeholder="Select term"
-                      style={{ width: 160, marginTop: 4 }}
-                      value={bulkTermId}
-                      onChange={setBulkTermId}
-                    >
-                      {terms.map((t) => (
-                        <Option key={t.termId} value={t.termId}>{t.termName}</Option>
-                      ))}
-                    </Select>
-                  </Col>
+                  {terms.length > 0 && (
+                    <Col>
+                      <Text strong>Term</Text>
+                      <br />
+                      <Select
+                        placeholder="Select term (if term-based)"
+                        style={{ width: 180, marginTop: 4 }}
+                        value={bulkTermId}
+                        onChange={setBulkTermId}
+                        allowClear
+                      >
+                        {terms.map((t) => (
+                          <Option key={t.termId} value={t.termId}>{t.termName}</Option>
+                        ))}
+                      </Select>
+                    </Col>
+                  )}
+                  {feePeriods.length > 0 && (
+                    <Col>
+                      <Text strong>Fee Period</Text>
+                      <br />
+                      <Select
+                        placeholder="Select period (if monthly)"
+                        style={{ width: 180, marginTop: 4 }}
+                        value={bulkFeePeriodId}
+                        onChange={setBulkFeePeriodId}
+                        allowClear
+                      >
+                        {feePeriods.map((p) => (
+                          <Option key={p.feePeriodId} value={p.feePeriodId}>{p.periodLabel}</Option>
+                        ))}
+                      </Select>
+                    </Col>
+                  )}
                 </>
               ) : isHostel ? (
                 <>

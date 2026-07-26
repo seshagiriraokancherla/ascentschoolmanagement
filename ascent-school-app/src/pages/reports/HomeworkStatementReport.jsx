@@ -45,13 +45,13 @@ export default function HomeworkStatementReport() {
     finally { setLoading(false) }
   }
 
-  // ── Group rows by DueDate for display ─────────────────────────────────────
+  // ── Group rows by AssignedDate for display ────────────────────────────────
 
   const grouped = rows
     ? Object.entries(
         rows.reduce((acc, r) => {
-          acc[r.dueDate] = acc[r.dueDate] || []
-          acc[r.dueDate].push(r)
+          acc[r.assignedDate] = acc[r.assignedDate] || []
+          acc[r.assignedDate].push(r)
           return acc
         }, {})
       ).sort(([a], [b]) => a.localeCompare(b))
@@ -83,7 +83,7 @@ export default function HomeworkStatementReport() {
       doc.setFontSize(9).setFont(undefined, 'bold')
       doc.setFillColor(230, 230, 230)
       doc.rect(14, y - 3, pw - 28, 7, 'F')
-      doc.text(`Due: ${date}  (${group.length} item${group.length !== 1 ? 's' : ''})`, 16, y + 1)
+      doc.text(`Date: ${date}  (${group.length} item${group.length !== 1 ? 's' : ''})`, 16, y + 1)
       doc.setFont(undefined, 'normal')
       y += 7
 
@@ -121,9 +121,9 @@ export default function HomeworkStatementReport() {
   const handleCsv = () => {
     if (!rows?.length) { message.warning('No data to export.'); return }
     exportCsv({
-      columns: ['Due Date', 'Assigned Date', 'Class', 'Subject', 'Title', 'Description', 'Assigned By'],
+      columns: ['Assigned Date', 'Class', 'Subject', 'Title', 'Description', 'Assigned By'],
       rows:    rows.map(r => [
-        r.dueDate, r.assignedDate, r.className, r.subjectName,
+        r.assignedDate, r.className, r.subjectName,
         r.title, r.description || '', r.assignedBy,
       ]),
       fileName: 'homework_statement.csv',
@@ -152,7 +152,7 @@ export default function HomeworkStatementReport() {
             format="DD-MM-YYYY"
             value={dates}
             onChange={v => { setDates(v); setRows(null) }}
-            placeholder={['Due From *', 'Due To *']}
+            placeholder={['From *', 'To *']}
             allowClear
           />
         </Col>
@@ -192,7 +192,7 @@ export default function HomeworkStatementReport() {
             background: '#f5f5f5', padding: '6px 12px', borderRadius: 4,
             marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10,
           }}>
-            <Text strong style={{ fontSize: 13 }}>Due: {date}</Text>
+            <Text strong style={{ fontSize: 13 }}>Date: {date}</Text>
             <Tag style={{ marginLeft: 4 }}>{group.length} item{group.length !== 1 ? 's' : ''}</Tag>
           </div>
 

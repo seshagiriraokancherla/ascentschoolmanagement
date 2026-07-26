@@ -81,3 +81,10 @@ nul
 # Android signing (local only)
 keystore.properties
 **/keystore.properties
+
+# Firebase secrets (never commit)
+# Service-account JSON = a real secret (grants FCM send on the whole project).
+**/firebase-service-account.json
+API/AscentSchools.API/App_Data/firebase-service-account.json
+# google-services.json = client config (not secret, but keep out of the repo).
+**/google-services.json

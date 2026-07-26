@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using AscentSchools.Core.DTOs.School.Media;
 
 namespace AscentSchools.Core.DTOs.Mobile.Data
 {
@@ -10,5 +12,6 @@ namespace AscentSchools.Core.DTOs.Mobile.Data
         public string   Scope          { get; set; }   // School / Class
         public bool     IsPinned       { get; set; }
         public DateTime CreatedAt      { get; set; }
+        public IEnumerable<MediaUploadDto> Media { get; set; }   // R2 uploads (Phase B)
     }
 }

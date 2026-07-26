@@ -55,6 +55,8 @@
     <Compile Include="Repositories\Control\SubscriptionRepository.cs" />
     <Compile Include="Repositories\Control\TenantUserRepository.cs" />
     <Compile Include="Repositories\School\MasterDataRepository.cs" />
+    <Compile Include="Repositories\School\R2ConfigRepository.cs" />
+    <Compile Include="Repositories\School\MediaUploadsRepository.cs" />
     <Compile Include="Repositories\School\ReportsRepository.cs" />
     <Compile Include="Repositories\School\SchoolEventsRepository.cs" />
     <Compile Include="Repositories\School\SmsRepository.cs" />
@@ -72,12 +74,15 @@
     <Compile Include="Repositories\Mobile\MobileParentAuthRepository.cs" />
     <Compile Include="Repositories\Mobile\MobileDataRepository.cs" />
     <Compile Include="Repositories\Mobile\AppConfigRepository.cs" />
+    <Compile Include="Repositories\Mobile\DevicePushTokenRepository.cs" />
     <Compile Include="Repositories\School\AttendanceRepository.cs" />
     <Compile Include="Repositories\School\DashboardRepository.cs" />
     <Compile Include="Repositories\School\TransportRepository.cs" />
     <Compile Include="Repositories\School\MarksRepository.cs" />
     <Compile Include="Repositories\School\HomeworkRepository.cs" />
     <Compile Include="Repositories\School\AnnouncementsRepository.cs" />
+    <Compile Include="Repositories\School\ClassTeacherRepository.cs" />
+    <Compile Include="Repositories\School\MessagingRepository.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />

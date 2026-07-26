@@ -68,11 +68,12 @@ namespace AscentSchools.API.Controllers.School
         // ── Bus Fee Structure ─────────────────────────────────────────────────
 
         [HttpGet, Route("fee-structure")]
-        public HttpResponseMessage GetFeeStructure([FromUri] int routeId, [FromUri] int academicYearId)
+        public HttpResponseMessage GetFeeStructure(
+            [FromUri] int routeId, [FromUri] int academicYearId, [FromUri] string paymentType = null)
         {
             if (routeId <= 0 || academicYearId <= 0)
                 return BadRequest("routeId and academicYearId are required.");
-            return Ok(_repo.GetBusFeeStructure(Tenant.TenantDbName, Tenant.SchoolId, routeId, academicYearId));
+            return Ok(_repo.GetBusFeeStructure(Tenant.TenantDbName, Tenant.SchoolId, routeId, academicYearId, paymentType));
         }
 
         [HttpPost, Route("fee-structure")]
@@ -83,7 +84,7 @@ namespace AscentSchools.API.Controllers.School
             if (request.Items == null || !request.Items.Any())
                 return BadRequest("No fee items provided.");
             _repo.SaveBusFeeStructure(Tenant.TenantDbName, Tenant.SchoolId, Tenant.FullName, request);
-            return Ok(_repo.GetBusFeeStructure(Tenant.TenantDbName, Tenant.SchoolId, request.RouteId, request.AcademicYearId));
+            return Ok(_repo.GetBusFeeStructure(Tenant.TenantDbName, Tenant.SchoolId, request.RouteId, request.AcademicYearId, request.PaymentType));
         }
 
         // ── Student Transport ─────────────────────────────────────────────────

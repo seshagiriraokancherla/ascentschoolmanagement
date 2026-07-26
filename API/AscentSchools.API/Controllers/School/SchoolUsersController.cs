@@ -44,12 +44,26 @@ namespace AscentSchools.API.Controllers.School
             return Ok(schools);
         }
 
-        // POST school/users
+        // GET school/users/staff — Active staff without a login (create-user dropdown)
+        [HttpGet, Route("staff")]
+        public HttpResponseMessage GetAssignableStaff()
+        {
+            var staff = _users.GetAssignableStaff(Tenant.TenantDbName, Tenant.SchoolId);
+            return Ok(staff);
+        }
+
+        // POST school/users — school-app users are always created from a staff record.
         [HttpPost, Route("")]
         public HttpResponseMessage CreateUser([FromBody] CreateTenantUserRequest request)
         {
             if (request == null || string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
                 return BadRequest("Username and password are required.");
+
+            if (request.EmployeeId == null || request.EmployeeId <= 0)
+                return BadRequest("A staff member is required.");
+
+            if (!_users.IsStaffAvailableForLogin(Tenant.TenantDbName, Tenant.SchoolId, request.EmployeeId.Value))
+                return BadRequest("The selected staff member is invalid or already has a login.");
 
             if (_users.UsernameExists(Tenant.TenantDbName, request.Username))
                 return BadRequest("Username already taken.");

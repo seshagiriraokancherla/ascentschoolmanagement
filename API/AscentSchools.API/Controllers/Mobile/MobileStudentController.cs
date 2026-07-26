@@ -119,7 +119,11 @@ namespace AscentSchools.API.Controllers.Mobile
             if (!string.IsNullOrEmpty(Mobile.ClassName))
                 classId = GetClassIdNullable(Mobile.DbName, Mobile.ClassName, Mobile.SchoolId);
 
-            var announcements = _data.GetAnnouncements(Mobile.DbName, Mobile.SchoolId, classId);
+            // Resolve the child's section so section-targeted announcements only reach
+            // matching-section parents; class-wide (section_id NULL) always reach everyone.
+            int? sectionId = GetStudentSectionId(Mobile.DbName, Mobile.StudentId);
+
+            var announcements = _data.GetAnnouncements(Mobile.DbName, Mobile.SchoolId, classId, sectionId);
             return Request.CreateResponse(HttpStatusCode.OK, ApiResponse<object>.Ok(announcements));
         }
 

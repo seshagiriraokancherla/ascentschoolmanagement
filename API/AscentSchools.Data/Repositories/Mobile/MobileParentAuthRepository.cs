@@ -279,6 +279,15 @@ namespace AscentSchools.Data.Repositories.Mobile
                     new { tokenId, replacedByHash });
         }
 
+        /// <summary>Slides the expiry forward without rotating (stable mobile refresh token).</summary>
+        public void ExtendRefreshToken(int tokenId, DateTime expiresAt)
+        {
+            using (var conn = _db.GetMasterConnection())
+                conn.Execute(
+                    "UPDATE parent_refresh_tokens SET expires_at = @expiresAt WHERE token_id = @tokenId AND revoked_at IS NULL",
+                    new { tokenId, expiresAt });
+        }
+
         public void RevokeAllRefreshTokens(int parentId)
         {
             using (var conn = _db.GetMasterConnection())

@@ -30,6 +30,7 @@ namespace AscentSyncTool.Models
     // ── Bulk student import (POST /school/students/bulk) ───────────────────────
     public class StudentBulkRow
     {
+        public int?   StudentUniqueId { get; set; }   // = legacy StuUnqID → new DB student_unique_id
         public string AdmissionNo  { get; set; }
         public string StudentName  { get; set; }
         public string Gender       { get; set; }
@@ -50,12 +51,39 @@ namespace AscentSyncTool.Models
         public string JoiningClass { get; set; }
         public string MotherTongue { get; set; }
         public string Status       { get; set; }   // Active / Inactive
+
+        // Extended fields carried from legacy → new-DB columns
+        public string   JoinType             { get; set; }
+        public string   FatherOccupation     { get; set; }
+        public string   FatherEmploymentType { get; set; }
+        public string   MotherOccupation     { get; set; }
+        public string   DateOfJoining        { get; set; }   // dd/MM/yyyy
+        public string   Nationality          { get; set; }
+        public string   DoorNo               { get; set; }
+        public string   AddressArea          { get; set; }
+        public string   AddressCity          { get; set; }
+        public string   AddressState         { get; set; }
+        public string   PermanentAddress     { get; set; }
+        public string   Email                { get; set; }
+        public decimal? AnnualIncome         { get; set; }
+        public int?     FamilyChildrenCount  { get; set; }
+        public string   DobProofSubmitted    { get; set; }
+        public string   CasteCertSubmitted   { get; set; }
+        public string   TransportType        { get; set; }
+        public string   AdmissionDate        { get; set; }   // dd/MM/yyyy
+        public string   StudentType          { get; set; }
+        public string   BloodGroup           { get; set; }
+        public string   JoinTerm             { get; set; }
+        public string   FirstLanguage        { get; set; }
+        public string   ThirdLanguage        { get; set; }
+        public string   UdiseNo              { get; set; }
     }
 
     public class BulkStudentImportRequest
     {
         public List<StudentBulkRow> Rows { get; set; } = new List<StudentBulkRow>();
-        public bool Upsert { get; set; } = true;   // tool always upserts (update existing)
+        public bool   Upsert    { get; set; } = true;   // tool always upserts (update existing)
+        public string CreatedBy { get; set; } = "synctool";
     }
 
     // ── Bulk import result ─────────────────────────────────────────────────────

@@ -21,7 +21,7 @@ namespace AscentSchools.API.Controllers.School
         // GET /school/attendance?classId=5&sectionId=2&date=2025-01-15
         // sectionId is optional — omit it to load the whole class (all sections).
         [HttpGet, Route("")]
-        public HttpResponseMessage GetAttendance([FromUri] int classId, [FromUri] int? sectionId, [FromUri] string date)
+        public HttpResponseMessage GetAttendance([FromUri] int classId, [FromUri] string date, [FromUri] int? sectionId = null)
         {
             if (classId <= 0)
                 return BadRequest("classId is required.");
@@ -58,7 +58,7 @@ namespace AscentSchools.API.Controllers.School
         // Hard-deletes attendance for a class on a date (so it can be re-marked).
         // sectionId is optional — omit it to delete the whole class (all sections).
         [HttpDelete, Route("")]
-        public HttpResponseMessage DeleteAttendance([FromUri] int classId, [FromUri] int? sectionId, [FromUri] string date)
+        public HttpResponseMessage DeleteAttendance([FromUri] int classId, [FromUri] string date, [FromUri] int? sectionId = null)
         {
             if (classId <= 0)
                 return BadRequest("classId is required.");

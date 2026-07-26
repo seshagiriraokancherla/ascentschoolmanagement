@@ -33,7 +33,51 @@ class TeacherRepository(private val api: ApiService) {
         if (!body.success) error(body.message ?: "Create failed")
     }
 
+    suspend fun getAnnouncements(classId: Int): Result<List<TeacherAnnouncementDto>> = runCatching {
+        api.getTeacherAnnouncements(classId).bodyOrError().dataOrError()
+    }
+
+    suspend fun createAnnouncement(request: TeacherCreateAnnouncementRequest): Result<Unit> = runCatching {
+        val body = api.createTeacherAnnouncement(request).bodyOrError()
+        if (!body.success) error(body.message ?: "Create failed")
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    // ── Messaging (teacher side — threads of their assigned classes) ──────
+
+    suspend fun getThreads(): Result<List<MessageThreadDto>> = runCatching {
+        api.getTeacherThreads().bodyOrError().dataOrError()
+    }
+
+    suspend fun getThread(threadId: Int): Result<MessageThreadDetailDto> = runCatching {
+        api.getTeacherThread(threadId).bodyOrError().dataOrError()
+    }
+
+    suspend fun reply(threadId: Int, text: String): Result<Unit> = runCatching {
+        val body = api.replyTeacherMessage(threadId, SendMessageRequest(text)).bodyOrError()
+        if (!body.success) error(body.message ?: "Reply failed")
+    }
+
+    suspend fun markThreadRead(threadId: Int): Result<Unit> = runCatching {
+        api.markTeacherThreadRead(threadId).bodyOrError()
+        Unit
+    }
+
+    suspend fun reportMessage(threadId: Int, messageId: Int, reason: String?): Result<Unit> = runCatching {
+        val body = api.reportTeacherMessage(threadId, ReportMessageRequest(messageId, reason)).bodyOrError()
+        if (!body.success) error(body.message ?: "Report failed")
+    }
+
+    suspend fun blockThread(threadId: Int): Result<Unit> = runCatching {
+        val body = api.blockTeacherThread(threadId).bodyOrError()
+        if (!body.success) error(body.message ?: "Block failed")
+    }
+
+    suspend fun unblockThread(threadId: Int): Result<Unit> = runCatching {
+        val body = api.unblockTeacherThread(threadId).bodyOrError()
+        if (!body.success) error(body.message ?: "Unblock failed")
+    }
 
     private fun <T> Response<T>.bodyOrError(): T {
         if (isSuccessful) return body() ?: error("Empty response body")

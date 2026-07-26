@@ -1,4 +1,5 @@
 using AscentSchools.Core.DTOs.Control.Users;
+using AscentSchools.Core.DTOs.School.Staff;
 using AscentSchools.Data.ConnectionFactory;
 using Dapper;
 using System.Collections.Generic;
@@ -22,6 +23,7 @@ namespace AscentSchools.Data.Repositories.Control
                 return conn.Query<TenantUserDto>(
                     @"SELECT u.user_id UserId, u.username Username, u.full_name FullName,
                              u.email Email, u.mobile Mobile, u.status Status, u.created_at CreatedAt,
+                             u.employee_id EmployeeId, st.staff_name StaffName, st.designation Designation,
                              ISNULL(
                                  STUFF((
                                      SELECT ', ' + r.role_name
@@ -31,6 +33,7 @@ namespace AscentSchools.Data.Repositories.Control
                                      FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, ''),
                              '') Roles
                       FROM users u
+                      LEFT JOIN staff st ON st.staff_id = u.employee_id
                       ORDER BY u.user_id");
         }
 
@@ -40,6 +43,37 @@ namespace AscentSchools.Data.Repositories.Control
                 return conn.ExecuteScalar<int>(
                     "SELECT COUNT(1) FROM users WHERE username = @username",
                     new { username }) > 0;
+        }
+
+        /// <summary>
+        /// Active staff of a branch that don't yet have a login (source for the
+        /// "create user from staff" dropdown in the school app).
+        /// </summary>
+        public IEnumerable<StaffDto> GetAssignableStaff(string tenantDbName, int schoolId)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.Query<StaffDto>(
+                    @"SELECT staff_id StaffId, staff_name StaffName, employee_code EmployeeCode,
+                             designation Designation, department Department, mobile Mobile, email Email,
+                             CONVERT(VARCHAR(10), join_date, 120) JoinDate, status Status
+                      FROM staff
+                      WHERE school_id = @schoolId AND status = 'Active'
+                        AND staff_id NOT IN (SELECT employee_id FROM users WHERE employee_id IS NOT NULL)
+                      ORDER BY staff_name",
+                    new { schoolId });
+        }
+
+        /// <summary>
+        /// True when the staff member exists in the branch, is Active, and has no login yet.
+        /// </summary>
+        public bool IsStaffAvailableForLogin(string tenantDbName, int schoolId, int staffId)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.ExecuteScalar<int>(
+                    @"SELECT COUNT(1) FROM staff
+                      WHERE staff_id = @staffId AND school_id = @schoolId AND status = 'Active'
+                        AND staff_id NOT IN (SELECT employee_id FROM users WHERE employee_id IS NOT NULL)",
+                    new { staffId, schoolId }) > 0;
         }
 
         public IEnumerable<TenantRoleDto> GetRoles(string tenantDbName)
@@ -59,11 +93,11 @@ namespace AscentSchools.Data.Repositories.Control
             using (var conn = _db.GetTenantConnection(tenantDbName))
             {
                 var userId = conn.QuerySingle<int>(
-                    @"INSERT INTO users (username, password_hash, full_name, email, mobile, created_by)
-                      VALUES (@Username, @PasswordHash, @FullName, @Email, @Mobile, @CreatedBy);
+                    @"INSERT INTO users (username, password_hash, full_name, email, mobile, employee_id, created_by)
+                      VALUES (@Username, @PasswordHash, @FullName, @Email, @Mobile, @EmployeeId, @CreatedBy);
                       SELECT CAST(SCOPE_IDENTITY() AS INT)",
                     new { request.Username, PasswordHash = passwordHash,
-                          request.FullName, request.Email, request.Mobile, CreatedBy = createdBy });
+                          request.FullName, request.Email, request.Mobile, request.EmployeeId, CreatedBy = createdBy });
 
                 if (request.SchoolIds != null && request.SchoolIds.Length > 0)
                 {

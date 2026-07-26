@@ -10,10 +10,16 @@ import api from '../../api/axiosInstance'
 
 const { Title, Text } = Typography
 
+// Suggest a username from a staff record: employee code if present, else the
+// name normalized to lowercase alphanumerics. Always editable by the operator.
+const suggestUsername = (s) =>
+  (s.employeeCode?.trim() || (s.staffName || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '')) || ''
+
 export default function UsersPage() {
   const [users,   setUsers]   = useState([])
   const [schools, setSchools] = useState([])
   const [roles,   setRoles]   = useState([])
+  const [staff,   setStaff]   = useState([])
   const [loading, setLoading] = useState(false)
 
   const [open,   setOpen]   = useState(false)
@@ -26,14 +32,16 @@ export default function UsersPage() {
   const fetchAll = async () => {
     setLoading(true)
     try {
-      const [usersRes, schoolsRes, rolesRes] = await Promise.all([
+      const [usersRes, schoolsRes, rolesRes, staffRes] = await Promise.all([
         api.get('/school/users'),
         api.get('/school/users/schools'),
         api.get('/school/users/roles'),
+        api.get('/school/users/staff'),
       ])
       setUsers(usersRes.data.data     || [])
       setSchools(schoolsRes.data.data || [])
       setRoles(rolesRes.data.data     || [])
+      setStaff(staffRes.data.data     || [])
     } finally {
       setLoading(false)
     }
@@ -50,14 +58,26 @@ export default function UsersPage() {
     setOpen(true)
   }
 
+  // Auto-fill name/email/mobile + suggest a username when a staff member is picked.
+  const onStaffSelect = (staffId) => {
+    const s = staff.find((x) => x.staffId === staffId)
+    if (!s) return
+    form.setFieldsValue({
+      fullName: s.staffName,
+      email:    s.email  || '',
+      mobile:   s.mobile || '',
+      username: suggestUsername(s),
+    })
+  }
+
   const handleCreate = async (values) => {
     setSaving(true)
     setError(null)
     try {
-      const res = await api.post('/school/users', values)
-      setUsers(res.data.data || [])
+      await api.post('/school/users', values)
       setOpen(false)
       form.resetFields()
+      fetchAll()   // refresh users + the assignable-staff list (linked staff drops off)
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to create user.')
     } finally {
@@ -87,8 +107,15 @@ export default function UsersPage() {
 
   const columns = [
     { title: 'ID',        dataIndex: 'userId',   width: 60 },
-    { title: 'Username',  dataIndex: 'username', render: (v) => <Text code>{v}</Text> },
+    { title: 'Username',  dataIndex: 'username', render: (v) => <Text strong>{v}</Text> },
     { title: 'Full Name', dataIndex: 'fullName' },
+    {
+      title: 'Staff',
+      dataIndex: 'staffName',
+      render: (v, r) => v
+        ? <span>{v}{r.designation ? <Text type="secondary"> · {r.designation}</Text> : null}</span>
+        : <Text type="secondary">—</Text>,
+    },
     { title: 'Email',     dataIndex: 'email',    render: (v) => v || '—' },
     { title: 'Mobile',    dataIndex: 'mobile',   render: (v) => v || '—' },
     {
@@ -125,12 +152,13 @@ export default function UsersPage() {
   ]
 
   const noSchools = schools.length === 0
+  const noStaff   = staff.length === 0
 
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Title level={4} style={{ margin: 0 }}>User Management</Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate} disabled={noSchools}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate} disabled={noSchools || noStaff}>
           Add User
         </Button>
       </div>
@@ -139,6 +167,15 @@ export default function UsersPage() {
         <Alert
           type="warning" showIcon
           message="No school branches found. Add at least one branch before creating users."
+          style={{ marginBottom: 16 }}
+        />
+      )}
+
+      {!noSchools && noStaff && (
+        <Alert
+          type="info" showIcon
+          message="No staff available for a login."
+          description="Users are created from staff records. Add a staff member (Staff module) — or all active staff already have a login."
           style={{ marginBottom: 16 }}
         />
       )}
@@ -166,6 +203,24 @@ export default function UsersPage() {
         {error && <Alert type="error" message={error} showIcon style={{ marginBottom: 12 }} />}
 
         <Form form={form} layout="vertical" onFinish={handleCreate} style={{ marginTop: 12 }}>
+          <Form.Item
+            name="employeeId"
+            label="Staff Member"
+            rules={[{ required: true, message: 'Select a staff member.' }]}
+            extra="Users are created from staff records. Name, email and mobile come from the selected staff."
+          >
+            <Select
+              showSearch
+              placeholder="Select staff member"
+              onChange={onStaffSelect}
+              optionFilterProp="label"
+              options={staff.map((s) => ({
+                value: s.staffId,
+                label: `${s.staffName}${s.employeeCode ? ` (${s.employeeCode})` : ''}${s.designation ? ` — ${s.designation}` : ''}`,
+              }))}
+            />
+          </Form.Item>
+
           <Form.Item name="fullName" label="Full Name" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
@@ -190,8 +245,8 @@ export default function UsersPage() {
           </Form.Item>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <Form.Item name="email"  label="Email"><Input /></Form.Item>
-            <Form.Item name="mobile" label="Mobile"><Input /></Form.Item>
+            <Form.Item name="email"  label="Email"><Input readOnly placeholder="From staff record" /></Form.Item>
+            <Form.Item name="mobile" label="Mobile"><Input readOnly placeholder="From staff record" /></Form.Item>
           </div>
 
           <Form.Item name="roleId" label="Role" rules={[{ required: true, message: 'Select a role.' }]}>

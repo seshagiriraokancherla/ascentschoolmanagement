@@ -21,6 +21,34 @@ namespace AscentSchools.API.Helpers
         private static int    AccessMins  => int.Parse(ConfigurationManager.AppSettings["Jwt:AccessTokenMins"]);
         private static int    RefreshDays => int.Parse(ConfigurationManager.AppSettings["Jwt:RefreshTokenDays"]);
 
+        // Mobile app sessions live much longer than web (avoids re-OTP → SMS cost).
+        // Defaults to 365 days when the config key is absent.
+        public  static int    MobileRefreshDays
+        {
+            get
+            {
+                var v = ConfigurationManager.AppSettings["Jwt:MobileRefreshTokenDays"];
+                return int.TryParse(v, out var d) && d > 0 ? d : 365;
+            }
+        }
+
+        // Mobile access token lifetime — separate from the web/control access token
+        // (Jwt:AccessTokenMins) so staff/admin web sessions stay short (revocable) while
+        // the mobile app carries a long-lived access token. Defaults to 180 days
+        // (259200 min) when the config key is absent.
+        //
+        // The app does NOT refresh on cold start (that call was the single biggest cause of
+        // spurious logouts), so this lifetime alone is what keeps a parent signed in between
+        // opens. Refresh happens lazily on a 401 and opportunistically in the background.
+        private static int    MobileAccessMins
+        {
+            get
+            {
+                var v = ConfigurationManager.AppSettings["Jwt:MobileAccessTokenMins"];
+                return int.TryParse(v, out var m) && m > 0 ? m : 259200;
+            }
+        }
+
         private static SymmetricSecurityKey SigningKey =>
             new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Secret));
 
@@ -126,6 +154,9 @@ namespace AscentSchools.API.Helpers
         public static DateTime RefreshTokenExpiry() =>
             DateTime.UtcNow.AddDays(RefreshDays);
 
+        public static DateTime MobileRefreshTokenExpiry() =>
+            DateTime.UtcNow.AddDays(MobileRefreshDays);
+
         // ── Control App Token ─────────────────────────────────────────────
 
         public static string GenerateControlAccessToken(ControlTokenClaims claims)
@@ -168,7 +199,7 @@ namespace AscentSchools.API.Helpers
                 new Claim("admissionNo", claims.AdmissionNo ?? ""),
             };
 
-            return BuildToken(claimsList, AccessMins);
+            return BuildToken(claimsList, MobileAccessMins);
         }
 
         /// <summary>Issues a parent-init token (tokenType=parent) with no child context yet.</summary>
@@ -188,7 +219,7 @@ namespace AscentSchools.API.Helpers
                 new Claim("admissionNo", claims.AdmissionNo ?? ""),
             };
 
-            return BuildToken(claimsList, AccessMins);
+            return BuildToken(claimsList, MobileAccessMins);
         }
 
         public static MobileStudentClaims ExtractMobileStudentClaims(ClaimsPrincipal principal)
@@ -248,7 +279,7 @@ namespace AscentSchools.API.Helpers
                 new Claim("dbName",    dbName   ?? ""),
                 new Claim("fullName",  fullName ?? ""),
             };
-            return BuildToken(claimsList, AccessMins);
+            return BuildToken(claimsList, MobileAccessMins);
         }
 
         private static string BuildToken(List<Claim> claims, int expiryMinutes)

@@ -1,5 +1,6 @@
 using AscentSchools.API.Filters;
 using AscentSchools.API.Middleware;
+using AscentSchools.Core.DTOs.School.Announcements;
 using AscentSchools.Core.DTOs.School.Attendance;
 using AscentSchools.Core.DTOs.School.Homework;
 using AscentSchools.Core.Models;
@@ -19,17 +20,19 @@ namespace AscentSchools.API.Controllers.Mobile
     [MobileTeacherAuth]
     public class MobileTeacherController : ApiController
     {
-        private readonly AttendanceRepository _attendance;
-        private readonly HomeworkRepository   _homework;
+        private readonly AttendanceRepository    _attendance;
+        private readonly HomeworkRepository      _homework;
+        private readonly AnnouncementsRepository _announcements;
         private readonly TenantConnectionFactory _db;
 
         private TeacherContext Teacher => TeacherContext.Current;
 
         public MobileTeacherController()
         {
-            _db         = new TenantConnectionFactory();
-            _attendance = new AttendanceRepository(_db);
-            _homework   = new HomeworkRepository(_db);
+            _db            = new TenantConnectionFactory();
+            _attendance    = new AttendanceRepository(_db);
+            _homework      = new HomeworkRepository(_db);
+            _announcements = new AnnouncementsRepository(_db);
         }
 
         // ── GET /mobile/teacher/classes ───────────────────────────────────────
@@ -138,8 +141,6 @@ namespace AscentSchools.API.Controllers.Mobile
                 return Fail(HttpStatusCode.BadRequest, "Title is required.");
             if (request.ClassId <= 0)
                 return Fail(HttpStatusCode.BadRequest, "classId is required.");
-            if (!DateTime.TryParse(request.DueDate, out var dueDate))
-                return Fail(HttpStatusCode.BadRequest, "A valid dueDate (yyyy-MM-dd) is required.");
 
             var assignedDate = DateTime.TryParse(request.AssignedDate, out var ad) ? ad : DateTime.Today;
 
@@ -150,12 +151,55 @@ namespace AscentSchools.API.Controllers.Mobile
                 SubjectId    = null,
                 ClassId      = request.ClassId,
                 AssignedDate = assignedDate,
-                DueDate      = dueDate,
+                DueDate      = null,
             };
 
             var id = _homework.CreateHomework(Teacher.DbName, Teacher.SchoolId, Teacher.FullName, saveReq);
             return Request.CreateResponse(HttpStatusCode.Created,
                 ApiResponse<object>.Ok(new { homeworkId = id }, "Homework created."));
+        }
+
+        // ── GET /mobile/teacher/announcements?classId= ───────────────────────
+        // Class announcements (plus school-wide) for the selected class.
+
+        [HttpGet, Route("announcements")]
+        public HttpResponseMessage GetAnnouncements([FromUri] int classId)
+        {
+            if (classId <= 0) return Fail(HttpStatusCode.BadRequest, "classId is required.");
+            var list = _announcements.GetAnnouncements(Teacher.DbName, Teacher.SchoolId, classId);
+            return Ok(list);
+        }
+
+        // ── POST /mobile/teacher/announcements ───────────────────────────────
+        // Teacher posts to their class (optionally a single section).
+
+        [HttpPost, Route("announcements")]
+        public HttpResponseMessage CreateAnnouncement([FromBody] TeacherCreateAnnouncementRequest request)
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.Title))
+                return Fail(HttpStatusCode.BadRequest, "Title is required.");
+            if (request.ClassId <= 0)
+                return Fail(HttpStatusCode.BadRequest, "classId is required.");
+
+            var saveReq = new SaveAnnouncementRequest
+            {
+                Title       = request.Title.Trim(),
+                Description = request.Description?.Trim(),
+                Scope       = "Class",
+                ClassId     = request.ClassId,
+                SectionId   = request.SectionId > 0 ? request.SectionId : (int?)null,
+                IsPinned    = false,
+            };
+
+            var id = _announcements.CreateAnnouncement(Teacher.DbName, Teacher.SchoolId, Teacher.FullName, saveReq);
+
+            new AscentSchools.API.Helpers.PushNotifier().NotifyClass(
+                Teacher.DbName, Teacher.GroupId, Teacher.SchoolId,
+                saveReq.ClassId, saveReq.SectionId,
+                "New Announcement", saveReq.Title, "announcement", id);
+
+            return Request.CreateResponse(HttpStatusCode.Created,
+                ApiResponse<object>.Ok(new { announcementId = id }, "Announcement posted."));
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────
@@ -202,6 +246,13 @@ namespace AscentSchools.API.Controllers.Mobile
         public string Title        { get; set; }
         public string Description  { get; set; }
         public string AssignedDate { get; set; }
-        public string DueDate      { get; set; }
+    }
+
+    public class TeacherCreateAnnouncementRequest
+    {
+        public int    ClassId     { get; set; }
+        public int?   SectionId   { get; set; }   // optional; NULL/0 = whole class
+        public string Title       { get; set; }
+        public string Description { get; set; }
     }
 }

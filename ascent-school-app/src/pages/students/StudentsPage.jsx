@@ -217,7 +217,7 @@ export default function StudentsPage() {
       width:     60,
       render:    (path) =>
         path
-          ? <Avatar src={`${API_BASE}${path}`} size={40} />
+          ? <Avatar src={/^https?:\/\//.test(path) ? path : `${API_BASE}${path}`} size={40} />
           : <Avatar icon={<UserOutlined />} size={40} />,
     },
     {
@@ -236,6 +236,13 @@ export default function StudentsPage() {
       key:    'classSection',
       width:  150,
       render: (_, r) => r.sectionName ? `${r.className} - ${r.sectionName}` : r.className,
+    },
+    {
+      title:     'Father Mobile',
+      dataIndex: 'fatherMobile',
+      key:       'fatherMobile',
+      width:     130,
+      render:    (v) => v || '—',
     },
     {
       title:     'Gender',

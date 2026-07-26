@@ -67,6 +67,7 @@
     <Compile Include="DTOs\School\Events\SchoolEventDto.cs" />
     <Compile Include="DTOs\School\Master\FeePeriodDtos.cs" />
     <Compile Include="DTOs\School\Settings\SchoolSettingsDtos.cs" />
+    <Compile Include="DTOs\School\Media\MediaDtos.cs" />
     <Compile Include="DTOs\School\Master\SectionDtos.cs" />
     <Compile Include="DTOs\School\Reports\ReportDtos.cs" />
     <Compile Include="DTOs\School\Sms\SmsDtos.cs" />
@@ -104,6 +105,7 @@
     <Compile Include="DTOs\Mobile\Data\HomeworkDto.cs" />
     <Compile Include="DTOs\Mobile\Data\AnnouncementDto.cs" />
     <Compile Include="DTOs\Mobile\Data\StudentProfileDto.cs" />
+    <Compile Include="DTOs\Mobile\Notifications\PushDtos.cs" />
     <Compile Include="DTOs\School\Attendance\AttendanceDtos.cs" />
     <Compile Include="DTOs\School\Dashboard\DashboardDto.cs" />
     <Compile Include="DTOs\School\Hostel\HostelDtos.cs" />
@@ -111,6 +113,8 @@
     <Compile Include="DTOs\School\Marks\MarksDto.cs" />
     <Compile Include="DTOs\School\Homework\HomeworkDto.cs" />
     <Compile Include="DTOs\School\Announcements\AnnouncementDto.cs" />
+    <Compile Include="DTOs\School\ClassTeachers\ClassTeacherDtos.cs" />
+    <Compile Include="DTOs\School\Messaging\MessagingDtos.cs" />
     <Compile Include="Models\ApiResponse.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

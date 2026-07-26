@@ -11,6 +11,8 @@ namespace AscentSchools.Core.DTOs.School.Announcements
         public string   AttachmentUrl  { get; set; }   // optional PDF/doc URL
         public int?     ClassId        { get; set; }
         public string   ClassName      { get; set; }
+        public int?     SectionId      { get; set; }   // optional; NULL = whole class
+        public string   SectionName    { get; set; }
         public bool     IsPinned       { get; set; }
         public string   Status         { get; set; }
         public string   CreatedBy      { get; set; }
@@ -24,6 +26,7 @@ namespace AscentSchools.Core.DTOs.School.Announcements
         public string Scope         { get; set; }  // School / Class
         public string AttachmentUrl { get; set; }
         public int?   ClassId     { get; set; }
+        public int?   SectionId   { get; set; }  // optional; NULL = whole class
         public bool   IsPinned    { get; set; }
     }
 }

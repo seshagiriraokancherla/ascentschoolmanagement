@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import {
   Card, Table, Button, Modal, Form, Input, Select, DatePicker,
-  Popconfirm, Tag, Space, Typography, App as AntApp, Row, Col,
+  Popconfirm, Space, Typography, App as AntApp, Row, Col,
 } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, PaperClipOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import api from '../../api/axiosInstance'
+import MediaUploader from '../../components/MediaUploader'
 
 const { Title, Text } = Typography
 const { TextArea } = Input
@@ -22,13 +23,21 @@ export default function HomeworkPage() {
   const [modal,     setModal]     = useState({ open: false, editing: null })
   const [saving,    setSaving]    = useState(false)
   const [classFilter, setClassFilter] = useState(null)
+  const [page,      setPage]      = useState(1)
+  const [pageSize,  setPageSize]  = useState(20)
+  const [total,     setTotal]     = useState(0)
 
-  const loadHomework = async (classId) => {
+  const loadHomework = async (classId, p = 1, ps = 20) => {
     setLoading(true)
     try {
-      const url = classId ? `/school/homework?classId=${classId}` : '/school/homework'
-      const r = await api.get(url)
-      setHomework(r.data.data || [])
+      const params = new URLSearchParams({ page: p, pageSize: ps })
+      if (classId) params.append('classId', classId)
+      const r = await api.get(`/school/homework?${params}`)
+      const d = r.data?.data || {}
+      setHomework(d.items || [])
+      setTotal(d.total || 0)
+      setPage(p)
+      setPageSize(ps)
     } finally {
       setLoading(false)
     }
@@ -37,7 +46,7 @@ export default function HomeworkPage() {
   useEffect(() => {
     api.get('/school/master/classes').then(r => setClasses(r.data.data || []))
     api.get('/school/master/subjects').then(r => setSubjects(r.data.data || []))
-    loadHomework(null)
+    loadHomework(null, 1, 20)
   }, [])
 
   const loadSections = async (classId) => {
@@ -56,7 +65,7 @@ export default function HomeworkPage() {
   const openCreate = () => {
     form.resetFields()
     setSections([])
-    form.setFieldsValue({ assignedDate: dayjs(), dueDate: dayjs().add(1, 'day') })
+    form.setFieldsValue({ assignedDate: dayjs() })
     setModal({ open: true, editing: null })
   }
 
@@ -68,7 +77,6 @@ export default function HomeworkPage() {
       classId:       record.classId,
       sectionId:     record.sectionId,
       assignedDate:  dayjs(record.assignedDate),
-      dueDate:       dayjs(record.dueDate),
       attachmentUrl: record.attachmentUrl,
     })
     loadSections(record.classId)
@@ -82,17 +90,19 @@ export default function HomeworkPage() {
       const body = {
         ...values,
         assignedDate: values.assignedDate.format('YYYY-MM-DD'),
-        dueDate:      values.dueDate.format('YYYY-MM-DD'),
       }
       if (modal.editing) {
         await api.put(`/school/homework/${modal.editing.homeworkId}`, body)
         message.success('Homework updated.')
+        setModal({ open: false, editing: null })
+        loadHomework(classFilter, page, pageSize)   // stay on the current page
       } else {
-        await api.post('/school/homework', body)
-        message.success('Homework created.')
+        const res = await api.post('/school/homework', body)
+        const newId = res.data?.data
+        message.success('Homework created — you can attach files below.')
+        setModal({ open: true, editing: { homeworkId: newId, ...values } })  // stay open in edit mode
+        loadHomework(classFilter, 1, pageSize)       // new item is newest — jump to page 1
       }
-      setModal({ open: false, editing: null })
-      loadHomework(classFilter)
     } catch (e) {
       message.error(e.message || 'Failed to save homework.')
     } finally {
@@ -104,7 +114,7 @@ export default function HomeworkPage() {
     try {
       await api.delete(`/school/homework/${id}`)
       message.success('Homework deleted.')
-      loadHomework(classFilter)
+      loadHomework(classFilter, page, pageSize)
     } catch (e) {
       message.error('Failed to delete.')
     }
@@ -131,18 +141,6 @@ export default function HomeworkPage() {
       key: 'assignedDate',
       width: 110,
       render: d => dayjs(d).format('DD MMM YYYY'),
-    },
-    {
-      title: 'Due Date',
-      dataIndex: 'dueDate',
-      key: 'dueDate',
-      width: 110,
-      render: d => {
-        const due   = dayjs(d)
-        const today = dayjs()
-        const color = due.isBefore(today, 'day') ? 'red' : due.isSame(today, 'day') ? 'orange' : 'default'
-        return <Tag color={color}>{due.format('DD MMM YYYY')}</Tag>
-      },
     },
     {
       title: 'Attachment',
@@ -180,7 +178,7 @@ export default function HomeworkPage() {
               placeholder="All classes"
               allowClear
               value={classFilter}
-              onChange={v => { setClassFilter(v); loadHomework(v) }}
+              onChange={v => { setClassFilter(v); loadHomework(v, 1, pageSize) }}
               options={classes.map(c => ({ label: c.className, value: c.classId }))}
             />
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
@@ -194,7 +192,14 @@ export default function HomeworkPage() {
           columns={columns}
           rowKey="homeworkId"
           loading={loading}
-          pagination={{ pageSize: 20 }}
+          pagination={{
+            current: page,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            showTotal: t => `${t} homework item${t !== 1 ? 's' : ''}`,
+            onChange: (p, ps) => loadHomework(classFilter, p, ps),
+          }}
         />
       </Card>
 
@@ -244,26 +249,21 @@ export default function HomeworkPage() {
               </Form.Item>
             </Col>
           </Row>
-          <Row gutter={12}>
-            <Col span={12}>
-              <Form.Item name="assignedDate" label="Assigned Date" rules={[{ required: true }]}>
-                <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="dueDate" label="Due Date" rules={[{ required: true }]}>
-                <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Form.Item
-            name="attachmentUrl"
-            label="Attachment URL"
-            extra="Optional — paste a Google Drive or Cloudinary PDF/doc link"
-          >
-            <Input placeholder="https://drive.google.com/..." prefix={<PaperClipOutlined />} />
+          <Form.Item name="assignedDate" label="Assigned Date" rules={[{ required: true }]}>
+            <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
           </Form.Item>
         </Form>
+
+        <div style={{ marginTop: 8 }}>
+          <Text strong>Attachments</Text>
+          {modal.editing
+            ? <div style={{ marginTop: 8 }}>
+                <MediaUploader entityType="homework" entityId={modal.editing.homeworkId} classes={['image', 'doc', 'audio']} max={3} />
+              </div>
+            : <div style={{ marginTop: 4 }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>Save the homework first, then edit it to upload files.</Text>
+              </div>}
+        </div>
       </Modal>
     </div>
   )

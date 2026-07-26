@@ -2,10 +2,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- allowBackup is off deliberately. A restored session belongs to a different device,
+         which device binding (one device per parent) rejects anyway, and restoring prefs
+         whose Keystore key doesn't exist on the new device is a known cause of silent
+         logouts. Cost: a parent moving to a new phone logs in once with OTP. -->
     <application
         android:name=".AscentApp"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:icon="@mipmap/ic_launcher"
@@ -23,6 +28,20 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Firebase Cloud Messaging (push notifications) -->
+        <service
+            android:name=".push.AscentFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- Default channel for background (system-tray) notifications -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="ascent_default" />
 
     </application>
 
