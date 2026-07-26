@@ -86,7 +86,7 @@ namespace AscentSchools.API.Controllers.Mobile
             var messageId = _messages.SendMessage(dbName, schoolId, threadId,
                 "teacher", Teacher.UserId, fullName, body);
 
-            new PushNotifier().NotifyParent(groupId, thread.ParentId,
+            new PushNotifier().NotifyParent(dbName, groupId, schoolId, thread.ParentId,
                 "Message from " + fullName,
                 Truncate(body, 80),
                 "message", threadId);

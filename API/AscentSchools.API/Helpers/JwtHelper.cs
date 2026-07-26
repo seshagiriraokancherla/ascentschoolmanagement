@@ -34,14 +34,18 @@ namespace AscentSchools.API.Helpers
 
         // Mobile access token lifetime — separate from the web/control access token
         // (Jwt:AccessTokenMins) so staff/admin web sessions stay short (revocable) while
-        // the mobile app carries a long-lived access token. Defaults to 15 days (21600 min)
-        // when the config key is absent.
+        // the mobile app carries a long-lived access token. Defaults to 180 days
+        // (259200 min) when the config key is absent.
+        //
+        // The app does NOT refresh on cold start (that call was the single biggest cause of
+        // spurious logouts), so this lifetime alone is what keeps a parent signed in between
+        // opens. Refresh happens lazily on a 401 and opportunistically in the background.
         private static int    MobileAccessMins
         {
             get
             {
                 var v = ConfigurationManager.AppSettings["Jwt:MobileAccessTokenMins"];
-                return int.TryParse(v, out var m) && m > 0 ? m : 21600;
+                return int.TryParse(v, out var m) && m > 0 ? m : 259200;
             }
         }
 

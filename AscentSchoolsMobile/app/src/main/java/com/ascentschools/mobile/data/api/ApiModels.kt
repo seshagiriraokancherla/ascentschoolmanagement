@@ -20,7 +20,8 @@ data class SchoolByCodeDto(
 // GET branding  (only the fields the app uses; Gson ignores the rest)
 data class BrandingDto(
     val displayName: String?,
-    val logoPath: String?      // relative (/Uploads/...) — resolve with RetrofitClient.mediaBaseUrl
+    val logoPath: String?,     // relative (/Uploads/...) — resolve with RetrofitClient.mediaBaseUrl
+    val primaryColor: String? = null   // e.g. "#1E3A8A" — used by the tile dashboard band/tint
 )
 
 // ── Auth — Teacher ────────────────────────────────────────────────────────────
@@ -307,6 +308,7 @@ data class MobileFeeLineItemDto(
     val termId           : Int?,
     val termName         : String?,
     val feePeriodId      : Int?,
+    val periodLabel      : String? = null,   // set for Monthly items (term_id null)
     val busRouteId       : Int?,
     val hostelId         : Int?,
     @com.google.gson.annotations.SerializedName("structureAmount")

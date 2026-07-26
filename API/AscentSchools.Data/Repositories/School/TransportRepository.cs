@@ -85,7 +85,10 @@ namespace AscentSchools.Data.Repositories.School
 
         // ── Bus Fee Structure ─────────────────────────────────────────────────
 
-        public BusFeeStructureDto GetBusFeeStructure(string tenantDbName, int schoolId, int routeId, int academicYearId)
+        // paymentType: "Term" or "Monthly". When null/blank, resolves to the saved
+        // payment_type for this route+year (defaulting to 'Term'), so the UI can
+        // auto-detect how a route was set up on first load.
+        public BusFeeStructureDto GetBusFeeStructure(string tenantDbName, int schoolId, int routeId, int academicYearId, string paymentType)
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
             {
@@ -93,36 +96,62 @@ namespace AscentSchools.Data.Repositories.School
                     "SELECT route_name FROM bus_routes WHERE route_id = @routeId AND school_id = @schoolId",
                     new { routeId, schoolId }) ?? "";
 
-                var terms = conn.Query<TermRow>(
-                    @"SELECT t.term_id TermId, t.term_name TermName,
-                             bfs.amount Amount
-                      FROM terms t
-                      LEFT JOIN bus_fee_structures bfs
-                             ON bfs.term_id          = t.term_id
-                            AND bfs.route_id         = @routeId
-                            AND bfs.academic_year_id = @academicYearId
-                            AND bfs.school_id        = @schoolId
-                      WHERE t.academic_year_id = @academicYearId AND t.school_id = @schoolId
-                      ORDER BY t.term_id",
-                    new { routeId, academicYearId, schoolId });
+                var payType = string.IsNullOrWhiteSpace(paymentType)
+                    ? (conn.QueryFirstOrDefault<string>(
+                           "SELECT TOP 1 payment_type FROM bus_fee_structures WHERE route_id = @routeId AND academic_year_id = @academicYearId AND school_id = @schoolId",
+                           new { routeId, academicYearId, schoolId }) ?? "Term")
+                    : paymentType.Trim();
+                if (payType != "Monthly") payType = "Term";
+
+                IEnumerable<BusFeeTermDto> rows;
+                if (payType == "Monthly")
+                {
+                    // One row per fee period; LEFT JOIN carries the saved amount if any.
+                    rows = conn.Query<BusFeeTermDto>(
+                        @"SELECT fp.fee_period_id FeePeriodId, fp.period_label PeriodLabel,
+                                 fp.sequence_no SequenceNo, bfs.amount Amount
+                          FROM fee_periods fp
+                          LEFT JOIN bus_fee_structures bfs
+                                 ON bfs.fee_period_id    = fp.fee_period_id
+                                AND bfs.route_id         = @routeId
+                                AND bfs.academic_year_id = @academicYearId
+                                AND bfs.school_id        = @schoolId
+                          WHERE fp.academic_year_id = @academicYearId AND fp.school_id = @schoolId
+                          ORDER BY ISNULL(fp.sequence_no, 9999), fp.period_label",
+                        new { routeId, academicYearId, schoolId });
+                }
+                else
+                {
+                    rows = conn.Query<BusFeeTermDto>(
+                        @"SELECT t.term_id TermId, t.term_name TermName, t.order_no OrderNo,
+                                 bfs.amount Amount
+                          FROM terms t
+                          LEFT JOIN bus_fee_structures bfs
+                                 ON bfs.term_id          = t.term_id
+                                AND bfs.route_id         = @routeId
+                                AND bfs.academic_year_id = @academicYearId
+                                AND bfs.school_id        = @schoolId
+                          WHERE t.academic_year_id = @academicYearId AND t.school_id = @schoolId
+                          ORDER BY ISNULL(t.order_no, 9999), t.term_id",
+                        new { routeId, academicYearId, schoolId });
+                }
 
                 return new BusFeeStructureDto
                 {
                     RouteId        = routeId,
                     RouteName      = routeName,
                     AcademicYearId = academicYearId,
-                    Terms          = terms.Select(t => new BusFeeTermDto
-                    {
-                        TermId   = t.TermId,
-                        TermName = t.TermName,
-                        Amount   = t.Amount,
-                    }),
+                    PaymentType    = payType,
+                    Terms          = rows.ToList(),
                 };
             }
         }
 
         public void SaveBusFeeStructure(string tenantDbName, int schoolId, string createdBy, SaveBusFeeStructureRequest req)
         {
+            var payType = string.IsNullOrWhiteSpace(req.PaymentType) ? "Term" : req.PaymentType.Trim();
+            if (payType != "Monthly") payType = "Term";
+
             using (var conn = _db.GetTenantConnection(tenantDbName))
             {
                 // Delete existing entries for this route + academic year, then re-insert
@@ -134,9 +163,11 @@ namespace AscentSchools.Data.Repositories.School
                 {
                     if (item.Amount > 0)
                         conn.Execute(
-                            @"INSERT INTO bus_fee_structures (route_id, term_id, amount, academic_year_id, school_id, status, created_by)
-                              VALUES (@routeId, @termId, @amount, @academicYearId, @schoolId, 'Active', @createdBy)",
-                            new { req.RouteId, item.TermId, item.Amount, req.AcademicYearId, schoolId, createdBy });
+                            @"INSERT INTO bus_fee_structures
+                                (route_id, term_id, fee_period_id, payment_type, amount, academic_year_id, school_id, status, created_by)
+                              VALUES
+                                (@routeId, @termId, @feePeriodId, @payType, @amount, @academicYearId, @schoolId, 'Active', @createdBy)",
+                            new { req.RouteId, item.TermId, item.FeePeriodId, payType, item.Amount, req.AcademicYearId, schoolId, createdBy });
                 }
             }
         }
@@ -185,13 +216,5 @@ namespace AscentSchools.Data.Repositories.School
                           studentUniqueId, academicYearId = req.AcademicYearId, schoolId });
         }
 
-        // ── Internal row types ────────────────────────────────────────────────
-
-        private class TermRow
-        {
-            public int      TermId   { get; set; }
-            public string   TermName { get; set; }
-            public decimal? Amount   { get; set; }
-        }
     }
 }

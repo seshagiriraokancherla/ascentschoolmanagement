@@ -115,7 +115,7 @@ namespace AscentSchools.API.Controllers.Mobile
                 FeeTypeCategory = request.FeeTypeCategory,
                 AcademicYearId  = request.AcademicYearId,
                 PaymentModeId   = modeId.Value,
-                PaymentDate     = DateTime.Today,
+                PaymentDate     = TimeHelper.IstToday(),
                 Items           = request.Items,
             };
 
@@ -178,7 +178,7 @@ namespace AscentSchools.API.Controllers.Mobile
                 FeeTypeCategory = original?.FeeTypeCategory,
                 AcademicYearId  = order.AcademicYearId,
                 PaymentModeId   = order.PaymentModeId,
-                PaymentDate     = original?.PaymentDate ?? DateTime.UtcNow,
+                PaymentDate     = original?.PaymentDate ?? TimeHelper.IstToday(),
                 Remarks         = $"Online ({order.GatewayName}) via {source}. Ref: {request.PaymentId}",
                 Items           = original?.Items ?? new List<CollectFeeItem>(),
             };

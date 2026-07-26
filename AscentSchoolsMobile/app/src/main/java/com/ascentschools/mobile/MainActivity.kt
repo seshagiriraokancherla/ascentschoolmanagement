@@ -11,16 +11,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.ascentschools.mobile.data.api.MobileOrderResponse
+import com.ascentschools.mobile.data.api.RetrofitClient
 import com.ascentschools.mobile.data.repository.AuthRepository
 import com.ascentschools.mobile.data.repository.FeeRepository
 import com.ascentschools.mobile.data.repository.PushRepository
@@ -108,12 +104,8 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
 
         setContent {
             AscentTheme {
-                var isLoggedIn        by remember { mutableStateOf(tokenStore.isLoggedIn) }
-                var userType          by remember { mutableStateOf(tokenStore.userType) }
-                // Show a loading indicator while we silently refresh an existing session.
-                // Without this, a cold start with an expired access token would immediately
-                // show the home screen, then fail on every API call until the user notices.
-                var isCheckingSession by remember { mutableStateOf(tokenStore.isLoggedIn) }
+                var isLoggedIn by remember { mutableStateOf(tokenStore.isLoggedIn) }
+                var userType   by remember { mutableStateOf(tokenStore.userType) }
 
                 // Generic single app (SCHOOL_CODE empty): the parent must pick a school
                 // (4-digit code) before anything else. Baked flavors skip this entirely.
@@ -126,35 +118,42 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                 // which overlays its own UI outside Compose — no gate state needed here.
                 // A FLEXIBLE update that finished downloading surfaces a restart prompt below.
 
-                // On cold start: silently refresh the stored session so the access token
-                // is valid before any screen tries to make API calls.
-                // The refresh cookie is now persisted by PersistentCookieJar, so this
-                // works even after the app was killed and restarted.
+                // Cold start does NO blocking auth work, and CANNOT log the user out.
+                //
+                // This used to await a token refresh behind a spinner and call
+                // tokenStore.clear() on ANY failure — so no network yet (the common case
+                // when the phone has just woken), a timeout, or a transient 5xx wiped a
+                // perfectly valid session and sent the parent back to the OTP screen. That
+                // was the real cause of the daily re-login, and it defeated every
+                // server-side token-lifetime fix.
+                //
+                // Nothing here needs to succeed first: the stored access token already
+                // carries child context (select-child writes it), it is long-lived
+                // (Jwt:MobileAccessTokenMins), and a mid-session expiry is handled by the
+                // OkHttp Authenticator, which retries the call and never clears state.
+                //
+                // The refresh below is opportunistic only — it slides the server's 365-day
+                // refresh window forward. It runs after the UI is up and its failure is a
+                // no-op.
                 LaunchedEffect(Unit) {
-                    if (isCheckingSession) {
-                        when (tokenStore.userType) {
-                            "parent"  -> authRepo.silentRefresh().onSuccess {
-                                // Refresh returns a parent token WITHOUT child context;
-                                // re-select the last child so data screens work after restart.
-                                val linkId = tokenStore.childLinkId
-                                if (linkId > 0) authRepo.selectChild(linkId)
-                            }
-                            "teacher" -> authRepo.silentRefreshTeacher()
-                            else      -> Result.failure<Unit>(Exception("Unknown user type"))
-                        }.onFailure {
-                            // Refresh failed — session is truly expired; force re-login
-                            tokenStore.clear()
-                            isLoggedIn = false
-                            userType   = ""
-                        }
-                        isCheckingSession = false
-                        // Session restored — ensure the FCM token is registered for this
-                        // user (token is stable but the server row must exist) + ask for
-                        // notification permission on Android 13+.
-                        if (tokenStore.isLoggedIn) {
-                            registerPush(pushRepo)
-                            requestNotifPermissionIfNeeded()
-                        }
+                    if (tokenStore.isLoggedIn) {
+                        registerPush(pushRepo)
+                        requestNotifPermissionIfNeeded()
+                        launch { runCatching { authRepo.refreshSessionQuietly() } }
+                    }
+                }
+
+                // The one and only automatic logout: a live API call 401'd and the server
+                // then explicitly rejected the refresh token, so the session is genuinely
+                // dead (revoked, or unused for 365 days). Without this the user would sit
+                // in a working shell with every screen failing and no way back to login.
+                val sessionExpired by RetrofitClient.sessionExpired.collectAsState()
+                LaunchedEffect(sessionExpired) {
+                    if (sessionExpired && isLoggedIn) {
+                        tokenStore.clear()
+                        isLoggedIn = false
+                        userType   = ""
+                        RetrofitClient.sessionExpired.value = false
                     }
                 }
 
@@ -171,12 +170,7 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                     )
                 }
 
-                if (isCheckingSession) {
-                    // Still refreshing the stored session before showing any screen.
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                } else if (needsSchool) {
+                if (needsSchool) {
                     val schoolVm = remember { SchoolCodeViewModel(authRepo, tokenStore) }
                     SchoolCodeScreen(viewModel = schoolVm, onResolved = { needsSchool = false })
                 } else if (isLoggedIn && userType == "teacher") {
@@ -187,6 +181,7 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                         is TeacherScreen.Home -> TeacherHomeScreen(
                             teacherName  = tokenStore.studentName ?: "",
                             viewModel    = teacherVm,
+                            tokenStore   = tokenStore,
                             onAttendance = { classId, sectionId ->
                                 teacherScreen = TeacherScreen.Attendance(classId, sectionId)
                             },

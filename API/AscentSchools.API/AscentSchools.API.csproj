@@ -223,6 +223,7 @@
     <Compile Include="Filters\JwtAuthenticationFilter.cs" />
     <Compile Include="Filters\RequirePermissionAttribute.cs" />
     <Compile Include="Helpers\JwtHelper.cs" />
+    <Compile Include="Helpers\TimeHelper.cs" />
     <Compile Include="Helpers\IGatewayService.cs" />
     <Compile Include="Helpers\RazorpayGatewayService.cs" />
     <Compile Include="Helpers\GatewayServiceFactory.cs" />

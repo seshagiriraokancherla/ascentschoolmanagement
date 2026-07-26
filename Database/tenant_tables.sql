@@ -535,6 +535,8 @@ CREATE TABLE bus_fee_structures (
     bus_fee_structure_id    INT             NOT NULL IDENTITY(1,1),
     route_id                INT             NULL,
     term_id                 INT             NULL,
+    fee_period_id           INT             NULL,   -- set when payment_type = 'Monthly'
+    payment_type            VARCHAR(10)     NOT NULL DEFAULT 'Term',   -- Term | Monthly
     amount                  DECIMAL(12,2)   NULL,
     academic_year_id        INT             NULL,
     status                  VARCHAR(10)      NULL,
@@ -548,6 +550,7 @@ CREATE TABLE bus_fee_structures (
     CONSTRAINT PK_bus_fee_structures                PRIMARY KEY (bus_fee_structure_id),
     CONSTRAINT FK_bus_fee_structures_route          FOREIGN KEY (route_id)         REFERENCES bus_routes(route_id),
     CONSTRAINT FK_bus_fee_structures_term           FOREIGN KEY (term_id)          REFERENCES terms(term_id),
+    CONSTRAINT FK_bus_fee_structures_period         FOREIGN KEY (fee_period_id)    REFERENCES fee_periods(fee_period_id),
     CONSTRAINT FK_bus_fee_structures_academic_year  FOREIGN KEY (academic_year_id) REFERENCES academic_years(academic_year_id)
 );
 GO
@@ -719,7 +722,7 @@ CREATE TABLE fee_receipts (
     student_id          BIGINT          NOT NULL,
     student_unique_id   INT             NULL,   -- Stable cross-year identifier copied from students.student_unique_id
     academic_year_id    INT             NULL,
-    payment_date        DATE            NOT NULL DEFAULT CAST(GETDATE() AS DATE),
+    payment_date        DATE            NOT NULL DEFAULT CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'India Standard Time' AS DATE),
     total_amount        DECIMAL(12,2)   NOT NULL DEFAULT 0,
     payment_mode_id     INT             NULL,
     cheque_no           VARCHAR(20)     NULL,
@@ -733,7 +736,7 @@ CREATE TABLE fee_receipts (
     source              VARCHAR(10)     NULL,   -- 'legacy' (VB6 EOD sync) | 'webapp' (school web app / parent portal)
     school_id           INT             NOT NULL,
     created_by          VARCHAR(25)     NULL,
-    created_at          DATETIME        NOT NULL DEFAULT GETDATE(),
+    created_at          DATETIME        NOT NULL DEFAULT CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'India Standard Time' AS DATETIME),  -- IST (server runs US Eastern)
     machine_id          VARCHAR(25)     NULL,
     CONSTRAINT PK_fee_receipts                  PRIMARY KEY (receipt_id),
     CONSTRAINT FK_fee_receipts_student          FOREIGN KEY (student_id)       REFERENCES students(student_id),
@@ -1313,10 +1316,16 @@ CREATE UNIQUE INDEX UQ_fee_concessions_period
     WHERE status = 'Active' AND fee_period_id IS NOT NULL AND fee_type_id IS NOT NULL;
 GO
 
--- One active concession per student+bus_route+term (transport fees)
+-- One active concession per student+bus_route+term (Term-based transport fees)
 CREATE UNIQUE INDEX UQ_fee_concessions_transport
     ON fee_concessions (student_id, bus_route_id, school_id, term_id)
     WHERE status = 'Active' AND bus_route_id IS NOT NULL AND term_id IS NOT NULL;
+GO
+
+-- One active concession per student+bus_route+period (Monthly transport fees)
+CREATE UNIQUE INDEX UQ_fee_concessions_transport_period
+    ON fee_concessions (student_id, bus_route_id, school_id, fee_period_id)
+    WHERE status = 'Active' AND bus_route_id IS NOT NULL AND fee_period_id IS NOT NULL;
 GO
 
 -- One active hostel concession per student+hostel+term (Term-based)

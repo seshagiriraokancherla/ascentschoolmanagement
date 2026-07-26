@@ -50,7 +50,7 @@ namespace AscentSchools.API.Helpers
                     else
                     {
                         var studentIds = GetCurrentYearStudentIds(dbName, schoolId, classId.Value, sectionId);
-                        tokens = _tokens.GetParentTokensForStudents(dbName, groupId, studentIds);
+                        tokens = _tokens.GetParentTokensForStudents(dbName, groupId, schoolId, studentIds);
                     }
                     if (tokens.Count == 0) return;
 
@@ -88,8 +88,8 @@ namespace AscentSchools.API.Helpers
         }
 
         /// <summary>Notify one parent — a teacher replied to their message.</summary>
-        public void NotifyParent(int groupId, int parentId, string title, string body,
-                                 string type, int entityId)
+        public void NotifyParent(string dbName, int groupId, int schoolId, int parentId,
+                                 string title, string body, string type, int entityId)
         {
             if (!_fcm.IsConfigured) return;
 
@@ -97,7 +97,7 @@ namespace AscentSchools.API.Helpers
             {
                 try
                 {
-                    var tokens = _tokens.GetTokensForParent(groupId, parentId);
+                    var tokens = _tokens.GetTokensForParent(dbName, groupId, schoolId, parentId);
                     if (tokens.Count == 0) return;
                     await _fcm.SendAsync(tokens, title, body, BuildData(type, entityId));
                 }

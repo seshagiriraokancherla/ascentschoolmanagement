@@ -13,6 +13,8 @@ namespace AscentSyncTool
     {
         private readonly DateTimePicker _from = new DateTimePicker { Format = DateTimePickerFormat.Short, Width = 120 };
         private readonly DateTimePicker _to   = new DateTimePicker { Format = DateTimePickerFormat.Short, Width = 120 };
+        private readonly Label    _yearLbl  = new Label    { Text = "Academic Year:", AutoSize = true, Margin = new Padding(12, 6, 4, 0) };
+        private readonly ComboBox _year     = new ComboBox { Width = 120, DropDownStyle = ComboBoxStyle.DropDownList };
         private readonly Button _btnShow   = new Button { Text = "Show",   Width = 80 };
         private readonly Button _btnSave   = new Button { Text = "Save",   Width = 80, Enabled = false };
         private readonly Button _btnCancel = new Button { Text = "Cancel", Width = 80, Enabled = false };
@@ -35,6 +37,25 @@ namespace AscentSyncTool
         public DateTime FromDate => _from.Value;
         public DateTime ToDate   => _to.Value;
 
+        /// <summary>Whether the academic-year filter dropdown is shown (legacy-source tabs only).</summary>
+        public bool ShowAcademicYearFilter
+        {
+            get => _yearLbl.Visible;
+            set { _yearLbl.Visible = value; _year.Visible = value; }
+        }
+
+        /// <summary>The currently selected academic year, or null when the filter is hidden/empty.</summary>
+        public string SelectedAcademicYear =>
+            (ShowAcademicYearFilter && _year.SelectedItem != null) ? _year.SelectedItem.ToString() : null;
+
+        /// <summary>Populate the academic-year dropdown; selects the first (latest) by default.</summary>
+        public void SetAcademicYears(System.Collections.Generic.IEnumerable<string> years)
+        {
+            _year.Items.Clear();
+            foreach (var y in years) _year.Items.Add(y);
+            if (_year.Items.Count > 0) _year.SelectedIndex = 0;
+        }
+
         public SyncTab()
         {
             Dock = DockStyle.Fill;
@@ -44,6 +65,10 @@ namespace AscentSyncTool
             bar.Controls.Add(_from);
             bar.Controls.Add(new Label { Text = "To:", AutoSize = true, Margin = new Padding(12, 6, 4, 0) });
             bar.Controls.Add(_to);
+            bar.Controls.Add(_yearLbl);
+            bar.Controls.Add(_year);
+            _yearLbl.Visible = false;
+            _year.Visible = false;
             bar.Controls.Add(_btnShow);
             bar.Controls.Add(_btnSave);
             bar.Controls.Add(_btnCancel);
@@ -126,6 +151,7 @@ namespace AscentSyncTool
             _btnCancel.Enabled = !busy && keepCancel && _grid.DataSource != null;
             _from.Enabled = !busy;
             _to.Enabled   = !busy;
+            _year.Enabled = !busy;
             Cursor = busy ? Cursors.WaitCursor : Cursors.Default;
         }
     }

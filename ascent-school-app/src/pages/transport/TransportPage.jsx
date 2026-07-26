@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   Tabs, Card, Table, Button, Modal, Form, Input, InputNumber,
   Select, Popconfirm, Space, Tag, Typography, App as AntApp,
-  Row, Col,
+  Row, Col, Alert,
 } from 'antd'
 import { PlusOutlined, EditOutlined, SaveOutlined, SearchOutlined, CarOutlined } from '@ant-design/icons'
 import api from '../../api/axiosInstance'
@@ -229,14 +229,19 @@ function RoutesTab() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Bus Fee Structure Tab
 // ─────────────────────────────────────────────────────────────────────────────
+// Amount-map key: distinct namespaces so a term row and a period row never collide.
+const busColKey = (payType, row) =>
+  payType === 'Monthly' ? `P_${row.feePeriodId}` : `T_${row.termId}`
+
 function BusFeeTab() {
   const { message } = AntApp.useApp()
   const [routes,       setRoutes]       = useState([])
   const [academicYears,setAcademicYears] = useState([])
   const [selectedRoute,setSelectedRoute] = useState(null)
   const [selectedYear, setSelectedYear]  = useState(null)
+  const [payType,      setPayType]       = useState('Term')  // Term | Monthly
   const [structure,    setStructure]     = useState(null)
-  const [amounts,      setAmounts]       = useState({})  // termId → amount
+  const [amounts,      setAmounts]       = useState({})  // T_{termId} | P_{feePeriodId} → amount
   const [loading,      setLoading]       = useState(false)
   const [saving,       setSaving]        = useState(false)
 
@@ -250,42 +255,62 @@ function BusFeeTab() {
     })
   }, [])
 
-  const loadStructure = async () => {
+  // ptOverride: pass the chosen payment type to force it; omit to let the server
+  // auto-detect how this route+year was saved (so first Load shows the right mode).
+  const loadStructure = async (ptOverride) => {
     if (!selectedRoute || !selectedYear) {
       message.warning('Select route and academic year first.')
       return
     }
     setLoading(true)
     try {
-      const r = await api.get(`/school/transport/fee-structure?routeId=${selectedRoute}&academicYearId=${selectedYear}`)
+      const ptParam = ptOverride ? `&paymentType=${ptOverride}` : ''
+      const r = await api.get(`/school/transport/fee-structure?routeId=${selectedRoute}&academicYearId=${selectedYear}${ptParam}`)
       const s = r.data.data
+      const pt = s.paymentType || 'Term'
       setStructure(s)
+      setPayType(pt)
       const init = {}
-      s.terms.forEach(t => { init[t.termId] = t.amount ?? '' })
+      ;(s.terms || []).forEach(t => { init[busColKey(pt, t)] = t.amount ?? '' })
       setAmounts(init)
     } finally {
       setLoading(false)
     }
   }
 
+  const changePayType = (v) => {
+    setPayType(v)
+    if (selectedRoute && selectedYear) loadStructure(v)
+  }
+
   const handleSave = async () => {
     setSaving(true)
     try {
+      const items = (structure?.terms || [])
+        .map(t => {
+          const amt = amounts[busColKey(payType, t)]
+          if (amt === '' || amt == null || Number(amt) <= 0) return null
+          return payType === 'Monthly'
+            ? { feePeriodId: t.feePeriodId, termId: null, amount: Number(amt) }
+            : { termId: t.termId, feePeriodId: null, amount: Number(amt) }
+        })
+        .filter(Boolean)
       await api.post('/school/transport/fee-structure', {
         routeId:        selectedRoute,
         academicYearId: selectedYear,
-        items:          Object.entries(amounts)
-                          .filter(([, v]) => v !== '' && Number(v) > 0)
-                          .map(([termId, amount]) => ({ termId: Number(termId), amount: Number(amount) })),
+        paymentType:    payType,
+        items,
       })
       message.success('Bus fee structure saved.')
-      loadStructure()
+      loadStructure(payType)
     } catch (e) {
       message.error(e.message || 'Failed to save.')
     } finally {
       setSaving(false)
     }
   }
+
+  const isMonthly = payType === 'Monthly'
 
   return (
     <Card>
@@ -310,34 +335,60 @@ function BusFeeTab() {
             options={academicYears.map(y => ({ label: y.academicYear, value: y.academicYearId }))}
           />
         </Col>
+        <Col>
+          <Text strong>Payment Type</Text>
+          <Select
+            style={{ display: 'block', width: 140, marginTop: 4 }}
+            value={payType}
+            onChange={changePayType}
+            options={[{ label: 'Term', value: 'Term' }, { label: 'Monthly', value: 'Monthly' }]}
+          />
+        </Col>
         <Col style={{ marginTop: 20 }}>
-          <Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={loadStructure}>Load</Button>
+          <Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => loadStructure()}>Load</Button>
         </Col>
       </Row>
 
       {structure && (
+        (structure.terms || []).length === 0 ? (
+          <Alert
+            type="info"
+            showIcon
+            message={isMonthly
+              ? 'No fee periods found for this academic year. Add them in Master Data → Fee Periods first.'
+              : 'No terms found for this academic year. Add them in Master Data → Terms first.'}
+          />
+        ) : (
         <>
           <Table
             dataSource={structure.terms}
-            rowKey="termId"
+            rowKey={t => busColKey(payType, t)}
             pagination={false}
             size="middle"
             columns={[
-              { title: 'Term', dataIndex: 'termName', key: 'termName', width: 200 },
+              {
+                title: isMonthly ? 'Fee Period' : 'Term',
+                key: 'label',
+                width: 200,
+                render: (_, t) => isMonthly ? t.periodLabel : t.termName,
+              },
               {
                 title: 'Amount (₹)',
                 key: 'amount',
-                render: (_, t) => (
-                  <InputNumber
-                    min={0}
-                    value={amounts[t.termId] === '' ? null : amounts[t.termId]}
-                    onChange={v => setAmounts(prev => ({ ...prev, [t.termId]: v ?? '' }))}
-                    style={{ width: 140 }}
-                    placeholder="0"
-                    formatter={v => v ? `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
-                    parser={v => v?.replace(/₹\s?|(,*)/g, '')}
-                  />
-                ),
+                render: (_, t) => {
+                  const k = busColKey(payType, t)
+                  return (
+                    <InputNumber
+                      min={0}
+                      value={amounts[k] === '' ? null : amounts[k]}
+                      onChange={v => setAmounts(prev => ({ ...prev, [k]: v ?? '' }))}
+                      style={{ width: 140 }}
+                      placeholder="0"
+                      formatter={v => v ? `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
+                      parser={v => v?.replace(/₹\s?|(,*)/g, '')}
+                    />
+                  )
+                },
               },
             ]}
           />
@@ -347,6 +398,7 @@ function BusFeeTab() {
             </Button>
           </div>
         </>
+        )
       )}
     </Card>
   )

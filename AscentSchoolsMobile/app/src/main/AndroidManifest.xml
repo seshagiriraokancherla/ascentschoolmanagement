@@ -4,9 +4,13 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- allowBackup is off deliberately. A restored session belongs to a different device,
+         which device binding (one device per parent) rejects anyway, and restoring prefs
+         whose Keystore key doesn't exist on the new device is a known cause of silent
+         logouts. Cost: a parent moving to a new phone logs in once with OTP. -->
     <application
         android:name=".AscentApp"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:icon="@mipmap/ic_launcher"

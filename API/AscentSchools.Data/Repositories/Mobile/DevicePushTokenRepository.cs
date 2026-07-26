@@ -71,7 +71,14 @@ namespace AscentSchools.Data.Repositories.Mobile
         // ── Target resolution (parents) ────────────────────────────────────────
 
         /// <summary>Parent device tokens for a given set of students (by tenant student_id).</summary>
-        public List<string> GetParentTokensForStudents(string dbName, int groupId, IEnumerable<long> studentIds)
+        // The dpt.* scoping matters: a master parent_id is shared across every school the
+        // parent has a child in (parent_accounts is a single master row), and the same parent
+        // may have several app installs (the generic CHAK IN app + baked per-school flavors),
+        // each a separate fcm_token. A token is scoped to the school currently selected in that
+        // app (UpsertParentToken stores group/school/db from the parent's active child). Without
+        // this filter every install of that parent receives the push regardless of which school
+        // it's viewing — the cause of "5 notifications on one device". (Phase 100)
+        public List<string> GetParentTokensForStudents(string dbName, int groupId, int schoolId, IEnumerable<long> studentIds)
         {
             var ids = studentIds?.Distinct().ToList();
             if (ids == null || ids.Count == 0) return new List<string>();
@@ -81,12 +88,15 @@ namespace AscentSchools.Data.Repositories.Mobile
                       FROM parent_children pc
                       JOIN device_push_tokens dpt
                         ON dpt.parent_id = pc.parent_id AND dpt.user_type = 'parent'
+                       AND dpt.db_name = @dbName AND dpt.group_id = @groupId AND dpt.school_id = @schoolId
                       WHERE pc.db_name = @dbName AND pc.group_id = @groupId AND pc.is_active = 1
                         AND pc.student_id IN @ids",
-                    new { dbName, groupId, ids }).ToList();
+                    new { dbName, groupId, schoolId, ids }).ToList();
         }
 
         /// <summary>Every parent device token for a school branch (school-wide announcements/events).</summary>
+        // See GetParentTokensForStudents — the dpt.* filter keeps a school-wide announcement from
+        // reaching a device whose app is currently logged into a different school.
         public List<string> GetSchoolParentTokens(string dbName, int groupId, int schoolId)
         {
             using (var conn = _db.GetMasterConnection())
@@ -95,19 +105,23 @@ namespace AscentSchools.Data.Repositories.Mobile
                       FROM parent_children pc
                       JOIN device_push_tokens dpt
                         ON dpt.parent_id = pc.parent_id AND dpt.user_type = 'parent'
+                       AND dpt.db_name = @dbName AND dpt.group_id = @groupId AND dpt.school_id = @schoolId
                       WHERE pc.db_name = @dbName AND pc.group_id = @groupId AND pc.is_active = 1
                         AND pc.school_id = @schoolId",
                     new { dbName, groupId, schoolId }).ToList();
         }
 
         /// <summary>Device tokens of one parent (a teacher replying to their message).</summary>
-        public List<string> GetTokensForParent(int groupId, int parentId)
+        // Scoped to the school of the conversation so the reply only lands on the app install
+        // currently viewing this school (same shared-parent_id reasoning as above).
+        public List<string> GetTokensForParent(string dbName, int groupId, int schoolId, int parentId)
         {
             using (var conn = _db.GetMasterConnection())
                 return conn.Query<string>(
                     @"SELECT DISTINCT fcm_token FROM device_push_tokens
-                      WHERE user_type = 'parent' AND parent_id = @parentId AND group_id = @groupId",
-                    new { groupId, parentId }).ToList();
+                      WHERE user_type = 'parent' AND parent_id = @parentId
+                        AND db_name = @dbName AND group_id = @groupId AND school_id = @schoolId",
+                    new { dbName, groupId, schoolId, parentId }).ToList();
         }
 
         // ── Target resolution (teachers) ───────────────────────────────────────

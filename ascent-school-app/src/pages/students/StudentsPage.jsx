@@ -238,6 +238,13 @@ export default function StudentsPage() {
       render: (_, r) => r.sectionName ? `${r.className} - ${r.sectionName}` : r.className,
     },
     {
+      title:     'Father Mobile',
+      dataIndex: 'fatherMobile',
+      key:       'fatherMobile',
+      width:     130,
+      render:    (v) => v || '—',
+    },
+    {
       title:     'Gender',
       dataIndex: 'gender',
       key:       'gender',

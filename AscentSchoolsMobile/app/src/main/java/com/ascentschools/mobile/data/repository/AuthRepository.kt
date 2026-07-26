@@ -32,6 +32,7 @@ class AuthRepository(
             if (!body.success || body.data == null) error(body.message ?: "Failed to load branding")
             tokenStore.brandingName    = body.data.displayName
             tokenStore.brandingLogoUrl = body.data.logoPath?.let { resolveMedia(it) }
+            tokenStore.brandingPrimaryColor = body.data.primaryColor
             body.data
         }
     }
@@ -162,6 +163,41 @@ class AuthRepository(
             body.data.refreshToken?.let { tokenStore.refreshToken = it }
             body.data.fullName?.let { tokenStore.studentName = it }
         }
+    }
+
+    /**
+     * Opportunistic background refresh, run once after the UI is already up.
+     *
+     * Its ONLY job is to slide the server's 365-day refresh window forward and renew the
+     * access token for parents who open the app regularly. It is not on the critical path:
+     * the app is already usable when this runs, and it NEVER clears the session — on any
+     * failure the previous token is left exactly as it was. (The cold-start refresh that
+     * used to gate the UI and wipe the session on failure is gone; that call was the single
+     * biggest cause of parents being sent back to the OTP screen.)
+     *
+     * The refresh endpoint returns a parent token WITHOUT child context, so the last child
+     * is re-selected immediately after. If that second step fails, the previous
+     * child-context token is restored — a child-less token would leave every data screen
+     * failing with "Please select a child first".
+     *
+     * @return true if the session was renewed; false if it was left untouched.
+     */
+    suspend fun refreshSessionQuietly(): Boolean {
+        val previousToken = tokenStore.accessToken ?: return false
+        val isTeacher     = tokenStore.userType == "teacher"
+
+        // On failure silentRefresh* leaves TokenStore untouched (it only writes after a
+        // successful parse), so there is nothing to roll back here.
+        if ((if (isTeacher) silentRefreshTeacher() else silentRefresh()).isFailure) return false
+
+        if (!isTeacher) {
+            val linkId = tokenStore.childLinkId
+            if (linkId > 0 && selectChild(linkId).isFailure) {
+                tokenStore.accessToken = previousToken
+                return false
+            }
+        }
+        return true
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

@@ -89,8 +89,9 @@ namespace AscentMigration.Migrators
                 var paymentModeMap  = await LoadPaymentModeMap(dest);    // mode_name                → payment_mode_id
                 var feeTypeMap      = await LoadFeeTypeMap(dest);        // fee_type_name            → fee_type_id
                 var termMap         = await LoadTermMap(dest);           // "term_name|acad_yr_id"   → term_id
+                var feePeriodMap    = await LoadFeePeriodMap(dest);      // "period_label|acad_yr_id"→ fee_period_id
 
-                Log($"Lookups loaded — years:{acadYearMap.Count} students:{studentMap.Count} payModes:{paymentModeMap.Count} feeTypes:{feeTypeMap.Count} terms:{termMap.Count}");
+                Log($"Lookups loaded — years:{acadYearMap.Count} students:{studentMap.Count} payModes:{paymentModeMap.Count} feeTypes:{feeTypeMap.Count} terms:{termMap.Count} feePeriods:{feePeriodMap.Count}");
 
                 // 3. Handle Truncate vs Skip
                 var mode = Config.GetTableMode(Name);
@@ -234,16 +235,21 @@ namespace AscentMigration.Migrators
                                                 feeTypeId = ftId;
                                         }
 
-                                        // --- term_id: PaymentTyp + academic_year_id ---
-                                        int? termId = null;
+                                        // --- term_id / fee_period_id: PaymentTyp + academic_year_id ---
+                                        // Try terms first; if not found, fall back to fee_periods (Monthly).
+                                        // A match in fee_periods sets fee_period_id and leaves term_id NULL.
+                                        int? termId      = null;
+                                        int? feePeriodId = null;
                                         var paymentTyp = item.PaymentTyp?.Trim();
                                         if (!string.IsNullOrWhiteSpace(paymentTyp) && academicYearId.HasValue)
                                         {
-                                            var termKey = $"{paymentTyp}|{academicYearId}";
-                                            if (!termMap.TryGetValue(termKey, out var tId))
-                                                Log($"Warning: receipt '{receiptNo}' item — term '{paymentTyp}' (academic_year_id={academicYearId}) not found — term_id set to NULL");
-                                            else
+                                            var key = $"{paymentTyp}|{academicYearId}";
+                                            if (termMap.TryGetValue(key, out var tId))
                                                 termId = tId;
+                                            else if (feePeriodMap.TryGetValue(key, out var pId))
+                                                feePeriodId = pId;
+                                            else
+                                                Log($"Warning: receipt '{receiptNo}' item — '{paymentTyp}' (academic_year_id={academicYearId}) not found in terms or fee_periods — term_id & fee_period_id set to NULL");
                                         }
 
                                         await dest.ExecuteAsync(@"
@@ -252,16 +258,17 @@ namespace AscentMigration.Migrators
                                                  bus_route_id, hostel_id,
                                                  amount, concession_amount, net_amount, school_id)
                                             VALUES
-                                                (@ReceiptId, @FeeTypeId, @TermId, NULL,
+                                                (@ReceiptId, @FeeTypeId, @TermId, @FeePeriodId,
                                                  NULL, NULL,
                                                  @Amount, 0, @Amount, @SchoolId)",
                                             new
                                             {
-                                                ReceiptId  = receiptId,
-                                                FeeTypeId  = feeTypeId,
-                                                TermId     = termId,
-                                                Amount     = item.FeeAmt ?? 0,
-                                                SchoolId   = Config.SchoolId
+                                                ReceiptId   = receiptId,
+                                                FeeTypeId   = feeTypeId,
+                                                TermId      = termId,
+                                                FeePeriodId = feePeriodId,
+                                                Amount      = item.FeeAmt ?? 0,
+                                                SchoolId    = Config.SchoolId
                                             }, tx);
                                     }
 
@@ -376,6 +383,22 @@ namespace AscentMigration.Migrators
             return map;
         }
 
+        private async Task<Dictionary<string, int>> LoadFeePeriodMap(SqlConnection dest)
+        {
+            // Composite key: "period_label|academic_year_id" — fallback for line items whose
+            // PaymentTyp is a Monthly period label rather than a term name.
+            var rows = await dest.QueryAsync<FeePeriodRow>(
+                "SELECT fee_period_id, period_label, academic_year_id FROM fee_periods WHERE school_id = @SchoolId",
+                new { Config.SchoolId });
+            var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var r in rows)
+            {
+                var key = $"{r.period_label?.Trim()}|{r.academic_year_id}";
+                if (!map.ContainsKey(key)) map[key] = r.fee_period_id;
+            }
+            return map;
+        }
+
         // ---------------------------------------------------------------
         // Helpers
         // ---------------------------------------------------------------
@@ -399,6 +422,7 @@ namespace AscentMigration.Migrators
         private class PaymentModeRow{ public int    payment_mode_id  { get; set; } public string mode_name      { get; set; } }
         private class FeeTypeRow    { public int    fee_type_id      { get; set; } public string fee_type_name  { get; set; } }
         private class TermRow       { public int    term_id          { get; set; } public string term_name      { get; set; } public int?   academic_year_id { get; set; } }
+        private class FeePeriodRow  { public int    fee_period_id    { get; set; } public string period_label   { get; set; } public int?   academic_year_id { get; set; } }
 
         private class StudentMeta   { public long StudentId { get; set; } public int? StudentUniqueId { get; set; } }
     }

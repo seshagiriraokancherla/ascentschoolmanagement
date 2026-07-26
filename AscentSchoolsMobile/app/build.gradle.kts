@@ -24,8 +24,8 @@ android {
         applicationId = "in.educare.mobile"   // overridden by each flavor
         minSdk        = 24
         targetSdk     = 35
-        versionCode   = 29
-        versionName   = "2.9"
+        versionCode   = 35
+        versionName   = "3.5"
     }
 
     // ── White-label school flavors ────────────────────────────────────────────
@@ -77,7 +77,7 @@ android {
             dimension     = "school"
             applicationId = "in.educare.app"
             buildConfigField("String", "SCHOOL_CODE", "\"\"")
-            resValue("string", "app_name", "Ascent Schools")
+            resValue("string", "app_name", "CHAK IN")
         }
     }
 

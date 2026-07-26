@@ -2,26 +2,47 @@ package com.ascentschools.mobile.ui.home
 
 import android.os.Build
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.ascentschools.mobile.data.api.ChildDto
 import com.ascentschools.mobile.data.api.MobileFeeLineItemDto
 import com.ascentschools.mobile.data.local.TokenStore
@@ -29,15 +50,19 @@ import com.ascentschools.mobile.data.repository.AuthRepository
 import com.ascentschools.mobile.data.repository.StudentRepository
 import kotlinx.coroutines.launch
 import com.ascentschools.mobile.ui.announcements.AnnouncementsScreen
+import com.ascentschools.mobile.ui.announcements.AnnouncementsUiState
 import com.ascentschools.mobile.ui.announcements.AnnouncementsViewModel
 import com.ascentschools.mobile.ui.components.PullToRefresh
 import com.ascentschools.mobile.ui.attendance.AttendanceScreen
 import com.ascentschools.mobile.ui.attendance.AttendanceViewModel
 import com.ascentschools.mobile.ui.events.EventsScreen
+import com.ascentschools.mobile.ui.events.EventsUiState
 import com.ascentschools.mobile.ui.events.EventsViewModel
 import com.ascentschools.mobile.ui.fee.FeeScreen
+import com.ascentschools.mobile.ui.fee.FeeUiState
 import com.ascentschools.mobile.ui.fee.FeeViewModel
 import com.ascentschools.mobile.ui.homework.HomeworkScreen
+import com.ascentschools.mobile.ui.homework.HomeworkUiState
 import com.ascentschools.mobile.ui.homework.HomeworkViewModel
 import com.ascentschools.mobile.ui.marks.MarksScreen
 import com.ascentschools.mobile.ui.marks.MarksViewModel
@@ -47,17 +72,24 @@ import com.ascentschools.mobile.ui.profile.ProfileScreen
 import com.ascentschools.mobile.ui.profile.ProfileViewModel
 import com.ascentschools.mobile.ui.theme.NavyBlue
 
-private data class BottomNavItem(val label: String, val icon: ImageVector, val index: Int)
+// Single source of truth for the 8 parent destinations. Both the bottom tab bar and
+// the tile dashboard iterate this list, so a feature is defined in exactly one place.
+private data class Feature(
+    val label    : String,
+    val icon     : ImageVector,
+    val index    : Int,
+    val gradient : Pair<Color, Color>   // fills the tile's icon square
+)
 
-private val navItems = listOf(
-    BottomNavItem("Home",       Icons.Default.Home,          0),
-    BottomNavItem("Attendance", Icons.Default.CalendarToday, 1),
-    BottomNavItem("Marks",      Icons.Default.Grade,         2),
-    BottomNavItem("Fees",       Icons.Default.Payments,      3),
-    BottomNavItem("Homework",   Icons.Default.MenuBook,      4),
-    BottomNavItem("Notices",    Icons.Default.Notifications, 5),
-    BottomNavItem("Events",     Icons.Default.PhotoLibrary,  6),
-    BottomNavItem("Messages",   Icons.Default.Chat,          7)
+private val features = listOf(
+    Feature("Home",       Icons.Default.Home,          0, Color(0xFF1E3A8A) to Color(0xFF3B82F6)),
+    Feature("Attendance", Icons.Default.CalendarToday, 1, Color(0xFF0E7490) to Color(0xFF06B6D4)),
+    Feature("Marks",      Icons.Default.Grade,         2, Color(0xFF4F46E5) to Color(0xFF6366F1)),
+    Feature("Fees",       Icons.Default.Payments,      3, Color(0xFFB45309) to Color(0xFFF59E0B)),
+    Feature("Homework",   Icons.Default.MenuBook,      4, Color(0xFF047857) to Color(0xFF10B981)),
+    Feature("Notices",    Icons.Default.Notifications, 5, Color(0xFFBE123C) to Color(0xFFF43F5E)),
+    Feature("Events",     Icons.Default.PhotoLibrary,  6, Color(0xFF6D28D9) to Color(0xFF8B5CF6)),
+    Feature("Messages",   Icons.Default.Chat,          7, Color(0xFF0369A1) to Color(0xFF0EA5E9))
 )
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -73,7 +105,9 @@ fun HomeScreen(
     onChangeSchool    : (() -> Unit)? = null,   // generic single-app build only
     onLogout          : () -> Unit
 ) {
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab   by remember { mutableIntStateOf(0) }
+    var tilesView     by remember { mutableStateOf(tokenStore.tilesView) }
+    var openedFeature by remember { mutableStateOf<Int?>(null) }   // tiles mode: which feature is open
 
     val scope   = rememberCoroutineScope()
     val context = LocalContext.current
@@ -85,8 +119,23 @@ fun HomeScreen(
     var switching    by remember { mutableStateOf(false) }
     var children     by remember { mutableStateOf<List<ChildDto>>(emptyList()) }
 
+    // Branding for the tile dashboard band + tint (color hex, logo). Loaded once —
+    // works for baked flavors too since /branding resolves from the school code.
+    var brandColorHex by remember { mutableStateOf(tokenStore.brandingPrimaryColor) }
+    var logoUrl       by remember { mutableStateOf(tokenStore.brandingLogoUrl) }
+
     LaunchedEffect(Unit) {
         authRepo.getChildren().onSuccess { children = it }
+        authRepo.loadBranding().onSuccess {
+            brandColorHex = tokenStore.brandingPrimaryColor
+            logoUrl       = tokenStore.brandingLogoUrl
+        }
+    }
+
+    val bandColor = parseBrandColor(brandColorHex, NavyBlue)
+    val logoModel: Any = remember(logoUrl) {
+        if (!logoUrl.isNullOrBlank()) logoUrl!!
+        else context.packageManager.getApplicationIcon(context.packageName)
     }
 
     val profileVm       = remember { ProfileViewModel(repo) }
@@ -97,20 +146,66 @@ fun HomeScreen(
     val eventsVm        = remember { EventsViewModel(repo) }
     val messagesVm      = remember { MessagesViewModel(repo) }
 
+    // ── Live badges (tiles mode) — derived from already-loaded VM state ──────────
+    val feeState by feeVm.uiState.collectAsState()
+    val hwState  by homeworkVm.uiState.collectAsState()
+    val annState by announcementsVm.uiState.collectAsState()
+    val evState  by eventsVm.uiState.collectAsState()
+
+    fun badgeFor(index: Int): Pair<String?, Boolean> = when (index) {
+        3 -> {  // Fees — total outstanding for the loaded category; red = money owed
+            val due = (feeState as? FeeUiState.Success)?.years?.sumOf { it.outstandingAmount } ?: 0.0
+            if (due > 0) ("₹${due.toLong()}" to true) else (null to false)
+        }
+        4 -> ((hwState  as? HomeworkUiState.Success)?.homework?.size?.takeIf { it > 0 }?.toString() to false)
+        5 -> ((annState as? AnnouncementsUiState.Success)?.announcements?.size?.takeIf { it > 0 }?.toString() to false)
+        6 -> ((evState  as? EventsUiState.Success)?.events?.size?.takeIf { it > 0 }?.toString() to false)
+        else -> null to false
+    }
+
+    // The one place each feature's screen is wired — reused by tabs AND tiles.
+    @Composable
+    fun FeatureContent(tab: Int) {
+        when (tab) {
+            0 -> PullToRefresh(onRefresh = { profileVm.load() })       { ProfileScreen(viewModel = profileVm) }
+            1 -> PullToRefresh(onRefresh = { attendanceVm.load() })    { AttendanceScreen(viewModel = attendanceVm) }
+            2 -> PullToRefresh(onRefresh = { marksVm.load() })         { MarksScreen(viewModel = marksVm) }
+            3 -> PullToRefresh(onRefresh = { feeVm.loadFees() })       { FeeScreen(viewModel = feeVm, onInitiatePayment = onInitiatePayment) }
+            4 -> PullToRefresh(onRefresh = { homeworkVm.load() })      { HomeworkScreen(viewModel = homeworkVm) }
+            5 -> PullToRefresh(onRefresh = { announcementsVm.load() }) { AnnouncementsScreen(viewModel = announcementsVm) }
+            6 -> PullToRefresh(onRefresh = { eventsVm.load() })        { EventsScreen(viewModel = eventsVm) }
+            7 -> MessagesScreen(viewModel = messagesVm)
+        }
+    }
+
+    // In tiles mode, the system back button returns to the grid instead of exiting.
+    BackHandler(enabled = tilesView && openedFeature != null) { openedFeature = null }
+
+    val inFeature = tilesView && openedFeature != null
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title  = {
+                title = {
                     Text(
-                        tokenStore.studentName ?: "Ascent Schools",
+                        if (inFeature) features.first { it.index == openedFeature }.label
+                        else tokenStore.studentName ?: "Ascent Schools",
                         style = MaterialTheme.typography.titleMedium
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor         = NavyBlue,
-                    titleContentColor      = Color.White,
-                    actionIconContentColor = Color.White
+                    containerColor          = if (tilesView) bandColor else NavyBlue,
+                    titleContentColor       = Color.White,
+                    navigationIconContentColor = Color.White,
+                    actionIconContentColor  = Color.White
                 ),
+                navigationIcon = {
+                    if (inFeature) {
+                        IconButton(onClick = { openedFeature = null }) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        }
+                    }
+                },
                 actions = {
                     IconButton(onClick = {
                         // Global refresh — reload every tab's data.
@@ -127,6 +222,21 @@ fun HomeScreen(
                         expanded         = menuExpanded,
                         onDismissRequest = { menuExpanded = false }
                     ) {
+                        DropdownMenuItem(
+                            text        = { Text(if (tilesView) "Tab view" else "Tile view") },
+                            leadingIcon = {
+                                Icon(
+                                    if (tilesView) Icons.Default.ViewList else Icons.Default.GridView,
+                                    contentDescription = null
+                                )
+                            },
+                            onClick = {
+                                menuExpanded  = false
+                                tilesView     = !tilesView
+                                tokenStore.tilesView = tilesView
+                                openedFeature = null
+                            }
+                        )
                         if (children.size > 1) {
                             DropdownMenuItem(
                                 text        = { Text("Switch Child") },
@@ -151,46 +261,84 @@ fun HomeScreen(
             )
         },
         bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface
-            ) {
-                navItems.forEach { item ->
-                    NavigationBarItem(
-                        selected = selectedTab == item.index,
-                        onClick  = { selectedTab = item.index },
-                        icon     = { Icon(item.icon, contentDescription = item.label) },
-                        label    = { Text(item.label, style = MaterialTheme.typography.labelSmall) },
-                        colors   = NavigationBarItemDefaults.colors(
-                            selectedIconColor   = NavyBlue,
-                            selectedTextColor   = NavyBlue,
-                            indicatorColor      = NavyBlue.copy(alpha = 0.12f),
-                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+            if (!tilesView) {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ) {
+                    features.forEach { item ->
+                        NavigationBarItem(
+                            selected = selectedTab == item.index,
+                            onClick  = { selectedTab = item.index },
+                            icon     = { Icon(item.icon, contentDescription = item.label) },
+                            label    = { Text(item.label, style = MaterialTheme.typography.labelSmall) },
+                            colors   = NavigationBarItemDefaults.colors(
+                                selectedIconColor   = NavyBlue,
+                                selectedTextColor   = NavyBlue,
+                                indicatorColor      = NavyBlue.copy(alpha = 0.12f),
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         )
-                    )
+                    }
                 }
             }
         }
     ) { innerPadding ->
-        AnimatedContent(
-            targetState   = selectedTab,
-            transitionSpec = {
-                val forward = targetState > initialState
-                (fadeIn(tween(220)) + slideInHorizontally(tween(220)) { if (forward) it / 8 else -it / 8 }) togetherWith
-                (fadeOut(tween(150)) + slideOutHorizontally(tween(150)) { if (forward) -it / 8 else it / 8 })
-            },
-            label  = "tabContent",
-            modifier = Modifier.padding(innerPadding)
-        ) { tab ->
-            when (tab) {
-                0 -> PullToRefresh(onRefresh = { profileVm.load() })       { ProfileScreen(viewModel = profileVm) }
-                1 -> PullToRefresh(onRefresh = { attendanceVm.load() })    { AttendanceScreen(viewModel = attendanceVm) }
-                2 -> PullToRefresh(onRefresh = { marksVm.load() })         { MarksScreen(viewModel = marksVm) }
-                3 -> PullToRefresh(onRefresh = { feeVm.loadFees() })       { FeeScreen(viewModel = feeVm, onInitiatePayment = onInitiatePayment) }
-                4 -> PullToRefresh(onRefresh = { homeworkVm.load() })      { HomeworkScreen(viewModel = homeworkVm) }
-                5 -> PullToRefresh(onRefresh = { announcementsVm.load() }) { AnnouncementsScreen(viewModel = announcementsVm) }
-                6 -> PullToRefresh(onRefresh = { eventsVm.load() })        { EventsScreen(viewModel = eventsVm) }
-                7 -> MessagesScreen(viewModel = messagesVm)
+        if (tilesView) {
+            if (openedFeature == null) {
+                val ticker = (annState as? AnnouncementsUiState.Success)?.announcements
+                    ?.mapNotNull { it.title }?.filter { it.isNotBlank() }
+                    ?.joinToString("        •        ")
+                    ?.takeIf { it.isNotBlank() }
+                    ?: "Welcome to ${tokenStore.brandingName ?: "our school"}."
+                val bgBrush = Brush.verticalGradient(
+                    listOf(bandColor.copy(alpha = 0.10f), Color(0xFFFFFFFF))
+                )
+
+                Column(Modifier.fillMaxSize().padding(innerPadding)) {
+                    LogoBand(bandColor, logoModel, tokenStore.brandingName ?: (tokenStore.studentName ?: ""))
+                    NewsTicker(ticker, bandColor) { openedFeature = 5 }
+                    Box(Modifier.weight(1f).fillMaxWidth().background(bgBrush)) {
+                        LazyVerticalGrid(
+                            columns               = GridCells.Fixed(3),
+                            modifier              = Modifier.fillMaxSize(),
+                            contentPadding        = PaddingValues(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement   = Arrangement.spacedBy(18.dp)
+                        ) {
+                            items(features) { f ->
+                                val (badge, alert) = badgeFor(f.index)
+                                IconTile(
+                                    label      = f.label,
+                                    icon       = f.icon,
+                                    gradient   = f.gradient,
+                                    badge      = badge,
+                                    badgeAlert = alert,
+                                    modifier   = Modifier.fillMaxWidth(),
+                                    onClick    = { openedFeature = f.index }
+                                )
+                            }
+                        }
+                    }
+                    PoweredByFooter()
+                }
+            } else {
+                Box(Modifier.fillMaxSize().padding(innerPadding)) {
+                    FeatureContent(openedFeature!!)
+                }
+            }
+        } else {
+            AnimatedContent(
+                targetState   = selectedTab,
+                transitionSpec = {
+                    val forward = targetState > initialState
+                    (fadeIn(tween(220)) + slideInHorizontally(tween(220)) { if (forward) it / 8 else -it / 8 }) togetherWith
+                    (fadeOut(tween(150)) + slideOutHorizontally(tween(150)) { if (forward) -it / 8 else it / 8 })
+                },
+                label  = "tabContent",
+                modifier = Modifier.padding(innerPadding)
+            ) { tab ->
+                FeatureContent(tab)
             }
         }
     }
@@ -264,4 +412,81 @@ fun HomeScreen(
             }
         )
     }
+}
+
+// ── Tile-dashboard chrome ──────────────────────────────────────────────────────
+
+/** Colored band carrying the school logo + name (the "hero" without a photo). */
+@Composable
+private fun LogoBand(bandColor: Color, logoModel: Any, name: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(bandColor)
+            .padding(vertical = 18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Surface(shape = CircleShape, color = Color.White, modifier = Modifier.size(72.dp)) {
+            AsyncImage(
+                model              = logoModel,
+                contentDescription = null,
+                contentScale       = ContentScale.Fit,
+                modifier           = Modifier.padding(8.dp)
+            )
+        }
+        if (name.isNotBlank()) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                name,
+                color      = Color.White,
+                fontWeight = FontWeight.Bold,
+                style      = MaterialTheme.typography.titleMedium,
+                textAlign  = TextAlign.Center
+            )
+        }
+    }
+}
+
+/** A red "News" chip + an auto-scrolling latest-announcements line; tap opens Notices. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun NewsTicker(text: String, bandColor: Color, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(40.dp)
+            .background(bandColor.copy(alpha = 0.85f))
+            .clickable { onClick() },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(color = Color(0xFFE53935), shape = RoundedCornerShape(topEnd = 6.dp, bottomEnd = 6.dp)) {
+            Text(
+                "News",
+                color      = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize   = 13.sp,
+                modifier   = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text,
+            color    = Color.White,
+            fontSize = 13.sp,
+            maxLines = 1,
+            modifier = Modifier.weight(1f).basicMarquee()
+        )
+        Spacer(Modifier.width(12.dp))
+    }
+}
+
+@Composable
+private fun PoweredByFooter() {
+    Text(
+        "Powered by Ascent Info Solutions",
+        modifier   = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+        textAlign  = TextAlign.Center,
+        fontSize   = 11.sp,
+        color      = MaterialTheme.colorScheme.onSurfaceVariant
+    )
 }

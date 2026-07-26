@@ -100,7 +100,7 @@ namespace AscentSchools.API.Controllers.School
 
         // ── Receipts ──────────────────────────────────────────────────────
 
-        // GET school/fees/receipts?search=&dateFrom=&dateTo=&status=&createdAfter=&createdBefore=&source=
+        // GET school/fees/receipts?search=&dateFrom=&dateTo=&status=&createdAfter=&createdBefore=&source=&paymentModeId=
         [HttpGet, Route("receipts")]
         public HttpResponseMessage GetReceipts(
             string    search        = null,
@@ -109,10 +109,11 @@ namespace AscentSchools.API.Controllers.School
             string    status        = null,
             DateTime? createdAfter  = null,
             string    source        = null,
-            DateTime? createdBefore = null)
+            DateTime? createdBefore = null,
+            int?      paymentModeId = null)
         {
             var receipts = _repo.GetReceipts(
-                Tenant.TenantDbName, Tenant.SchoolId, search, dateFrom, dateTo, status, createdAfter, source, createdBefore);
+                Tenant.TenantDbName, Tenant.SchoolId, search, dateFrom, dateTo, status, createdAfter, source, createdBefore, paymentModeId);
             return Ok(receipts);
         }
 
@@ -290,7 +291,7 @@ namespace AscentSchools.API.Controllers.School
                 FeeTypeCategory  = originalRequest?.FeeTypeCategory,
                 AcademicYearId   = order.AcademicYearId,
                 PaymentModeId    = order.PaymentModeId,
-                PaymentDate      = originalRequest?.PaymentDate ?? DateTime.UtcNow,
+                PaymentDate      = originalRequest?.PaymentDate ?? TimeHelper.IstToday(),
                 Remarks          = $"Online ({order.GatewayName}){viaLabel}. Ref: {paymentId}",
                 Items            = originalRequest?.Items ?? new List<CollectFeeItem>(),
             };

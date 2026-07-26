@@ -29,6 +29,8 @@ export default function ReceiptsPage() {
   const [dateRange,    setDateRange]    = useState(null)
   const [status,       setStatus]       = useState('')
   const [createdAfter, setCreatedAfter] = useState(null)
+  const [paymentModeId, setPaymentModeId] = useState(null)
+  const [paymentModes,  setPaymentModes]  = useState([])
   const [page,         setPage]         = useState(1)
   const [pageSize,     setPageSize]     = useState(20)
 
@@ -52,6 +54,7 @@ export default function ReceiptsPage() {
       if (dateRange?.[1])   q.set('dateTo',       dateRange[1].format('YYYY-MM-DD'))
       if (status)           q.set('status',       status)
       if (createdAfter)     q.set('createdAfter', createdAfter.format('YYYY-MM-DDTHH:mm:ss'))
+      if (paymentModeId)    q.set('paymentModeId', paymentModeId)
       const res = await api.get(`/school/fees/receipts?${q}`)
       setReceipts(res.data?.data || [])
     } finally {
@@ -60,6 +63,13 @@ export default function ReceiptsPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  // Load Active payment modes for the filter dropdown.
+  useEffect(() => {
+    api.get('/school/master/payment-modes')
+      .then(r => setPaymentModes((r.data?.data || []).filter(m => m.status === 'Active')))
+      .catch(() => {})
+  }, [])
 
   const viewReceipt = async (receiptId) => {
     setDrawerOpen(true)
@@ -216,6 +226,16 @@ export default function ReceiptsPage() {
               options={STATUS_OPTIONS}
               value={status}
               onChange={setStatus}
+            />
+          </Col>
+          <Col>
+            <Select
+              style={{ width: 150 }}
+              placeholder="All Payment Modes"
+              allowClear
+              value={paymentModeId}
+              onChange={(v) => setPaymentModeId(v ?? null)}
+              options={paymentModes.map(m => ({ label: m.modeName, value: m.paymentModeId }))}
             />
           </Col>
           <Col>

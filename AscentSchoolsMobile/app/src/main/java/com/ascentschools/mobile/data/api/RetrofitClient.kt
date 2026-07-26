@@ -16,6 +16,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import kotlinx.coroutines.flow.MutableStateFlow
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -97,12 +98,26 @@ object RetrofitClient {
     // Per-build-type: debug → local dev API, release → production (see app/build.gradle.kts).
     private val BASE_URL = BuildConfig.API_BASE_URL
 
-    /** Site root (BASE_URL without the trailing "api/") — used to resolve relative
-     *  media paths such as branding logos (/Uploads/...). */
-    val mediaBaseUrl: String = BASE_URL.removeSuffix("api/")
+    /** Base for resolving relative media paths (branding logos, /Uploads/...).
+     *  The Uploads folder is served UNDER the API app (e.g. edu-care.in/api/Uploads/...),
+     *  NOT the site root — so keep the full BASE_URL including the trailing "api/".
+     *  Stripping "api/" here made every branding logo URL 404. */
+    val mediaBaseUrl: String = BASE_URL
 
     private var _tokenStore: TokenStore? = null
     private var _cookieJar: PersistentCookieJar? = null
+
+    /**
+     * Raised only when the session is provably dead: a real API call returned 401 AND the
+     * subsequent refresh was explicitly rejected by the server (401/403) — i.e. the refresh
+     * token was revoked or is 365 days idle. Two independent rejections, so this cannot be
+     * tripped by a flaky network.
+     *
+     * This is the ONLY automatic logout in the app. It replaces the old cold-start
+     * "refresh failed for any reason → wipe the session" behaviour, which treated an
+     * unreachable server exactly like a revoked token and logged people out daily.
+     */
+    val sessionExpired = MutableStateFlow(false)
 
     fun init(tokenStore: TokenStore, context: Context) {
         _tokenStore = tokenStore
@@ -164,7 +179,12 @@ object RetrofitClient {
                 .header("X-Refresh-Token", store.refreshToken ?: "")
                 .also { applySchoolHeaders(it, store) }.build()
             var token = refreshClient.newCall(refreshReq).execute().use { resp ->
-                if (!resp.isSuccessful) return null
+                if (!resp.isSuccessful) {
+                    // Explicit rejection = the refresh token really is dead. Any other
+                    // failure (timeout, DNS, 5xx) is transient and must NOT end the session.
+                    if (resp.code == 401 || resp.code == 403) sessionExpired.value = true
+                    return null
+                }
                 val bodyStr = resp.body?.string()
                 // Persist the rotated refresh token so the next refresh doesn't reuse a
                 // revoked one.

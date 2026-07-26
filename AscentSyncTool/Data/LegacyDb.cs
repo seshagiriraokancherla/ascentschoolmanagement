@@ -18,8 +18,18 @@ namespace AscentSyncTool.Data
             return conn;
         }
 
-        // ── Export: receipts by FeeDat range ──────────────────────────────────
-        public List<LegacyFeeReceipt> GetReceipts(DateTime from, DateTime toInclusive)
+        // ── Distinct academic years (for the filter dropdown) ─────────────────
+        public List<string> GetAcademicYears()
+        {
+            using (var conn = Open())
+                return conn.Query<string>(
+                    @"SELECT DISTINCT AcademicYear FROM SAS_AcdYear
+                      WHERE AcademicYear IS NOT NULL AND LTRIM(RTRIM(AcademicYear)) <> ''
+                      ORDER BY AcademicYear DESC").AsList();
+        }
+
+        // ── Export: receipts by FeeDat range (+ optional academic year) ───────
+        public List<LegacyFeeReceipt> GetReceipts(DateTime from, DateTime toInclusive, string academicYear = null)
         {
             using (var conn = Open())
                 return conn.Query<LegacyFeeReceipt>(
@@ -27,12 +37,18 @@ namespace AscentSyncTool.Data
                              FeeAmt, PymntTyp, RefNo, RemarksDet, FeeReceiptStat, DeletResn
                       FROM SAS_FeeReceipts
                       WHERE FeeDat >= @from AND FeeDat < @toExclusive
+                        AND (@acdYear IS NULL OR AcdYear = @acdYear)
                       ORDER BY FeeReciptID, Id_new",
-                    new { from = from.Date, toExclusive = toInclusive.Date.AddDays(1) }).AsList();
+                    new
+                    {
+                        from = from.Date,
+                        toExclusive = toInclusive.Date.AddDays(1),
+                        acdYear = string.IsNullOrWhiteSpace(academicYear) ? null : academicYear
+                    }).AsList();
         }
 
-        // ── Export: students by CrtDat range ──────────────────────────────────
-        public List<LegacyStudent> GetStudents(DateTime from, DateTime toInclusive)
+        // ── Export: students by CrtDat range (+ optional academic year) ───────
+        public List<LegacyStudent> GetStudents(DateTime from, DateTime toInclusive, string academicYear = null)
         {
             using (var conn = Open())
                 return conn.Query<LegacyStudent>(
@@ -47,8 +63,14 @@ namespace AscentSyncTool.Data
                              BloodGrp, JoinTerm, StuFirstLang, StuThirdLang, StuUdiseNo, CrtDat
                       FROM SAS_StudentMaster
                       WHERE CrtDat >= @from AND CrtDat < @toExclusive
+                        AND (@acdYear IS NULL OR StuAcdYear = @acdYear)
                       ORDER BY CrtDat",
-                    new { from = from.Date, toExclusive = toInclusive.Date.AddDays(1) }).AsList();
+                    new
+                    {
+                        from = from.Date,
+                        toExclusive = toInclusive.Date.AddDays(1),
+                        acdYear = string.IsNullOrWhiteSpace(academicYear) ? null : academicYear
+                    }).AsList();
         }
 
         // ── Download: does a receipt already exist in legacy? ─────────────────
