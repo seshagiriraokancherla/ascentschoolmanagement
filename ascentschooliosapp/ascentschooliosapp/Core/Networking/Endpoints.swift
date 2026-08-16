@@ -140,6 +140,86 @@ extension APIClient {
         try await send("mobile/teacher/homework", method: .post, body: request)
     }
 
+    // MARK: - Messaging (Phase 92)
+
+    // Parent side (child context). One thread per selected child — no list.
+    func parentThread() async throws -> ParentThreadViewDto {
+        try await send("mobile/messages")
+    }
+
+    func sendParentMessage(body: String) async throws -> SendMessageResult {
+        try await send("mobile/messages", method: .post, body: SendMessageRequest(body: body))
+    }
+
+    func markParentThreadRead() async throws {
+        try await sendVoid("mobile/messages/read", method: .post)
+    }
+
+    func reportParentMessage(messageId: Int, reason: String?) async throws {
+        try await sendVoid(
+            "mobile/messages/report",
+            method: .post,
+            body: ReportMessageRequest(messageId: messageId, reason: reason)
+        )
+    }
+
+    func blockParentThread() async throws {
+        try await sendVoid("mobile/messages/block", method: .post)
+    }
+
+    func unblockParentThread() async throws {
+        try await sendVoid("mobile/messages/unblock", method: .post)
+    }
+
+    // Teacher side. Inbox spans all assigned classes; chat is per threadId.
+    func teacherThreads() async throws -> [MessageThreadDto] {
+        try await send("mobile/teacher/messages")
+    }
+
+    func teacherThread(threadId: Int) async throws -> MessageThreadDetailDto {
+        try await send("mobile/teacher/messages/\(threadId)")
+    }
+
+    func replyTeacherMessage(threadId: Int, body: String) async throws -> SendMessageResult {
+        try await send(
+            "mobile/teacher/messages/\(threadId)",
+            method: .post,
+            body: SendMessageRequest(body: body)
+        )
+    }
+
+    func markTeacherThreadRead(threadId: Int) async throws {
+        try await sendVoid("mobile/teacher/messages/\(threadId)/read", method: .post)
+    }
+
+    func reportTeacherMessage(threadId: Int, messageId: Int, reason: String?) async throws {
+        try await sendVoid(
+            "mobile/teacher/messages/\(threadId)/report",
+            method: .post,
+            body: ReportMessageRequest(messageId: messageId, reason: reason)
+        )
+    }
+
+    func blockTeacherThread(threadId: Int) async throws {
+        try await sendVoid("mobile/teacher/messages/\(threadId)/block", method: .post)
+    }
+
+    func unblockTeacherThread(threadId: Int) async throws {
+        try await sendVoid("mobile/teacher/messages/\(threadId)/unblock", method: .post)
+    }
+
+    // Phase 90 — teacher class/section announcements
+    func teacherAnnouncements(classId: Int) async throws -> [TeacherAnnouncementDto] {
+        try await send(
+            "mobile/teacher/announcements",
+            query: [URLQueryItem(name: "classId", value: String(classId))]
+        )
+    }
+
+    func createTeacherAnnouncement(_ request: TeacherCreateAnnouncementRequest) async throws -> TeacherAnnouncementDto {
+        try await send("mobile/teacher/announcements", method: .post, body: request)
+    }
+
     // MARK: - Fees (parent JWT with child context)
 
     func feeOutstanding(category: FeeTypeCategory) async throws -> CrossYearFeeSummaryDto {

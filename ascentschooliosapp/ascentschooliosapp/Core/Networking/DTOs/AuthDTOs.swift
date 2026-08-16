@@ -44,6 +44,12 @@ struct SelectChildRequest: Encodable {
 
 struct AuthResponse: Decodable {
     let accessToken: String
+    // Phase 88 (Android parity): the app now holds its own refresh token and
+    // sends it as `X-Refresh-Token` (server reads header-first, cookie fallback).
+    // Optional — web clients / older API builds omit it and fall back to the cookie.
+    // Phase 96 made it stable (non-rotating), so the value returned by /refresh
+    // equals the one sent, but we always re-save defensively.
+    let refreshToken: String?
     let tokenType: String?
     let fullName: String?
     let className: String?
@@ -58,6 +64,7 @@ struct AuthResponse: Decodable {
 
 struct TeacherAuthResponse: Decodable {
     let accessToken: String
+    let refreshToken: String?   // Phase 88 — see AuthResponse
     let tokenType: String?
     let fullName: String?
     let userId: Int?

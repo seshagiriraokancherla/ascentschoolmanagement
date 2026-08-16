@@ -29,6 +29,9 @@ final class TeacherAttendanceViewModel {
     var presentCount: Int { students.filter { $0.status?.caseInsensitiveCompare("Present") == .orderedSame }.count }
     var absentCount:  Int { students.filter { $0.status?.caseInsensitiveCompare("Absent")  == .orderedSame }.count }
     var lateCount:    Int { students.filter { $0.status?.caseInsensitiveCompare("Late")    == .orderedSame }.count }
+    // Phase 73 (Android parity): Half Day is settable via the long-press menu;
+    // surface its count in the summary row too. Server stores "HalfDay" (no space).
+    var halfDayCount: Int { students.filter { $0.status?.caseInsensitiveCompare("HalfDay") == .orderedSame }.count }
     var unmarkedCount: Int { students.filter { ($0.status ?? "").isEmpty }.count }
 
     var hasAnyStatusSet: Bool { students.contains { ($0.status ?? "").isEmpty == false } }

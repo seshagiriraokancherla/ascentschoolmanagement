@@ -7,7 +7,7 @@ import SwiftUI
 struct ParentHomeView: View {
 
     enum Tab: Hashable {
-        case home, attendance, marks, fees, homework, announcements, events, profile
+        case home, attendance, marks, fees, homework, announcements, events, messages, profile
     }
 
     @State private var selectedTab: Tab = .home
@@ -22,6 +22,9 @@ struct ParentHomeView: View {
     @State private var children: [ChildDto] = []
     @State private var childEpoch: Int = 0
     @State private var showChildSheet: Bool = false
+    // Phase 65 pt2: bumped by the global Refresh button; combined with childEpoch
+    // into each tab's `.id`, so a tap rebuilds every tab (reloading its data).
+    @State private var refreshEpoch: Int = 0
 
     private var store: KeychainTokenStore { KeychainTokenStore.shared }
 
@@ -34,6 +37,7 @@ struct ParentHomeView: View {
             tab(HomeworkView(), title: "Homework", tab: .homework, systemImage: "book.closed")
             tab(AnnouncementsView(), title: "Notices", tab: .announcements, systemImage: "megaphone")
             tab(EventsView(), title: "Events", tab: .events, systemImage: "photo.on.rectangle.angled")
+            tab(MessagesView(), title: "Messages", tab: .messages, systemImage: "bubble.left.and.bubble.right")
             tab(ProfileView(), title: "Profile", tab: .profile, systemImage: "person.circle")
         }
         .tint(AppTheme.Palette.navyBlue)
@@ -81,7 +85,8 @@ struct ParentHomeView: View {
                         title: title,
                         onLogout: logout,
                         onSwitchChild: switchChildAction,
-                        onChangeSchool: changeSchoolAction
+                        onChangeSchool: changeSchoolAction,
+                        onRefresh: globalRefresh
                     )
                 }
                 .toolbarBackground(AppTheme.Palette.navyBlue, for: .navigationBar)
@@ -89,8 +94,8 @@ struct ParentHomeView: View {
                 .toolbarColorScheme(.dark, for: .navigationBar)
         }
         // Rebuilds this tab's subtree (and therefore its @State-owned view model)
-        // whenever a different child is selected.
-        .id(childEpoch)
+        // whenever a different child is selected OR the global Refresh is tapped.
+        .id("\(childEpoch)-\(refreshEpoch)")
         .tabItem {
             Label(title, systemImage: systemImage)
         }
@@ -121,6 +126,15 @@ struct ParentHomeView: View {
                 // UI could be added later, but Android currently swallows too.
             }
         }
+    }
+
+    // Phase 65 pt2/3 (Android parity): reload every tab's data (via the epoch
+    // bump → tab `.id` change) AND re-run the app-version check. A long-lived
+    // 180-day session may never cold-start, so this is the mid-session path for
+    // a forced update to surface (RootView observes AppConfigStore.isForced).
+    private func globalRefresh() {
+        refreshEpoch &+= 1
+        Task { await AppConfigStore.shared.refresh() }
     }
 
     private func logout() {

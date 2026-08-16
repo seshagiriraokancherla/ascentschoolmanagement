@@ -8,14 +8,18 @@ enum UserType: String {
 
 // Mirrors Android `TokenStore` (data/local/TokenStore.kt):
 // keeps the access token plus user-context fields, all backed by Keychain.
-// The refresh token is NOT stored here — it's an HttpOnly cookie owned by
-// `HTTPCookieStorage.shared` and archived to disk by `CookiePersistence`.
+// Phase 88: the app now ALSO holds its own refresh token here and sends it as
+// `X-Refresh-Token` on refresh calls (the HttpOnly cookie in `HTTPCookieStorage`
+// / `CookiePersistence` is kept as a fallback but is no longer load-bearing —
+// the Keychain-held token is the reliable copy across app kills).
 @Observable
 final class KeychainTokenStore {
     static let shared = KeychainTokenStore()
 
     private enum Keys {
         static let accessToken = "auth.accessToken"
+        // Phase 88 — app-held refresh token (sent as X-Refresh-Token on refresh).
+        static let refreshToken = "auth.refreshToken"
         static let tokenType   = "auth.tokenType"
         static let userType    = "auth.userType"
         static let studentName = "auth.studentName"
@@ -40,6 +44,7 @@ final class KeychainTokenStore {
     }
 
     private(set) var accessToken: String?
+    private(set) var refreshToken: String?
     private(set) var tokenType: String?
     private(set) var userType: UserType?
     private(set) var studentName: String?
@@ -69,7 +74,8 @@ final class KeychainTokenStore {
     }
 
     private init() {
-        accessToken = KeychainHelper.readString(Keys.accessToken)
+        accessToken  = KeychainHelper.readString(Keys.accessToken)
+        refreshToken = KeychainHelper.readString(Keys.refreshToken)
         tokenType   = KeychainHelper.readString(Keys.tokenType)
         if let raw = KeychainHelper.readString(Keys.userType) {
             userType = UserType(rawValue: raw)
@@ -100,6 +106,7 @@ final class KeychainTokenStore {
     // before they can reach `ParentHomeView`.
     func saveParentAuthWithoutChild(_ response: AuthResponse) {
         write(Keys.accessToken, response.accessToken)
+        saveRefreshTokenIfPresent(response.refreshToken)
         write(Keys.tokenType, response.tokenType)
         write(Keys.userType, UserType.parent.rawValue)
         write(Keys.studentName, response.fullName)
@@ -120,6 +127,7 @@ final class KeychainTokenStore {
     // JWT) plus the resolved child context (studentId / admissionNo / className).
     func saveParentAuth(_ response: AuthResponse) {
         write(Keys.accessToken, response.accessToken)
+        saveRefreshTokenIfPresent(response.refreshToken)
         write(Keys.tokenType, response.tokenType)
         write(Keys.userType, UserType.parent.rawValue)
         write(Keys.studentName, response.fullName)
@@ -138,6 +146,7 @@ final class KeychainTokenStore {
 
     func saveTeacherAuth(_ response: TeacherAuthResponse) {
         write(Keys.accessToken, response.accessToken)
+        saveRefreshTokenIfPresent(response.refreshToken)
         write(Keys.tokenType, response.tokenType)
         write(Keys.userType, UserType.teacher.rawValue)
         write(Keys.studentName, response.fullName)
@@ -157,6 +166,19 @@ final class KeychainTokenStore {
     func updateAccessToken(_ token: String) {
         write(Keys.accessToken, token)
         accessToken = token
+    }
+
+    // Phase 88: persist a (possibly rotated) refresh token from any auth/refresh
+    // response. No-op when the server didn't send one (web/older builds) so we
+    // never wipe a good stored token.
+    func updateRefreshToken(_ token: String?) {
+        saveRefreshTokenIfPresent(token)
+    }
+
+    private func saveRefreshTokenIfPresent(_ token: String?) {
+        guard let token, !token.isEmpty else { return }
+        write(Keys.refreshToken, token)
+        refreshToken = token
     }
 
     // Phase 68: called from AuthViewModel.selectChild AND the future in-app
@@ -205,12 +227,13 @@ final class KeychainTokenStore {
     func clear() {
         // Note: device id is owned by `DeviceIDProvider` and intentionally NOT cleared
         // — matches Android's `TokenStore.clear()` preserving `device_id`.
-        [Keys.accessToken, Keys.tokenType, Keys.userType,
+        [Keys.accessToken, Keys.refreshToken, Keys.tokenType, Keys.userType,
          Keys.studentName, Keys.studentId, Keys.admissionNo, Keys.className,
          Keys.childLinkId]
             .forEach { KeychainHelper.delete(key: $0) }
 
-        accessToken = nil
+        accessToken  = nil
+        refreshToken = nil
         tokenType   = nil
         userType    = nil
         studentName = nil

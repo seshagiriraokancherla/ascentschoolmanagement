@@ -134,10 +134,12 @@ struct TeacherAttendanceView: View {
     }
 
     private var summaryChips: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             chip("Present", count: viewModel.presentCount, color: AppTheme.Palette.present)
             chip("Absent",  count: viewModel.absentCount,  color: AppTheme.Palette.absent)
             chip("Late",    count: viewModel.lateCount,    color: AppTheme.Palette.late)
+            // Phase 73: Half Day count (settable via long-press menu).
+            chip("Half Day", count: viewModel.halfDayCount, color: AppTheme.Palette.halfDay)
             chip("Unmarked", count: viewModel.unmarkedCount, color: AppTheme.Palette.textSecondary)
         }
     }

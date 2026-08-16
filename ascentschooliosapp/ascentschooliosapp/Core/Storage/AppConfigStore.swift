@@ -33,6 +33,24 @@ final class AppConfigStore {
         self.status = status
     }
 
+    // Phase 57/71 + 65 pt3: fetch /mobile/app/config and store the result.
+    // Fail-open — any error (network, decode, 5xx) leaves the previous status
+    // untouched so a transient outage never blocks the app. Called from RootView
+    // on cold start AND from the home-screen global Refresh button (a long-lived
+    // 180-day session may never cold-start, so this is the only way a forced
+    // update surfaces mid-session — `isForced` is observed by RootView).
+    func refresh() async {
+        do {
+            let latest = try await APIClient.shared.appConfig(
+                applicationId: AppInfo.applicationId,
+                versionCode: AppInfo.versionCode
+            )
+            status = latest
+        } catch {
+            // Silently ignore — mirrors Android's fail-open behaviour.
+        }
+    }
+
     // Called by the "Refresh" affordance and by the update sheet's dismiss
     // action so the sheet doesn't re-appear on every state change until the
     // next cold start.

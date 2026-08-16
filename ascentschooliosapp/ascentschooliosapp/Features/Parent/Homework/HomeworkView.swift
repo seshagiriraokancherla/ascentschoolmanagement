@@ -55,21 +55,13 @@ struct HomeworkView: View {
 
     private func card(_ item: HomeworkDto) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                if let subject = item.subjectName, !subject.isEmpty {
-                    Text(subject.uppercased())
-                        .font(.appLabelSmall.bold())
-                        .foregroundStyle(AppTheme.Palette.navyBlue)
-                }
-                Spacer()
-                if let due = item.dueDate, !due.isEmpty {
-                    Text("Due \(due.friendlyDate())")
-                        .font(.appLabelSmall.bold())
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(dueColor(for: due), in: Capsule())
-                }
+            // Phase 93 (Android parity): "due date" retired everywhere — schools
+            // didn't use it. Only the subject label remains on this row.
+            if let subject = item.subjectName, !subject.isEmpty {
+                Text(subject.uppercased())
+                    .font(.appLabelSmall.bold())
+                    .foregroundStyle(AppTheme.Palette.navyBlue)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             if let title = item.title, !title.isEmpty {
@@ -121,23 +113,5 @@ struct HomeworkView: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.Palette.appSurface, in: RoundedRectangle(cornerRadius: 16))
-    }
-
-    // Red-orange if past due, navy otherwise.
-    private func dueColor(for iso: String) -> Color {
-        let parser = ISO8601DateFormatter()
-        parser.formatOptions = [.withInternetDateTime]
-        let plainDateOnly = DateFormatter()
-        plainDateOnly.locale = Locale(identifier: "en_US_POSIX")
-        plainDateOnly.dateFormat = "yyyy-MM-dd"
-
-        let parsed: Date? = parser.date(from: iso) ?? plainDateOnly.date(from: iso)
-        guard let parsed else { return AppTheme.Palette.navyBlue }
-
-        let today = Calendar.current.startOfDay(for: Date())
-        let dueDay = Calendar.current.startOfDay(for: parsed)
-        if dueDay < today { return AppTheme.Palette.absent }
-        if dueDay == today { return AppTheme.Palette.late }
-        return AppTheme.Palette.navyBlue
     }
 }
