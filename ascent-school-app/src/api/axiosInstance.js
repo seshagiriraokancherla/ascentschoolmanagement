@@ -34,6 +34,40 @@ async function doRefresh() {
   return body.data.accessToken
 }
 
+// ── Error text extraction ─────────────────────────────────────────────────
+// Two different body shapes come back from the API:
+//   • handled errors  → our envelope:  { success:false, message: "Admission number already exists." }
+//   • unhandled crash → Web API HttpError: { message: "An error has occurred.",
+//                                            exceptionMessage: "<the real reason>", stackTrace: … }
+// The envelope's `message` is the useful one; HttpError's is a fixed placeholder
+// and the truth sits in `exceptionMessage` (WebApiConfig sets
+// IncludeErrorDetailPolicy.Always, so it IS sent in production). Prefer the
+// exception text whenever the top-level message is that placeholder, otherwise
+// nothing above this layer can tell a validation failure from a server crash.
+const GENERIC_HTTP_ERROR = 'an error has occurred'
+
+function errorTextFrom(body, status) {
+  const msg = body?.message
+  const ex  = body?.exceptionMessage || body?.ExceptionMessage
+  if (ex && (!msg || msg.trim().toLowerCase().replace(/\.$/, '') === GENERIC_HTTP_ERROR)) return ex
+  return msg || body?.Message || `Request failed: ${status}`
+}
+
+/**
+ * Message to show for a caught error: the server's reason when there is one,
+ * otherwise the caller's own wording.
+ *
+ * An Ant Design `validateFields()` rejection carries `errorFields` and a useless
+ * message, and the form already highlights the offending inputs — so those fall
+ * back to the caller's text rather than leaking form internals into a toast.
+ * (Callers that want no toast at all for validation still guard on
+ * `err?.errorFields` themselves, as StudentFormPage does.)
+ */
+export function apiError(err, fallback = 'Something went wrong.') {
+  if (err?.errorFields) return fallback
+  return err?.message || fallback
+}
+
 // ── Core request function ─────────────────────────────────────────────────
 async function request(method, path, body, retry = false) {
   const token     = useAuthStore.getState().accessToken
@@ -82,7 +116,7 @@ async function request(method, path, body, retry = false) {
   // ── Non-2xx → throw with same shape as before ─────────────────────────
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({}))
-    const err     = new Error(errBody.message || `Request failed: ${res.status}`)
+    const err     = new Error(errorTextFrom(errBody, res.status))
     err.response  = { status: res.status, data: errBody }
     throw err
   }

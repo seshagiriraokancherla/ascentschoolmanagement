@@ -5,7 +5,7 @@ import { useBrandingStore } from '../../store/brandingStore'
 import { exportCsv } from './reportUtils'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 
 const { Text, Title } = Typography
 
@@ -80,7 +80,7 @@ export default function FailedStudentsReport() {
       if (sectionId) params.append('sectionId', sectionId)
       const r = await api.get(`/school/reports/failed-students?${params}`)
       setData(r.data?.data)
-    } catch { message.error('Failed to load failed students report.') }
+    } catch (e) { message.error(apiError(e, 'Failed to load failed students report.')) }
     finally { setLoading(false) }
   }
 

@@ -24,6 +24,10 @@ namespace AscentSchools.Data.Repositories.School
              WHERE school_id = @schoolId AND status = 'Active'
              ORDER BY academic_year_id DESC)";
 
+        // Server runs US Eastern (Phase 98) — every server-stamped message time must be IST.
+        private const string IstNow =
+            "CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'India Standard Time' AS DATETIME)";
+
         // ── Parent side ───────────────────────────────────────────────────
 
         /// <summary>
@@ -80,7 +84,7 @@ namespace AscentSchools.Data.Repositories.School
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 return conn.QuerySingle<int>(
-                    @"DECLARE @existing INT =
+                    $@"DECLARE @existing INT =
                           (SELECT thread_id FROM message_threads
                            WHERE school_id = @schoolId AND student_unique_id = @studentUniqueId
                              AND parent_id = @parentId);
@@ -88,8 +92,8 @@ namespace AscentSchools.Data.Repositories.School
                           SELECT @existing;
                       ELSE
                       BEGIN
-                          INSERT INTO message_threads (student_unique_id, parent_id, school_id)
-                          VALUES (@studentUniqueId, @parentId, @schoolId);
+                          INSERT INTO message_threads (student_unique_id, parent_id, school_id, created_at)
+                          VALUES (@studentUniqueId, @parentId, @schoolId, {IstNow});
                           SELECT CAST(SCOPE_IDENTITY() AS INT);
                       END",
                     new { schoolId, studentUniqueId, parentId });
@@ -157,6 +161,63 @@ namespace AscentSchools.Data.Repositories.School
                     new { threadId, schoolId, userId }) > 0;
         }
 
+        // ── Admin conversation viewer (school web app, read-only) ──────────
+
+        /// <summary>
+        /// Threads filtered for the admin Conversations page. Class/section are resolved
+        /// from the student's placement in the SELECTED academic year (null → current year),
+        /// so a year filter shows a promoted child under the class they were in that year;
+        /// a thread whose student isn't placed in the selected year won't appear (INNER JOIN).
+        /// The date range matches threads that had ANY message activity in the window.
+        /// </summary>
+        public IEnumerable<ConversationListItemDto> GetThreadsForAdmin(
+            string tenantDbName, int schoolId, int? academicYearId,
+            int? classId, int? sectionId, int? studentUniqueId, int? teacherUserId,
+            System.DateTime dateFrom, System.DateTime dateToExclusive)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.Query<ConversationListItemDto>(
+                    $@"SELECT DISTINCT
+                              t.thread_id ThreadId, t.student_unique_id StudentUniqueId,
+                              t.status Status, t.last_message_at LastMessageAt,
+                              s.student_name StudentName, s.admission_no AdmissionNo,
+                              c.class_name ClassName, sec.section_name SectionName,
+                              (SELECT TOP 1 m.body FROM messages m
+                               WHERE m.thread_id = t.thread_id AND m.status = 'Active'
+                               ORDER BY m.created_at DESC) LastMessageBody,
+                              (SELECT COUNT(1) FROM messages m WHERE m.thread_id = t.thread_id) MessageCount,
+                              STUFF((SELECT DISTINCT ', ' + u.full_name
+                                     FROM class_teacher_assignments a
+                                     JOIN users u ON u.user_id = a.user_id AND u.status = 'Active'
+                                     WHERE a.class_id = s.class_id AND a.school_id = s.school_id
+                                       AND a.academic_year_id = s.academic_year_id
+                                       AND (a.section_id IS NULL OR a.section_id = s.section_id)
+                                     FOR XML PATH('')), 1, 2, '') TeacherNames
+                       FROM message_threads t
+                       JOIN students s
+                            ON s.student_unique_id = t.student_unique_id
+                           AND s.school_id = t.school_id
+                           AND s.academic_year_id = ISNULL(@academicYearId, {CurrentYear})
+                       LEFT JOIN classes c      ON c.class_id     = s.class_id
+                       LEFT JOIN sections sec   ON sec.section_id = s.section_id
+                       WHERE t.school_id = @schoolId
+                         AND (@classId IS NULL OR s.class_id = @classId)
+                         AND (@sectionId IS NULL OR s.section_id = @sectionId)
+                         AND (@studentUniqueId IS NULL OR t.student_unique_id = @studentUniqueId)
+                         AND (@teacherUserId IS NULL OR EXISTS (
+                                 SELECT 1 FROM class_teacher_assignments a2
+                                 WHERE a2.class_id = s.class_id AND a2.school_id = s.school_id
+                                   AND a2.academic_year_id = s.academic_year_id
+                                   AND (a2.section_id IS NULL OR a2.section_id = s.section_id)
+                                   AND a2.user_id = @teacherUserId))
+                         AND EXISTS (SELECT 1 FROM messages m
+                                     WHERE m.thread_id = t.thread_id
+                                       AND m.created_at >= @dateFrom AND m.created_at < @dateToExclusive)
+                       ORDER BY t.last_message_at DESC",
+                    new { schoolId, academicYearId, classId, sectionId, studentUniqueId,
+                          teacherUserId, dateFrom, dateToExclusive });
+        }
+
         // ── Shared ────────────────────────────────────────────────────────
 
         public MessageThreadDto GetThread(string tenantDbName, int schoolId, int threadId, string forSide)
@@ -213,10 +274,10 @@ namespace AscentSchools.Data.Repositories.School
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 return conn.QuerySingle<int>(
-                    @"INSERT INTO messages (thread_id, sender_type, sender_id, sender_name, body, school_id)
-                      VALUES (@threadId, @senderType, @senderId, @senderName, @body, @schoolId);
+                    $@"INSERT INTO messages (thread_id, sender_type, sender_id, sender_name, body, school_id, created_at)
+                      VALUES (@threadId, @senderType, @senderId, @senderName, @body, @schoolId, {IstNow});
                       DECLARE @newId INT = CAST(SCOPE_IDENTITY() AS INT);
-                      UPDATE message_threads SET last_message_at = GETDATE()
+                      UPDATE message_threads SET last_message_at = {IstNow}
                       WHERE thread_id = @threadId AND school_id = @schoolId;
                       SELECT @newId;",
                     new { threadId, senderType, senderId, senderName, body, schoolId });
@@ -228,7 +289,7 @@ namespace AscentSchools.Data.Repositories.School
             var otherSide = readerSide == "parent" ? "teacher" : "parent";
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 return conn.Execute(
-                    @"UPDATE messages SET read_at = GETDATE()
+                    $@"UPDATE messages SET read_at = {IstNow}
                       WHERE thread_id = @threadId AND school_id = @schoolId
                         AND sender_type = @otherSide AND read_at IS NULL",
                     new { threadId, schoolId, otherSide });
@@ -241,11 +302,11 @@ namespace AscentSchools.Data.Repositories.School
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 conn.Execute(
-                    @"UPDATE message_threads
+                    $@"UPDATE message_threads
                       SET status          = CASE WHEN @blocked = 1 THEN 'Blocked' ELSE 'Active' END,
                           blocked_by_type = CASE WHEN @blocked = 1 THEN @byType ELSE NULL END,
                           blocked_by_id   = CASE WHEN @blocked = 1 THEN @byId   ELSE NULL END,
-                          blocked_at      = CASE WHEN @blocked = 1 THEN GETDATE() ELSE NULL END
+                          blocked_at      = CASE WHEN @blocked = 1 THEN {IstNow} ELSE NULL END
                       WHERE thread_id = @threadId AND school_id = @schoolId",
                     new { threadId, schoolId, blocked, byType, byId });
         }
@@ -281,9 +342,9 @@ namespace AscentSchools.Data.Repositories.School
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 return conn.QuerySingle<int>(
-                    @"INSERT INTO message_reports
-                        (message_id, thread_id, reported_by_type, reported_by_id, reason, school_id)
-                      VALUES (@messageId, @threadId, @byType, @byId, @reason, @schoolId);
+                    $@"INSERT INTO message_reports
+                        (message_id, thread_id, reported_by_type, reported_by_id, reason, school_id, created_at)
+                      VALUES (@messageId, @threadId, @byType, @byId, @reason, @schoolId, {IstNow});
                       SELECT CAST(SCOPE_IDENTITY() AS INT)",
                     new { messageId, threadId, byType, byId, reason, schoolId });
         }
@@ -321,8 +382,8 @@ namespace AscentSchools.Data.Repositories.School
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 conn.Execute(
-                    @"UPDATE message_reports
-                      SET status = @action, reviewed_by = @reviewedBy, reviewed_at = GETDATE()
+                    $@"UPDATE message_reports
+                      SET status = @action, reviewed_by = @reviewedBy, reviewed_at = {IstNow}
                       WHERE report_id = @reportId AND school_id = @schoolId;
 
                       IF @action = 'Removed'

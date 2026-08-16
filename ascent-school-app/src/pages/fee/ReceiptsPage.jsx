@@ -6,7 +6,7 @@ import {
 import { SearchOutlined, EyeOutlined, StopOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons'
 import Papa from 'papaparse'
 import dayjs from 'dayjs'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 import { useBrandingStore } from '../../store/brandingStore'
 
 const { Text, Title } = Typography
@@ -77,8 +77,8 @@ export default function ReceiptsPage() {
     try {
       const res = await api.get(`/school/fees/receipts/${receiptId}`)
       setDetailReceipt(res.data?.data)
-    } catch {
-      message.error('Failed to load receipt.')
+    } catch (e) {
+      message.error(apiError(e, 'Failed to load receipt.'))
     } finally {
       setLoadingDetail(false)
     }
@@ -91,8 +91,8 @@ export default function ReceiptsPage() {
       try {
         const res = await api.get(`/school/fees/receipts/${receiptId}`)
         rec = res.data?.data
-      } catch {
-        message.error('Failed to load receipt for printing.')
+      } catch (e) {
+        message.error(apiError(e, 'Failed to load receipt for printing.'))
         return
       }
     }
@@ -118,8 +118,8 @@ export default function ReceiptsPage() {
       setCancelModalOpen(false)
       load()
       if (detailReceipt?.receiptId === cancellingId) setDrawerOpen(false)
-    } catch {
-      message.error('Failed to cancel receipt.')
+    } catch (e) {
+      message.error(apiError(e, 'Failed to cancel receipt.'))
     } finally {
       setCancelling(false)
     }

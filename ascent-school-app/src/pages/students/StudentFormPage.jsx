@@ -8,7 +8,7 @@ import {
 } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import dayjs from 'dayjs'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 import { uploadToR2, MAX_IMAGE_BYTES, IMAGE_TYPES } from '../../api/r2Upload'
 import { useAuthStore } from '../../store/authStore'
 
@@ -166,7 +166,7 @@ export default function StudentFormPage() {
         })
         if (s.classId) loadSections(s.classId)
       })
-      .catch(() => message.error('Failed to load student.'))
+      .catch((e) => message.error(apiError(e, 'Failed to load student.')))
       .finally(() => setLoading(false))
   }, [id])
 
@@ -262,7 +262,7 @@ export default function StudentFormPage() {
       message.success(isEdit ? 'Student updated.' : 'Student registered.')
       navigate('/students')
     } catch (err) {
-      if (!err?.errorFields) message.error('Failed to save student.')
+      if (!err?.errorFields) message.error(apiError(err, 'Failed to save student.'))
     } finally {
       setSaving(false)
     }
@@ -713,8 +713,8 @@ export default function StudentFormPage() {
     try {
       const res = await api.get(`/school/students/${id}/history`)
       setHistoryRows(res.data?.data || [])
-    } catch {
-      message.error('Failed to load history.')
+    } catch (e) {
+      message.error(apiError(e, 'Failed to load history.'))
     } finally {
       setHistoryLoading(false)
     }

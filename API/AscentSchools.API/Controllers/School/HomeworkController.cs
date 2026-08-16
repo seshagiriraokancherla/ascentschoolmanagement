@@ -53,20 +53,30 @@ namespace AscentSchools.API.Controllers.School
         {
             if (request == null)
                 return BadRequest("No data provided.");
+            if (!request.ClassId.HasValue || request.ClassId.Value <= 0)
+                return BadRequest("Class is required.");
             if (request.AssignedDate == default(DateTime))
                 return BadRequest("Date is required.");
             if (request.Items == null || !request.Items.Any(i => i.SubjectId.HasValue && !string.IsNullOrWhiteSpace(i.Description)))
                 return BadRequest("Enter homework for at least one subject.");
 
-            var saved = _repo.CreateBatchHomework(Tenant.TenantDbName, Tenant.SchoolId, Tenant.FullName, request);
+            var result = _repo.CreateBatchHomework(Tenant.TenantDbName, Tenant.SchoolId, Tenant.FullName, request);
 
-            if (saved > 0)
-                new PushNotifier().NotifyClass(
-                    Tenant.TenantDbName, Tenant.GroupId, Tenant.SchoolId,
-                    request.ClassId, request.SectionId,
-                    "New Homework", "Today's homework has been posted.", "homework", 0);
+            // One push per target section; a null target notifies the whole class.
+            if (result.SubjectCount > 0)
+            {
+                var notifier = new PushNotifier();
+                foreach (var sectionId in result.Sections)
+                    notifier.NotifyClass(
+                        Tenant.TenantDbName, Tenant.GroupId, Tenant.SchoolId,
+                        request.ClassId, sectionId,
+                        "New Homework", "Today's homework has been posted.", "homework", 0);
+            }
 
-            return Ok(saved, $"Saved homework for {saved} subject(s).");
+            var scope = result.Sections.Count == 1 && !result.Sections[0].HasValue
+                ? "all sections"
+                : $"{result.Sections.Count} section(s)";
+            return Ok(result, $"Saved homework for {result.SubjectCount} subject(s) in {scope}.");
         }
 
         [HttpPut, Route("{id:int}")]

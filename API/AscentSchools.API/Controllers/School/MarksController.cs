@@ -64,8 +64,6 @@ namespace AscentSchools.API.Controllers.School
                 return BadRequest("classId, examTypeId and academicYearId are required.");
             if (request.Entries == null || !request.Entries.Any())
                 return BadRequest("No mark entries provided.");
-            if (request.MaxMarks <= 0)
-                return BadRequest("Max marks must be greater than zero.");
 
             _repo.SaveMarks(Tenant.TenantDbName, Tenant.SchoolId, Tenant.FullName, request);
             return Ok(true, "Marks saved.");

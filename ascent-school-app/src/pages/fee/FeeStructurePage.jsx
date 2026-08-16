@@ -4,7 +4,7 @@ import {
   Alert, Row, Col, App as AntApp, Radio, Tag,
 } from 'antd'
 import { SaveOutlined, SearchOutlined } from '@ant-design/icons'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 
 const { Text } = Typography
 
@@ -172,8 +172,8 @@ export default function FeeStructurePage() {
         Items:          items,
       })
       message.success('Fee structure saved.')
-    } catch {
-      message.error('Failed to save fee structure.')
+    } catch (e) {
+      message.error(apiError(e, 'Failed to save fee structure.'))
     } finally {
       setSaving(false)
     }

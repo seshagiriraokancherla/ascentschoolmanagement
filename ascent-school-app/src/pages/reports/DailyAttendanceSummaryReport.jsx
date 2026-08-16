@@ -3,7 +3,7 @@ import { DatePicker, Select, Button, Row, Col, Table, Space, App as AntApp } fro
 import { FilePdfOutlined, FileTextOutlined } from '@ant-design/icons'
 import { useBrandingStore } from '../../store/brandingStore'
 import { exportPdf, exportCsv } from './reportUtils'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 import dayjs from 'dayjs'
 
 const { RangePicker } = DatePicker
@@ -54,7 +54,7 @@ export default function DailyAttendanceSummaryReport() {
       if (sectionId) params.append('sectionId', sectionId)
       const r = await api.get(`/school/reports/daily-attendance-summary?${params}`)
       setData(r.data?.data || [])
-    } catch { message.error('Failed to load report.') }
+    } catch (e) { message.error(apiError(e, 'Failed to load report.')) }
     finally { setLoading(false) }
   }
 

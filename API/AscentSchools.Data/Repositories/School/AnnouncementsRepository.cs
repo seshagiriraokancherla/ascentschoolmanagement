@@ -33,8 +33,11 @@ namespace AscentSchools.Data.Repositories.School
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 return conn.QuerySingle<int>(
-                    @"INSERT INTO announcements (title, description, scope, class_id, section_id, is_pinned, attachment_url, school_id, created_by)
-                      VALUES (@title, @description, @scope, @classId, @sectionId, @isPinned, @attachmentUrl, @schoolId, @createdBy);
+                    // created_at stamped in IST (server runs US Eastern) so "today's news"
+                    // on the mobile ticker lands on the right day — see Phase 98/104.
+                    @"INSERT INTO announcements (title, description, scope, class_id, section_id, is_pinned, attachment_url, school_id, created_by, created_at)
+                      VALUES (@title, @description, @scope, @classId, @sectionId, @isPinned, @attachmentUrl, @schoolId, @createdBy,
+                              CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'India Standard Time' AS DATETIME));
                       SELECT SCOPE_IDENTITY();",
                     new { req.Title, req.Description, req.Scope, req.ClassId, req.SectionId, req.IsPinned, req.AttachmentUrl, schoolId, createdBy });
         }

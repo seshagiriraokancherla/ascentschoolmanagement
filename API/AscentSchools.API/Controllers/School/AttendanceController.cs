@@ -81,5 +81,18 @@ namespace AscentSchools.API.Controllers.School
             var summary = _repo.GetMonthlySummary(Tenant.TenantDbName, Tenant.SchoolId, classId, sectionId, month, year);
             return Ok(summary);
         }
+
+        // GET /school/attendance/monthly-export?month=7&year=2026
+        // Present-day counts for every student in the month — read by the sync tool
+        // (X-Api-Key) and pushed into the legacy SAS_BulkAttendance table.
+        [HttpGet, Route("monthly-export")]
+        public HttpResponseMessage GetMonthlyExport([FromUri] int month, [FromUri] int year)
+        {
+            if (month < 1 || month > 12 || year < 2000)
+                return BadRequest("Valid month (1-12) and year are required.");
+
+            var rows = _repo.GetMonthlyPresentExport(Tenant.TenantDbName, Tenant.SchoolId, month, year);
+            return Ok(rows);
+        }
     }
 }

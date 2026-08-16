@@ -3,7 +3,7 @@ import { Table, Select, Button, Space, Row, Col, Typography, Divider, App as Ant
 import { FilePdfOutlined, FileExcelOutlined } from '@ant-design/icons'
 import { useBrandingStore } from '../../store/brandingStore'
 import { exportPdf, exportCsv } from './reportUtils'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 
 const { Text } = Typography
 
@@ -51,7 +51,7 @@ export default function TransportStudentsReport() {
       const r = await api.get(`/school/reports/transport-students?${q}`)
       setRows(r.data?.data || [])
       setLoaded(true)
-    } catch { message.error('Failed to load transport students report.') }
+    } catch (e) { message.error(apiError(e, 'Failed to load transport students report.')) }
     finally { setLoading(false) }
   }
 

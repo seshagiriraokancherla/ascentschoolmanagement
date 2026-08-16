@@ -78,7 +78,6 @@ private fun ProfileContent(p: StudentProfileDto) {
         ProfileCard("Personal Details") {
             InfoRow("Father's Name", p.fatherName)
             InfoRow("Mother's Name", p.motherName)
-            InfoRow("Date of Birth", p.dateOfBirth ?: "-")
             InfoRow("Gender", p.gender ?: "-")
             InfoRow("Blood Group", p.bloodGroup ?: "-")
             InfoRow("Mobile", p.mobile ?: "-")

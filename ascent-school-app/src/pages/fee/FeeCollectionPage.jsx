@@ -5,7 +5,7 @@ import {
 } from 'antd'
 import { SearchOutlined, UserOutlined, DollarOutlined, WifiOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 import { useBrandingStore } from '../../store/brandingStore'
 
 const { Text, Title } = Typography
@@ -83,8 +83,8 @@ export default function FeeCollectionPage() {
         initAmounts[key] = { amount: Math.max(0, li.outstanding), concession: 0 }
       })
       setLineAmounts(initAmounts)
-    } catch {
-      message.error('Failed to load student fee details.')
+    } catch (e) {
+      message.error(apiError(e, 'Failed to load student fee details.'))
     } finally {
       setLoadingDues(false)
     }
@@ -146,8 +146,8 @@ export default function FeeCollectionPage() {
       })
       reloadDues()
       resetPaymentForm()
-    } catch {
-      message.error('Failed to collect fee.')
+    } catch (e) {
+      message.error(apiError(e, 'Failed to collect fee.'))
     } finally {
       setCollecting(false)
     }
@@ -225,7 +225,7 @@ export default function FeeCollectionPage() {
     } catch (err) {
       // 'dismissed' is user-initiated, not an error
       if (err?.message !== 'dismissed' && err?.message !== 'verify_failed') {
-        message.error('Failed to initiate online payment.')
+        message.error(apiError(err, 'Failed to initiate online payment.'))
       }
     } finally {
       setCollecting(false)

@@ -59,6 +59,8 @@ export const P = {
   SETTINGS_MANAGE: 'SETTINGS.MANAGE',
 
   USER_MANAGE: 'USER_MGMT.MANAGE',
+
+  MESSAGES_VIEW: 'MESSAGES.VIEW',   // read-only admin view of parent↔teacher conversations
 }
 
 /**
@@ -99,6 +101,7 @@ export const PATH_PERM = {
   '/homework':                  P.HOMEWORK_VIEW,
   '/homework/daily':            P.HOMEWORK_MANAGE,
   '/announcements':             P.ANNOUNCEMENT_VIEW,
+  '/calendar':                  P.ANNOUNCEMENT_VIEW,   // reuses Announcement view perm — no perm migration/re-login needed
   '/events':                    P.EVENTS_VIEW,
   '/reports':                   P.REPORTS_VIEW,
 
@@ -117,6 +120,8 @@ export const PATH_PERM = {
   '/settings/sms-gateway':      P.SETTINGS_MANAGE,
   '/settings/message-reports':  P.SETTINGS_MANAGE,
   '/settings/r2-storage':       P.SETTINGS_MANAGE,
+
+  '/messages/conversations':    P.MESSAGES_VIEW,
 }
 
 /** True if the user (via hasPermission) may access the given absolute path. */

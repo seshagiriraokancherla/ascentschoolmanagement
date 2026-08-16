@@ -5,7 +5,7 @@ import {
   Row, Col, Alert,
 } from 'antd'
 import { PlusOutlined, EditOutlined, SaveOutlined, SearchOutlined, CarOutlined } from '@ant-design/icons'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 
 const { Title, Text } = Typography
 
@@ -468,7 +468,7 @@ function StudentsTab() {
       const r = await api.get(`/school/transport/students?${params}`)
       setStudents(r.data.data || [])
       setLoaded(true)
-    } catch { message.error('Failed to load students.') }
+    } catch (e) { message.error(apiError(e, 'Failed to load students.')) }
     finally  { setLoading(false) }
   }
 

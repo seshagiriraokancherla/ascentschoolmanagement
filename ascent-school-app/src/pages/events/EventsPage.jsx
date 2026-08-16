@@ -8,7 +8,7 @@ import {
   PushpinOutlined, PlayCircleOutlined, PictureOutlined, PaperClipOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 import MediaUploader from '../../components/MediaUploader'
 
 const { Title, Text, Link } = Typography
@@ -102,7 +102,7 @@ export default function EventsPage() {
       message.success('Event deleted.')
       load()
     } catch (e) {
-      message.error('Failed to delete event.')
+      message.error(apiError(e, 'Failed to delete event.'))
     }
   }
 

@@ -3,7 +3,7 @@ import { Table, Select, Button, Space, Row, Col, Typography, Divider, App as Ant
 import { FilePdfOutlined, FileExcelOutlined } from '@ant-design/icons'
 import { useBrandingStore } from '../../store/brandingStore'
 import { exportPdf, exportCsv } from './reportUtils'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 
 const { Text } = Typography
 
@@ -42,7 +42,7 @@ export default function TotalStrengthReport() {
       const r = await api.get(`/school/reports/strength?academicYearId=${yearId}`)
       setRows(r.data?.data || [])
       setLoaded(true)
-    } catch { message.error('Failed to load strength report.') }
+    } catch (e) { message.error(apiError(e, 'Failed to load strength report.')) }
     finally { setLoading(false) }
   }
 

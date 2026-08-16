@@ -79,14 +79,24 @@ data class TeacherHomeworkDto(
     val description : String?,
     val subjectName : String?,
     val className   : String?,
+    val sectionName : String?,
     val assignedDate: String,
     val dueDate     : String?,   // retired — null for new homework
     val status      : String?,
     val createdBy   : String?
 )
 
+// Paged teacher homework response ({ items, total, page, pageSize })
+data class TeacherHomeworkPage(
+    val items    : List<TeacherHomeworkDto> = emptyList(),
+    val total    : Int = 0,
+    val page     : Int = 1,
+    val pageSize : Int = 20
+)
+
 data class TeacherCreateHomeworkRequest(
     val classId     : Int,
+    val sectionId   : Int?,          // null = whole class
     val title       : String,
     val description : String?,
     val assignedDate: String
@@ -112,6 +122,49 @@ data class TeacherCreateAnnouncementRequest(
     val sectionId   : Int?,   // null = whole class
     val title       : String,
     val description : String?
+)
+
+// ── Marks (teacher, one subject at a time) ──────────────────────────────────
+
+data class TeacherExamTypeDto(val examTypeId: Int, val examTypeName: String)
+data class TeacherMarksSubjectDto(val subjectId: Int, val subjectName: String)
+
+// Mirrors SubjectMarksDto from the backend
+data class TeacherSubjectMarksDto(
+    val subjectId        : Int,
+    val subjectName      : String,
+    val examId           : Int?,
+    val maxMarks         : Double,
+    val activityMaxMarks : Double?,
+    val hasActivity      : Boolean,
+    val students         : List<TeacherStudentMarkDto> = emptyList()
+)
+
+data class TeacherStudentMarkDto(
+    val studentId     : Long,
+    val studentName   : String,
+    val admissionNo   : String,
+    val marksObtained : Double?,
+    val activityMarks : Double?,
+    val isAbsent      : Boolean
+)
+
+data class TeacherSaveMarksRequest(
+    val classId          : Int,
+    val sectionId        : Int,
+    val examTypeId       : Int,
+    val subjectId        : Int,
+    val examId           : Int?,
+    val maxMarks         : Double,
+    val activityMaxMarks : Double?,
+    val entries          : List<TeacherMarkEntry>
+)
+
+data class TeacherMarkEntry(
+    val studentId     : Long,
+    val marksObtained : Double?,
+    val activityMarks : Double?,
+    val isAbsent      : Boolean
 )
 
 // ── Push notifications (FCM) ────────────────────────────────────────────────────
@@ -281,6 +334,18 @@ data class SchoolEventDto(
     val scope         : String?,
     val isPinned      : Boolean,
     val media         : List<MediaUploadDto>? = null   // R2 uploads (Phase B)
+)
+
+// ── Calendar ──────────────────────────────────────────────────────────────────
+// Matches CalendarEventDto on backend. startDate/endDate are ISO ("2026-07-05T00:00:00").
+
+data class CalendarEventDto(
+    val calendarEventId : Int,
+    val title           : String?,
+    val description     : String?,
+    val category        : String?,   // Holiday | Exam | Celebration | Event
+    val startDate       : String?,
+    val endDate         : String?
 )
 
 // ── Fee ───────────────────────────────────────────────────────────────────────

@@ -47,18 +47,52 @@ namespace AscentSchools.Data.Repositories.School
                     new { name = req.ExamTypeName, req.AcademicYearId, req.DisplayOrder, id, schoolId });
         }
 
-        // ── Marks Grid ────────────────────────────────────────────────────────
+        // ── Current academic year (mobile has no year picker) ───────────────────
 
-        public MarksGridDto GetMarksGrid(string tenantDbName, int schoolId, int classId, int sectionId, int examTypeId, int academicYearId)
+        public int GetCurrentAcademicYearId(string tenantDbName, int schoolId)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.ExecuteScalar<int>(
+                    @"SELECT TOP 1 academic_year_id FROM academic_years
+                      WHERE school_id = @schoolId AND status = 'Active'
+                      ORDER BY academic_year_id DESC",
+                    new { schoolId });
+        }
+
+        // The per-subject exam config (max / activity max / exam_id) resolved from
+        // exam_master for a class+exam type+year. Shared by the grid and single-subject
+        // reads. Falls back to max 100 / no activity when the exam isn't defined yet.
+        private const string ExamConfigApply =
+            @"OUTER APPLY (
+                  SELECT TOP 1 em.id ExamId, em.sub_max_marks SubMax, em.activity_max_marks ActMax
+                  FROM exam_master em
+                  WHERE em.school_id = @schoolId AND em.academic_year_id = @academicYearId
+                    AND em.exam_type_id = @examTypeId AND em.class_id = @classId
+                    AND em.subject_id = cs.subject_id
+                    AND ISNULL(em.exam_status, 'Active') = 'Active'
+                  ORDER BY em.id DESC
+              ) em";
+
+        // ── Marks Grid (web — every mapped subject of the class) ────────────────
+
+        public MarksGridDto GetMarksGrid(string tenantDbName, int schoolId,
+            int classId, int sectionId, int examTypeId, int academicYearId)
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
             {
                 var subjects = conn.Query<SubjectHeaderDto>(
-                    @"SELECT subject_id SubjectId, subject_name SubjectName
-                      FROM subjects
-                      WHERE school_id = @schoolId AND ISNULL(status, 'Active') = 'Active'
-                      ORDER BY subject_name",
-                    new { schoolId }).ToList();
+                    @"SELECT cs.subject_id SubjectId, sub.subject_name SubjectName,
+                             em.ExamId,
+                             CAST(ISNULL(em.SubMax, 100) AS DECIMAL(6,2)) MaxMarks,
+                             em.ActMax ActivityMaxMarks,
+                             CASE WHEN ISNULL(em.ActMax, 0) > 0 THEN 1 ELSE 0 END HasActivity
+                      FROM class_subjects cs
+                      JOIN subjects sub ON sub.subject_id = cs.subject_id
+                      " + ExamConfigApply + @"
+                      WHERE cs.school_id = @schoolId AND cs.academic_year_id = @academicYearId
+                        AND cs.class_id = @classId AND cs.status = 'Active'
+                      ORDER BY ISNULL(cs.display_order, 9999), sub.subject_name",
+                    new { schoolId, academicYearId, examTypeId, classId }).ToList();
 
                 var students = conn.Query<StudentRow>(
                     @"SELECT student_id StudentId, student_name StudentName, admission_no AdmissionNo
@@ -70,7 +104,8 @@ namespace AscentSchools.Data.Repositories.School
 
                 var marks = conn.Query<MarkRow>(
                     @"SELECT sm.student_id StudentId, sm.subject_id SubjectId,
-                             sm.marks_obtained MarksObtained, sm.max_marks MaxMarks, sm.is_absent IsAbsent
+                             sm.marks_obtained MarksObtained, sm.activity_marks ActivityMarks,
+                             sm.is_absent IsAbsent
                       FROM student_marks sm
                       JOIN students s ON s.student_id = sm.student_id
                       WHERE s.class_id = @classId AND s.section_id = @sectionId
@@ -88,10 +123,12 @@ namespace AscentSchools.Data.Repositories.School
                         var existing = marks[s.StudentId].FirstOrDefault(m => m.SubjectId == sub.SubjectId);
                         return new MarkCellDto
                         {
-                            SubjectId     = sub.SubjectId,
-                            MarksObtained = existing?.MarksObtained,
-                            MaxMarks      = existing?.MaxMarks ?? 100,
-                            IsAbsent      = existing?.IsAbsent ?? false,
+                            SubjectId        = sub.SubjectId,
+                            MarksObtained    = existing?.MarksObtained,
+                            ActivityMarks    = existing?.ActivityMarks,
+                            MaxMarks         = sub.MaxMarks,
+                            ActivityMaxMarks = sub.ActivityMaxMarks,
+                            IsAbsent         = existing?.IsAbsent ?? false,
                         };
                     }).ToList()
                 });
@@ -100,7 +137,55 @@ namespace AscentSchools.Data.Repositories.School
             }
         }
 
-        // ── Save Marks (upsert per entry) ─────────────────────────────────────
+        // ── Single subject (mobile) ─────────────────────────────────────────────
+
+        public SubjectMarksDto GetSubjectMarks(string tenantDbName, int schoolId,
+            int classId, int sectionId, int examTypeId, int subjectId, int academicYearId)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+            {
+                // Reuse ExamConfigApply by aliasing the subject as cs.subject_id.
+                var header = conn.QuerySingleOrDefault<SubjectHeaderDto>(
+                    @"SELECT sub.subject_id SubjectId, sub.subject_name SubjectName,
+                             em.ExamId,
+                             CAST(ISNULL(em.SubMax, 100) AS DECIMAL(6,2)) MaxMarks,
+                             em.ActMax ActivityMaxMarks,
+                             CASE WHEN ISNULL(em.ActMax, 0) > 0 THEN 1 ELSE 0 END HasActivity
+                      FROM (SELECT @subjectId AS subject_id) cs
+                      JOIN subjects sub ON sub.subject_id = cs.subject_id AND sub.school_id = @schoolId
+                      " + ExamConfigApply,
+                    new { schoolId, academicYearId, examTypeId, classId, subjectId });
+
+                if (header == null) return null;
+
+                var students = conn.Query<StudentSubjectMarkDto>(
+                    @"SELECT s.student_id StudentId, s.student_name StudentName, s.admission_no AdmissionNo,
+                             sm.marks_obtained MarksObtained, sm.activity_marks ActivityMarks,
+                             ISNULL(sm.is_absent, 0) IsAbsent
+                      FROM students s
+                      LEFT JOIN student_marks sm
+                             ON sm.student_id = s.student_id AND sm.subject_id = @subjectId
+                            AND sm.exam_type_id = @examTypeId AND sm.academic_year_id = @academicYearId
+                            AND sm.school_id = @schoolId
+                      WHERE s.class_id = @classId AND s.section_id = @sectionId
+                        AND s.school_id = @schoolId AND s.status IN ('Active', 'Y')
+                      ORDER BY s.student_name",
+                    new { schoolId, academicYearId, examTypeId, classId, sectionId, subjectId }).ToList();
+
+                return new SubjectMarksDto
+                {
+                    SubjectId        = header.SubjectId,
+                    SubjectName      = header.SubjectName,
+                    ExamId           = header.ExamId,
+                    MaxMarks         = header.MaxMarks,
+                    ActivityMaxMarks = header.ActivityMaxMarks,
+                    HasActivity      = header.HasActivity,
+                    Students         = students,
+                };
+            }
+        }
+
+        // ── Save Marks (upsert per entry; carries exam_id + activity) ───────────
 
         public void SaveMarks(string tenantDbName, int schoolId, string enteredBy, SaveMarksRequest req)
         {
@@ -119,21 +204,28 @@ namespace AscentSchools.Data.Repositories.School
                           AND target.school_id        = source.school_id
                           WHEN MATCHED THEN
                               UPDATE SET marks_obtained = @marksObtained, max_marks = @maxMarks,
-                                         is_absent = @isAbsent, updated_by = @enteredBy, updated_at = GETDATE()
+                                         activity_marks = @activityMarks, activity_max_marks = @activityMaxMarks,
+                                         exam_id = @examId, is_absent = @isAbsent,
+                                         updated_by = @enteredBy, updated_at = GETDATE()
                           WHEN NOT MATCHED THEN
-                              INSERT (student_id, subject_id, exam_type_id, academic_year_id,
-                                      marks_obtained, max_marks, is_absent, school_id, entered_by)
-                              VALUES (@studentId, @subjectId, @examTypeId, @academicYearId,
-                                      @marksObtained, @maxMarks, @isAbsent, @schoolId, @enteredBy);",
+                              INSERT (student_id, subject_id, exam_type_id, exam_id, academic_year_id,
+                                      marks_obtained, max_marks, activity_marks, activity_max_marks,
+                                      is_absent, school_id, entered_by)
+                              VALUES (@studentId, @subjectId, @examTypeId, @examId, @academicYearId,
+                                      @marksObtained, @maxMarks, @activityMarks, @activityMaxMarks,
+                                      @isAbsent, @schoolId, @enteredBy);",
                         new
                         {
                             entry.StudentId,
                             entry.SubjectId,
                             req.ExamTypeId,
+                            examId = entry.ExamId,
                             req.AcademicYearId,
                             schoolId,
-                            marksObtained = entry.IsAbsent ? 0 : entry.MarksObtained,
-                            maxMarks      = req.MaxMarks,
+                            marksObtained    = entry.IsAbsent ? 0 : entry.MarksObtained,
+                            maxMarks         = entry.MaxMarks > 0 ? entry.MaxMarks : 100,
+                            activityMarks    = entry.IsAbsent ? (decimal?)null : entry.ActivityMarks,
+                            activityMaxMarks = entry.ActivityMaxMarks,
                             entry.IsAbsent,
                             enteredBy,
                         });
@@ -141,7 +233,7 @@ namespace AscentSchools.Data.Repositories.School
             }
         }
 
-        // ── Internal row types ────────────────────────────────────────────────
+        // ── Internal row types ──────────────────────────────────────────────────
 
         private class StudentRow
         {
@@ -152,11 +244,11 @@ namespace AscentSchools.Data.Repositories.School
 
         private class MarkRow
         {
-            public long    StudentId     { get; set; }
-            public int     SubjectId     { get; set; }
-            public decimal MarksObtained { get; set; }
-            public decimal MaxMarks      { get; set; }
-            public bool    IsAbsent      { get; set; }
+            public long     StudentId     { get; set; }
+            public int      SubjectId     { get; set; }
+            public decimal? MarksObtained { get; set; }
+            public decimal? ActivityMarks { get; set; }
+            public bool     IsAbsent      { get; set; }
         }
     }
 }

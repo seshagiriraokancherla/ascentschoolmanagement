@@ -4,7 +4,7 @@ import {
   Row, Col, App as AntApp, Tag, Statistic,
 } from 'antd'
 import { ArrowRightOutlined, CheckCircleOutlined } from '@ant-design/icons'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 
 const { Title, Text } = Typography
 
@@ -71,8 +71,8 @@ export default function PromoteStudentsPage() {
       const r    = await api.get(`/school/students/promote/preview?${params}`)
       const body = r.data?.data || {}
       setPreview({ students: body.students || [], detainedCount: body.detainedCount || 0 })
-    } catch {
-      message.error('Failed to load student list.')
+    } catch (e) {
+      message.error(apiError(e, 'Failed to load student list.'))
     } finally {
       setLoading(false)
     }

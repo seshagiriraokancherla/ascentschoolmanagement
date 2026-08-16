@@ -3,7 +3,7 @@ import { Table, Select, Button, Space, Row, Col, Typography, App as AntApp, Date
 import { FilePdfOutlined, FileExcelOutlined, SearchOutlined } from '@ant-design/icons'
 import { useBrandingStore } from '../../store/brandingStore'
 import { exportPdf, exportCsv } from './reportUtils'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 import dayjs from 'dayjs'
 
 const { Text } = Typography
@@ -61,8 +61,8 @@ export default function RegularAbsenteesReport() {
       if (sectionId) params.append('sectionId', sectionId)
       const r = await api.get(`/school/reports/regular-absentees?${params}`)
       setData(r.data?.data || [])
-    } catch {
-      message.error('Failed to load report.')
+    } catch (e) {
+      message.error(apiError(e, 'Failed to load report.'))
     } finally {
       setLoading(false)
     }

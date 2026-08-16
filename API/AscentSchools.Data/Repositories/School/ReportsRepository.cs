@@ -217,13 +217,16 @@ namespace AscentSchools.Data.Repositories.School
 
                 var marksLookup = ids.Any()
                     ? conn.Query<TopperMarkRow>(
-                        @"SELECT student_id StudentId, subject_id SubjectId,
-                                 marks_obtained MarksObtained, max_marks MaxMarks, is_absent IsAbsent
-                          FROM student_marks
-                          WHERE school_id        = @schoolId
-                            AND exam_type_id     = @examTypeId
-                            AND academic_year_id = @academicYearId
-                            AND student_id IN @ids",
+                        @"SELECT sm.student_id StudentId, sm.subject_id SubjectId,
+                                 sm.marks_obtained MarksObtained, sm.max_marks MaxMarks, sm.is_absent IsAbsent,
+                                 sm.activity_marks ActivityMarks, sm.activity_max_marks ActivityMaxMarks,
+                                 em.subject_min_marks SubjectMinMarks
+                          FROM student_marks sm
+                          LEFT JOIN exam_master em ON em.id = sm.exam_id
+                          WHERE sm.school_id        = @schoolId
+                            AND sm.exam_type_id     = @examTypeId
+                            AND sm.academic_year_id = @academicYearId
+                            AND sm.student_id IN @ids",
                         new { schoolId, examTypeId, academicYearId, ids })
                       .ToLookup(m => m.StudentId)
                     : Enumerable.Empty<TopperMarkRow>().ToLookup(m => m.StudentId);
@@ -249,14 +252,22 @@ namespace AscentSchools.Data.Repositories.School
                             {
                                 subjMarks[sub.SubjectName] = "AB";
                                 failedSubjs.Add(sub.SubjectName);
-                                max += m.MaxMarks;
+                                max += m.MaxMarks + (m.ActivityMaxMarks ?? 0);
                             }
                             else
                             {
-                                subjMarks[sub.SubjectName] = $"{m.MarksObtained}/{m.MaxMarks}";
-                                obtained += m.MarksObtained;
-                                max      += m.MaxMarks;
-                                if (m.MaxMarks > 0 && m.MarksObtained < m.MaxMarks * threshold)
+                                // Total = written + activity (activity is 0 when the subject has none).
+                                var subObt = m.MarksObtained + (m.ActivityMarks ?? 0);
+                                var subMax = m.MaxMarks + (m.ActivityMaxMarks ?? 0);
+                                subjMarks[sub.SubjectName] = $"{subObt}/{subMax}";
+                                obtained += subObt;
+                                max      += subMax;
+                                // Pass mark from the exam definition (exam_master.subject_min_marks via exam_id)
+                                // when available; otherwise the global percentage threshold.
+                                var passMark = (m.SubjectMinMarks.HasValue && m.SubjectMinMarks.Value > 0)
+                                    ? (decimal)m.SubjectMinMarks.Value
+                                    : subMax * threshold;
+                                if (subMax > 0 && subObt < passMark)
                                     failedSubjs.Add(sub.SubjectName);
                             }
                         }
@@ -337,7 +348,8 @@ namespace AscentSchools.Data.Repositories.School
                 var marksByExam = ids.Any()
                     ? conn.Query<TopperMarkRowWithExam>(
                         @"SELECT student_id StudentId, subject_id SubjectId, exam_type_id ExamTypeId,
-                                 marks_obtained MarksObtained, max_marks MaxMarks, is_absent IsAbsent
+                                 marks_obtained MarksObtained, max_marks MaxMarks, is_absent IsAbsent,
+                                 activity_marks ActivityMarks, activity_max_marks ActivityMaxMarks
                           FROM student_marks
                           WHERE school_id        = @schoolId
                             AND academic_year_id = @academicYearId
@@ -364,8 +376,13 @@ namespace AscentSchools.Data.Repositories.School
                                 {
                                     var m = examMarks[s.StudentId].FirstOrDefault(x => x.SubjectId == sub.SubjectId);
                                     if (m == null)       { subjMarks[sub.SubjectName] = "—"; }
-                                    else if (m.IsAbsent) { subjMarks[sub.SubjectName] = "AB"; max += m.MaxMarks; }
-                                    else                 { subjMarks[sub.SubjectName] = $"{m.MarksObtained}/{m.MaxMarks}"; obtained += m.MarksObtained; max += m.MaxMarks; }
+                                    else if (m.IsAbsent) { subjMarks[sub.SubjectName] = "AB"; max += m.MaxMarks + (m.ActivityMaxMarks ?? 0); }
+                                    else
+                                    {
+                                        var subObt = m.MarksObtained + (m.ActivityMarks ?? 0);
+                                        var subMax = m.MaxMarks + (m.ActivityMaxMarks ?? 0);
+                                        subjMarks[sub.SubjectName] = $"{subObt}/{subMax}"; obtained += subObt; max += subMax;
+                                    }
                                 }
                                 return new
                                 {
@@ -453,7 +470,8 @@ namespace AscentSchools.Data.Repositories.School
                 var marksLookup = ids.Any()
                     ? conn.Query<TopperMarkRow>(
                         @"SELECT student_id StudentId, subject_id SubjectId,
-                                 marks_obtained MarksObtained, max_marks MaxMarks, is_absent IsAbsent
+                                 marks_obtained MarksObtained, max_marks MaxMarks, is_absent IsAbsent,
+                                 activity_marks ActivityMarks, activity_max_marks ActivityMaxMarks
                           FROM student_marks
                           WHERE school_id        = @schoolId
                             AND exam_type_id     = @examTypeId
@@ -476,8 +494,13 @@ namespace AscentSchools.Data.Repositories.School
                         {
                             var m = marksLookup[s.StudentId].FirstOrDefault(x => x.SubjectId == sub.SubjectId);
                             if (m == null)             { subjMarks[sub.SubjectName] = "—"; }
-                            else if (m.IsAbsent)       { subjMarks[sub.SubjectName] = "AB"; max += m.MaxMarks; }
-                            else                       { subjMarks[sub.SubjectName] = $"{m.MarksObtained}/{m.MaxMarks}"; obtained += m.MarksObtained; max += m.MaxMarks; }
+                            else if (m.IsAbsent)       { subjMarks[sub.SubjectName] = "AB"; max += m.MaxMarks + (m.ActivityMaxMarks ?? 0); }
+                            else
+                            {
+                                var subObt = m.MarksObtained + (m.ActivityMarks ?? 0);
+                                var subMax = m.MaxMarks + (m.ActivityMaxMarks ?? 0);
+                                subjMarks[sub.SubjectName] = $"{subObt}/{subMax}"; obtained += subObt; max += subMax;
+                            }
                         }
                         return new
                         {
@@ -812,7 +835,8 @@ namespace AscentSchools.Data.Repositories.School
                 var allMarksByStudent = ids.Any()
                     ? conn.Query<TopperMarkRowWithExam>(
                         @"SELECT student_id StudentId, subject_id SubjectId, exam_type_id ExamTypeId,
-                                 marks_obtained MarksObtained, max_marks MaxMarks, is_absent IsAbsent
+                                 marks_obtained MarksObtained, max_marks MaxMarks, is_absent IsAbsent,
+                                 activity_marks ActivityMarks, activity_max_marks ActivityMaxMarks
                           FROM student_marks
                           WHERE school_id        = @schoolId
                             AND academic_year_id = @academicYearId
@@ -845,8 +869,8 @@ namespace AscentSchools.Data.Repositories.School
                             decimal eObt = 0, eMax = 0;
                             foreach (var m in examMarks)
                             {
-                                eMax += m.MaxMarks;
-                                if (!m.IsAbsent) eObt += m.MarksObtained;
+                                eMax += m.MaxMarks + (m.ActivityMaxMarks ?? 0);
+                                if (!m.IsAbsent) eObt += m.MarksObtained + (m.ActivityMarks ?? 0);
                             }
                             examTotals[et.ExamTypeName] = $"{eObt}/{eMax}";
                             grandObt += eObt;
@@ -981,9 +1005,9 @@ namespace AscentSchools.Data.Repositories.School
                     new { schoolId, dateFrom, dateTo, minDays, classId, sectionId });
         }
 
-        private class TopperMarkRowWithExam  { public long StudentId { get; set; } public int SubjectId { get; set; } public int ExamTypeId { get; set; } public decimal MarksObtained { get; set; } public decimal MaxMarks { get; set; } public bool IsAbsent { get; set; } }
+        private class TopperMarkRowWithExam  { public long StudentId { get; set; } public int SubjectId { get; set; } public int ExamTypeId { get; set; } public decimal MarksObtained { get; set; } public decimal MaxMarks { get; set; } public bool IsAbsent { get; set; } public decimal? ActivityMarks { get; set; } public decimal? ActivityMaxMarks { get; set; } }
         private class TopperStudentMeta  { public long StudentId { get; set; } public string AdmissionNo { get; set; } public string StudentName { get; set; } public string ClassName { get; set; } public string SectionName { get; set; } public int ClassId { get; set; } public int SectionId { get; set; } }
-        private class TopperMarkRow      { public long StudentId { get; set; } public int SubjectId { get; set; } public decimal MarksObtained { get; set; } public decimal MaxMarks { get; set; } public bool IsAbsent { get; set; } }
+        private class TopperMarkRow      { public long StudentId { get; set; } public int SubjectId { get; set; } public decimal MarksObtained { get; set; } public decimal MaxMarks { get; set; } public bool IsAbsent { get; set; } public decimal? ActivityMarks { get; set; } public decimal? ActivityMaxMarks { get; set; } public int? SubjectMinMarks { get; set; } }
         private class ClassMeta   { public string ClassName { get; set; } public string SectionName { get; set; } }
         private class StudentMeta { public long StudentId { get; set; } public string AdmissionNo { get; set; } public string StudentName { get; set; } }
         private class DayRecord   { public long StudentId { get; set; } public int DayNo { get; set; } public string Status { get; set; } }

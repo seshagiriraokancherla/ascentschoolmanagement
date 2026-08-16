@@ -6,7 +6,7 @@ import {
 import { PrinterOutlined, SaveOutlined, SearchOutlined, DeleteOutlined } from '@ant-design/icons'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 import { useBrandingStore } from '../../store/brandingStore'
 
 const { Title, Text } = Typography
@@ -245,7 +245,7 @@ export default function FeeConcessionPage() {
       if (concessionMode === 'hostel'    && indvHostelId) params.set('hostelId', indvHostelId)
       const r = await api.get(`/school/students?${params}`)
       setSearchResults((r.data?.data || []).slice(0, 20))
-    } catch { message.error('Student search failed') }
+    } catch (e) { message.error(apiError(e, 'Student search failed')) }
     finally  { setSearching(false) }
   }, [searchTerm, filterYear, concessionMode, indvForm])
 
@@ -314,7 +314,7 @@ export default function FeeConcessionPage() {
         key:         s.studentId,
       }))
       setBulkStudents(students)
-    } catch { message.error('Failed to load students') }
+    } catch (e) { message.error(apiError(e, 'Failed to load students')) }
     finally  { setLoadingStudents(false) }
   }
 
@@ -389,7 +389,7 @@ export default function FeeConcessionPage() {
       if (filterSection) params.set('sectionId', filterSection)
       const r = await api.get(`/school/fees/concessions?${params}`)
       setConcessions(r.data?.data || [])
-    } catch { message.error('Failed to load concessions') }
+    } catch (e) { message.error(apiError(e, 'Failed to load concessions')) }
     finally  { setLoadingList(false) }
   }
 

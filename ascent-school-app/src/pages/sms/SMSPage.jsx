@@ -9,7 +9,7 @@ import {
   CheckCircleOutlined, CloseCircleOutlined, UserOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 
 const { Text, Title } = Typography
 const { TextArea }    = Input
@@ -146,8 +146,8 @@ function SendTab() {
       setRecipients(list)
       setSelectedKeys(list.map(s => s.studentId))
       if (list.length === 0) message.info('No recipients found for the selected filters.')
-    } catch {
-      message.error('Failed to load recipients.')
+    } catch (e) {
+      message.error(apiError(e, 'Failed to load recipients.'))
     } finally {
       setLoading(false)
     }
@@ -484,8 +484,8 @@ function HistoryTab() {
       if (dateRange[1])    params.append('dateTo',   dateRange[1].format('YYYY-MM-DD'))
       const r = await api.get(`/school/sms/logs?${params}`)
       setLogs(r.data?.data || [])
-    } catch {
-      message.error('Failed to load SMS history.')
+    } catch (e) {
+      message.error(apiError(e, 'Failed to load SMS history.'))
     } finally {
       setLoading(false)
     }

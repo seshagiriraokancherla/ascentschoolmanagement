@@ -5,7 +5,7 @@ import {
 import { SearchOutlined, FilePdfOutlined, FileExcelOutlined } from '@ant-design/icons'
 import { useBrandingStore } from '../../store/brandingStore'
 import { exportPdf, exportCsv } from '../reports/reportUtils'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 
 const { Title, Text } = Typography
 
@@ -43,8 +43,8 @@ export default function BloodGroupSearchPage() {
     try {
       const r = await api.get(`/school/students?bloodGroup=${encodeURIComponent(bloodGroup)}&status=Active`)
       setData(r.data?.data || [])
-    } catch {
-      message.error('Failed to load students.')
+    } catch (e) {
+      message.error(apiError(e, 'Failed to load students.'))
     } finally {
       setLoading(false)
     }

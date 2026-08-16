@@ -18,6 +18,15 @@ data class StudentAttendanceState(
     val status      : AttendanceStatus = AttendanceStatus.Present
 )
 
+data class StudentMarkState(
+    val studentId   : Long,
+    val studentName : String,
+    val admissionNo : String,
+    val marks       : String = "",   // text so the field can be blank
+    val activity    : String = "",
+    val absent      : Boolean = false
+)
+
 sealed class TeacherUiState {
     object Idle    : TeacherUiState()
     object Loading : TeacherUiState()
@@ -54,10 +63,33 @@ class TeacherViewModel(private val repo: TeacherRepository) : ViewModel() {
     private val _homework = MutableStateFlow<List<TeacherHomeworkDto>>(emptyList())
     val homework = _homework.asStateFlow()
 
+    // Pagination — accumulate pages via infinite scroll; bounds the payload as history grows.
+    private val _isLoadingMoreHomework = MutableStateFlow(false)
+    val isLoadingMoreHomework = _isLoadingMoreHomework.asStateFlow()
+    private val _homeworkTotal = MutableStateFlow(0)   // total matching rows on the server
+    val homeworkTotal = _homeworkTotal.asStateFlow()
+    private var homeworkClassId   = 0
+    private var homeworkSectionId : Int? = null
+    private var homeworkPage      = 0
+
     // ── Announcements ─────────────────────────────────────────────────────────
 
     private val _announcements = MutableStateFlow<List<TeacherAnnouncementDto>>(emptyList())
     val announcements = _announcements.asStateFlow()
+
+    // ── Marks ─────────────────────────────────────────────────────────────────
+
+    private val _examTypes = MutableStateFlow<List<TeacherExamTypeDto>>(emptyList())
+    val examTypes = _examTypes.asStateFlow()
+
+    private val _marksSubjects = MutableStateFlow<List<TeacherMarksSubjectDto>>(emptyList())
+    val marksSubjects = _marksSubjects.asStateFlow()
+
+    private val _marksHeader = MutableStateFlow<TeacherSubjectMarksDto?>(null)
+    val marksHeader = _marksHeader.asStateFlow()
+
+    private val _markStudents = MutableStateFlow<List<StudentMarkState>>(emptyList())
+    val markStudents = _markStudents.asStateFlow()
 
     // ── Messaging ─────────────────────────────────────────────────────────────
 
@@ -178,17 +210,44 @@ class TeacherViewModel(private val repo: TeacherRepository) : ViewModel() {
         }
     }
 
-    fun loadHomework(classId: Int) {
+    fun loadHomework(classId: Int, sectionId: Int? = null) {
+        homeworkClassId   = classId
+        homeworkSectionId = sectionId
         viewModelScope.launch {
             _isLoading.value = true
-            repo.getHomework(classId)
-                .onSuccess { _homework.value = it }
+            _homework.value = emptyList()
+            homeworkPage         = 0
+            _homeworkTotal.value = 0
+            repo.getHomework(classId, sectionId, 1, HOMEWORK_PAGE_SIZE)
+                .onSuccess {
+                    _homework.value      = it.items
+                    _homeworkTotal.value = it.total
+                    homeworkPage         = 1
+                }
                 .onFailure { _uiState.value = TeacherUiState.Error(it.message ?: "Failed to load homework") }
             _isLoading.value = false
         }
     }
 
-    fun createHomework(classId: Int, title: String, description: String?) {
+    /** Fetches the next page and appends it. No-op when a load is in flight or all rows are loaded. */
+    fun loadMoreHomework() {
+        if (_isLoading.value || _isLoadingMoreHomework.value) return
+        if (homeworkPage == 0 || _homework.value.size >= _homeworkTotal.value) return
+        val next = homeworkPage + 1
+        viewModelScope.launch {
+            _isLoadingMoreHomework.value = true
+            repo.getHomework(homeworkClassId, homeworkSectionId, next, HOMEWORK_PAGE_SIZE)
+                .onSuccess {
+                    _homework.value      = _homework.value + it.items
+                    _homeworkTotal.value = it.total
+                    homeworkPage         = next
+                }
+                .onFailure { _uiState.value = TeacherUiState.Error(it.message ?: "Failed to load more homework") }
+            _isLoadingMoreHomework.value = false
+        }
+    }
+
+    fun createHomework(classId: Int, sectionId: Int?, title: String, description: String?) {
         if (title.isBlank()) { _uiState.value = TeacherUiState.Error("Title is required"); return }
 
         viewModelScope.launch {
@@ -196,13 +255,14 @@ class TeacherViewModel(private val repo: TeacherRepository) : ViewModel() {
             val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
             repo.createHomework(TeacherCreateHomeworkRequest(
                 classId     = classId,
+                sectionId   = sectionId,
                 title       = title,
                 description = description?.takeIf { it.isNotBlank() },
                 assignedDate = today
             ))
                 .onSuccess {
                     _uiState.value = TeacherUiState.Success("Homework created.")
-                    loadHomework(classId)
+                    loadHomework(classId, homeworkSectionId)
                 }
                 .onFailure { _uiState.value = TeacherUiState.Error(it.message ?: "Create failed") }
             _isLoading.value = false
@@ -238,6 +298,113 @@ class TeacherViewModel(private val repo: TeacherRepository) : ViewModel() {
             _isLoading.value = false
         }
     }
+
+    // ── Marks ─────────────────────────────────────────────────────────────────
+
+    fun loadExamTypes() {
+        viewModelScope.launch {
+            repo.getExamTypes()
+                .onSuccess { _examTypes.value = it }
+                .onFailure { _uiState.value = TeacherUiState.Error(it.message ?: "Failed to load exams") }
+        }
+    }
+
+    fun loadMarksSubjects(classId: Int) {
+        _marksSubjects.value = emptyList()
+        viewModelScope.launch {
+            repo.getMarksSubjects(classId)
+                .onSuccess { _marksSubjects.value = it }
+                .onFailure { _uiState.value = TeacherUiState.Error(it.message ?: "Failed to load subjects") }
+        }
+    }
+
+    /** Clears the loaded student list — call when exam/subject changes so stale marks don't linger. */
+    fun clearMarks() {
+        _marksHeader.value = null
+        _markStudents.value = emptyList()
+    }
+
+    fun loadMarks(classId: Int, sectionId: Int, examTypeId: Int, subjectId: Int) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            repo.getMarks(classId, sectionId, examTypeId, subjectId)
+                .onSuccess { h ->
+                    _marksHeader.value = h
+                    _markStudents.value = h.students.map { s ->
+                        StudentMarkState(
+                            studentId   = s.studentId,
+                            studentName = s.studentName,
+                            admissionNo = s.admissionNo,
+                            marks       = s.marksObtained?.let { fmt(it) } ?: "",
+                            activity    = s.activityMarks?.let { fmt(it) } ?: "",
+                            absent      = s.isAbsent
+                        )
+                    }
+                }
+                .onFailure { _uiState.value = TeacherUiState.Error(it.message ?: "Failed to load marks") }
+            _isLoading.value = false
+        }
+    }
+
+    fun setMark(studentId: Long, value: String) {
+        _markStudents.value = _markStudents.value.map {
+            if (it.studentId == studentId) it.copy(marks = value) else it
+        }
+    }
+
+    fun setActivity(studentId: Long, value: String) {
+        _markStudents.value = _markStudents.value.map {
+            if (it.studentId == studentId) it.copy(activity = value) else it
+        }
+    }
+
+    fun toggleMarkAbsent(studentId: Long) {
+        _markStudents.value = _markStudents.value.map {
+            if (it.studentId == studentId) {
+                val a = !it.absent
+                if (a) it.copy(absent = true, marks = "", activity = "") else it.copy(absent = false)
+            } else it
+        }
+    }
+
+    fun saveMarks(classId: Int, sectionId: Int, examTypeId: Int) {
+        val header = _marksHeader.value ?: return
+        val students = _markStudents.value
+        // Only send rows with something entered (or marked absent) — no junk 0 rows.
+        val entries = students.mapNotNull { s ->
+            val hasMark = s.marks.isNotBlank()
+            val hasAct  = s.activity.isNotBlank()
+            if (!s.absent && !hasMark && !hasAct) null
+            else TeacherMarkEntry(
+                studentId     = s.studentId,
+                marksObtained = if (s.absent) 0.0 else s.marks.toDoubleOrNull() ?: 0.0,
+                activityMarks = if (s.absent || !header.hasActivity || !hasAct) null else s.activity.toDoubleOrNull(),
+                isAbsent      = s.absent
+            )
+        }
+        if (entries.isEmpty()) { _uiState.value = TeacherUiState.Error("Enter at least one mark."); return }
+
+        viewModelScope.launch {
+            _isLoading.value = true
+            repo.saveMarks(TeacherSaveMarksRequest(
+                classId          = classId,
+                sectionId        = sectionId,
+                examTypeId       = examTypeId,
+                subjectId        = header.subjectId,
+                examId           = header.examId,
+                maxMarks         = header.maxMarks,
+                activityMaxMarks = header.activityMaxMarks,
+                entries          = entries
+            ))
+                .onSuccess { _uiState.value = TeacherUiState.Success("Marks saved for ${entries.size} students.") }
+                .onFailure { _uiState.value = TeacherUiState.Error(it.message ?: "Save failed") }
+            _isLoading.value = false
+        }
+    }
+
+    // Trim a trailing ".0" so whole numbers show as "45" not "45.0".
+    private fun fmt(d: Double): String =
+        if (d == d.toLong().toDouble()) d.toLong().toString() else d.toString()
 
     // ── Messaging ─────────────────────────────────────────────────────────────
 
@@ -318,4 +485,8 @@ class TeacherViewModel(private val repo: TeacherRepository) : ViewModel() {
     val presentCount get() = _attendanceStudents.value.count { it.status == AttendanceStatus.Present }
     val absentCount  get() = _attendanceStudents.value.count { it.status == AttendanceStatus.Absent  }
     val lateCount    get() = _attendanceStudents.value.count { it.status == AttendanceStatus.Late    }
+
+    companion object {
+        private const val HOMEWORK_PAGE_SIZE = 20
+    }
 }

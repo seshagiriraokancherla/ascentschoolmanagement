@@ -42,6 +42,26 @@ namespace AscentSchools.Core.DTOs.School.Messaging
         public List<MessageDto> Messages { get; set; }
     }
 
+    /// <summary>
+    /// Read-only admin conversation-list row (school web app — Conversations viewer).
+    /// Class/section reflect the student's placement in the SELECTED academic year;
+    /// TeacherNames are the class teachers assigned for that year.
+    /// </summary>
+    public class ConversationListItemDto
+    {
+        public int       ThreadId        { get; set; }
+        public int       StudentUniqueId { get; set; }
+        public string    StudentName     { get; set; }
+        public string    AdmissionNo     { get; set; }
+        public string    ClassName       { get; set; }
+        public string    SectionName     { get; set; }
+        public string    TeacherNames    { get; set; }   // comma-separated assigned class teachers
+        public string    Status          { get; set; }   // Active | Blocked
+        public string    LastMessageBody { get; set; }
+        public DateTime? LastMessageAt   { get; set; }
+        public int       MessageCount    { get; set; }
+    }
+
     public class SendMessageRequest
     {
         public string Body { get; set; }

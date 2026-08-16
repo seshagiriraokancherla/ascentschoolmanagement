@@ -82,7 +82,9 @@ INSERT INTO permissions (permission_code, module_code, description) VALUES
 -- Settings
 ('SETTINGS.MANAGE',             'SETTINGS',         'Manage school settings and payment gateway'),
 -- User Management
-('USER_MGMT.MANAGE',            'USER_MGMT',        'Manage roles, permissions and users');
+('USER_MGMT.MANAGE',            'USER_MGMT',        'Manage roles, permissions and users'),
+-- Messaging (read-only admin conversation viewer)
+('MESSAGES.VIEW',               'MESSAGES',         'View parent-teacher conversations (read-only)');
 GO
 
 
@@ -906,9 +908,12 @@ CREATE TABLE student_marks (
     student_id          BIGINT          NOT NULL,
     subject_id          INT             NOT NULL,
     exam_type_id        INT             NOT NULL,
+    exam_id             INT             NULL,        -- FK → exam_master.id (set once marks entry is exam-master-driven; added below)
     academic_year_id    INT             NOT NULL,
-    marks_obtained      DECIMAL(6,2)    NOT NULL,
+    marks_obtained      DECIMAL(6,2)    NOT NULL,    -- written / main component (or total when no activity)
     max_marks           DECIMAL(6,2)    NOT NULL DEFAULT 100,
+    activity_marks      DECIMAL(6,2)    NULL,        -- activity / internal component; total = marks_obtained + ISNULL(activity_marks,0)
+    activity_max_marks  DECIMAL(6,2)    NULL,        -- snapshot of the activity max at entry time
     is_absent           BIT             NOT NULL DEFAULT 0,
     school_id           INT             NOT NULL,
     entered_by          VARCHAR(100)    NOT NULL,
@@ -986,7 +991,8 @@ CREATE TABLE announcements (
     school_id       INT             NOT NULL,
     status          VARCHAR(10)     NOT NULL DEFAULT 'Active',
     created_by      VARCHAR(100)    NOT NULL,
-    created_at      DATETIME        NOT NULL DEFAULT GETDATE(),
+    -- IST default (server runs US Eastern) so mobile "today's news" filtering is correct — Phase 104
+    created_at      DATETIME        NOT NULL DEFAULT (CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'India Standard Time' AS DATETIME)),
     updated_by      VARCHAR(100)    NULL,
     updated_at      DATETIME        NULL,
     attachment_url  VARCHAR(4000)   NULL,       -- optional PDF/doc link (Google Drive, Cloudinary)
@@ -995,6 +1001,28 @@ CREATE TABLE announcements (
     CONSTRAINT FK_announcements_section FOREIGN KEY (section_id) REFERENCES sections(section_id)
 );
 CREATE INDEX IX_announcements_school_date ON announcements (school_id, created_at DESC);
+GO
+
+-- School calendar — holidays, exams, celebrations, events (school-wide, date-range).
+CREATE TABLE calendar_events (
+    calendar_event_id INT           NOT NULL IDENTITY(1,1),
+    title             VARCHAR(200)  NOT NULL,   -- holiday/event name (e.g. "Dussehra", "FA-1 Exams")
+    description       NVARCHAR(MAX) NULL,        -- optional details
+    category          VARCHAR(20)   NOT NULL DEFAULT 'Event',  -- Holiday | Exam | Celebration | Event
+    start_date        DATE          NOT NULL,
+    end_date          DATE          NOT NULL,    -- = start_date for a single-day entry
+    academic_year_id  INT           NULL,
+    school_id         INT           NOT NULL,
+    status            VARCHAR(10)   NOT NULL DEFAULT 'Active',
+    created_by        VARCHAR(100)  NOT NULL,
+    -- IST default (server runs US Eastern) — keep server-stamped dates on the Indian day (Phase 98/103/105).
+    created_at        DATETIME      NOT NULL DEFAULT (CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'India Standard Time' AS DATETIME)),
+    updated_by        VARCHAR(100)  NULL,
+    updated_at        DATETIME      NULL,
+    CONSTRAINT PK_calendar_events               PRIMARY KEY (calendar_event_id),
+    CONSTRAINT FK_calendar_events_academic_year FOREIGN KEY (academic_year_id) REFERENCES academic_years(academic_year_id)
+);
+CREATE INDEX IX_calendar_events_school_date ON calendar_events (school_id, start_date);
 GO
 
 IF NOT EXISTS (
@@ -1371,12 +1399,14 @@ GO
 -- ============================================================
 CREATE TABLE exam_master (
     id                INT          NOT NULL IDENTITY(1,1),
+    exam_name         VARCHAR(200) NULL,        -- exam label, e.g. "FA-1 Maths" / "First Formative"
     exam_type_id      INT          NULL,        -- FK → exam_types (by name)
     class_id          INT          NULL,        -- FK → classes
     exam_total_marks  INT          NULL,
     exam_min_marks    INT          NULL,
     subject_min_marks INT          NULL,
     sub_max_marks     INT          NULL,
+    activity_max_marks DECIMAL(6,2) NULL,       -- max for the optional activity component; set = this subject-exam has activity marks
     exam_remarks      VARCHAR(300) NULL,
     academic_year_id  INT          NULL,        -- FK → academic_years
     subject_id        INT          NULL,        -- FK → subjects
@@ -1394,6 +1424,12 @@ CREATE TABLE exam_master (
     CONSTRAINT FK_exam_master_subject    FOREIGN KEY (subject_id)       REFERENCES subjects(subject_id),
     CONSTRAINT FK_exam_master_grade_type FOREIGN KEY (grade_type_id)    REFERENCES grade_types(id)
 );
+GO
+
+-- student_marks.exam_id → exam_master (added here because student_marks (table 30)
+-- is created before exam_master (table 46), so the FK can't be inline above).
+ALTER TABLE student_marks ADD CONSTRAINT FK_student_marks_exam_master
+    FOREIGN KEY (exam_id) REFERENCES exam_master(id);
 GO
 
 
@@ -1497,7 +1533,7 @@ CREATE TABLE message_threads (
     blocked_at        DATETIME     NULL,
     last_message_at   DATETIME     NULL,
     school_id         INT          NOT NULL,
-    created_at        DATETIME     NOT NULL DEFAULT GETDATE(),
+    created_at        DATETIME     NOT NULL DEFAULT CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'India Standard Time' AS DATETIME),  -- IST (server runs US Eastern)
     CONSTRAINT PK_message_threads PRIMARY KEY (thread_id),
     CONSTRAINT UQ_message_threads_student_parent UNIQUE (school_id, student_unique_id, parent_id)
 );
@@ -1521,7 +1557,7 @@ CREATE TABLE messages (
     status      VARCHAR(10)   NOT NULL DEFAULT 'Active',  -- Active | Removed
     read_at     DATETIME      NULL,       -- when the OTHER side first read it
     school_id   INT           NOT NULL,
-    created_at  DATETIME      NOT NULL DEFAULT GETDATE(),
+    created_at  DATETIME      NOT NULL DEFAULT CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'India Standard Time' AS DATETIME),  -- IST (server runs US Eastern)
     CONSTRAINT PK_messages        PRIMARY KEY (message_id),
     CONSTRAINT FK_messages_thread FOREIGN KEY (thread_id) REFERENCES message_threads(thread_id)
 );
@@ -1544,10 +1580,41 @@ CREATE TABLE message_reports (
     reviewed_by      VARCHAR(150) NULL,
     reviewed_at      DATETIME     NULL,
     school_id        INT          NOT NULL,
-    created_at       DATETIME     NOT NULL DEFAULT GETDATE(),
+    created_at       DATETIME     NOT NULL DEFAULT CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'India Standard Time' AS DATETIME),  -- IST (server runs US Eastern)
     CONSTRAINT PK_message_reports         PRIMARY KEY (report_id),
     CONSTRAINT FK_message_reports_message FOREIGN KEY (message_id) REFERENCES messages(message_id),
     CONSTRAINT FK_message_reports_thread  FOREIGN KEY (thread_id)  REFERENCES message_threads(thread_id)
 );
 CREATE INDEX IX_message_reports_open ON message_reports (school_id, status, created_at DESC);
+GO
+
+
+-- ============================================================
+-- 53. class_subjects
+--     Which subjects a class studies in a given academic year.
+--     Drives the exam / marks feature (marks grid, report cards) so a
+--     class only shows the subjects it actually offers — subjects on their
+--     own are year-scoped but NOT class-scoped.
+--     Max / pass marks live on the exam definition, NOT here.
+--     All key columns are NOT NULL, so a single UNIQUE is enough (unlike
+--     class_teacher_assignments, no nullable section => no filtered-index trap).
+-- ============================================================
+CREATE TABLE class_subjects (
+    class_subject_id  INT          NOT NULL IDENTITY(1,1),
+    academic_year_id  INT          NOT NULL,
+    class_id          INT          NOT NULL,
+    subject_id        INT          NOT NULL,
+    display_order     INT          NULL,        -- order on the marks grid / report card
+    is_optional       BIT          NOT NULL DEFAULT 0,   -- elective vs core
+    status            VARCHAR(10)  NOT NULL DEFAULT 'Active',
+    school_id         INT          NOT NULL,
+    created_by        VARCHAR(100) NULL,
+    created_at        DATETIME     NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT PK_class_subjects      PRIMARY KEY (class_subject_id),
+    CONSTRAINT FK_cs_academic_year    FOREIGN KEY (academic_year_id) REFERENCES academic_years(academic_year_id),
+    CONSTRAINT FK_cs_class            FOREIGN KEY (class_id)         REFERENCES classes(class_id),
+    CONSTRAINT FK_cs_subject          FOREIGN KEY (subject_id)       REFERENCES subjects(subject_id),
+    CONSTRAINT UQ_class_subjects      UNIQUE (school_id, academic_year_id, class_id, subject_id)
+);
+CREATE INDEX IX_class_subjects_lookup ON class_subjects (school_id, academic_year_id, class_id, status);
 GO

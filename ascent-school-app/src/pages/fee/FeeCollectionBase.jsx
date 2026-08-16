@@ -8,7 +8,7 @@ import {
   SearchOutlined, UserOutlined, DollarOutlined, WifiOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 import { useBrandingStore } from '../../store/brandingStore'
 
 const { Text, Title } = Typography
@@ -169,8 +169,8 @@ export default function FeeCollectionBase({ title, feeTypeCategory, joinTypeFilt
         setSelectedYear(cur.academicYearId)
         initSelection(cur.lineItems || [])
       }
-    } catch {
-      message.error('Failed to load student fee details.')
+    } catch (e) {
+      message.error(apiError(e, 'Failed to load student fee details.'))
     } finally {
       setLoadingDues(false)
     }
@@ -265,8 +265,8 @@ export default function FeeCollectionBase({ title, feeTypeCategory, joinTypeFilt
               await reloadSummary()
               resetPaymentForm()
               resolve()
-            } catch {
-              message.error('Payment received but receipt creation failed. Contact support.')
+            } catch (e) {
+              message.error(apiError(e, 'Payment received but receipt creation failed. Contact support.'))
               reject(new Error('verify_failed'))
             }
           },
@@ -275,7 +275,7 @@ export default function FeeCollectionBase({ title, feeTypeCategory, joinTypeFilt
       })
     } catch (err) {
       if (err?.message !== 'dismissed' && err?.message !== 'verify_failed')
-        message.error('Failed to process payment.')
+        message.error(apiError(err, 'Failed to process payment.'))
     } finally {
       setCollecting(false)
     }

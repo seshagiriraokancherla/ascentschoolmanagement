@@ -5,7 +5,7 @@ import { useBrandingStore } from '../../store/brandingStore'
 import { exportCsv } from './reportUtils'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 
 const { RangePicker } = DatePicker
 const { Text } = Typography
@@ -49,7 +49,7 @@ export default function SubjectHomeworkReport() {
       if (subjectId) params.append('subjectId', subjectId)
       const r = await api.get(`/school/reports/homework-statement?${params}`)
       setRows(r.data?.data || [])
-    } catch { message.error('Failed to load subject homework report.') }
+    } catch (e) { message.error(apiError(e, 'Failed to load subject homework report.')) }
     finally { setLoading(false) }
   }
 

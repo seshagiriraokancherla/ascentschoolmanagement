@@ -52,6 +52,8 @@ import kotlinx.coroutines.launch
 import com.ascentschools.mobile.ui.announcements.AnnouncementsScreen
 import com.ascentschools.mobile.ui.announcements.AnnouncementsUiState
 import com.ascentschools.mobile.ui.announcements.AnnouncementsViewModel
+import com.ascentschools.mobile.ui.calendar.CalendarScreen
+import com.ascentschools.mobile.ui.calendar.CalendarViewModel
 import com.ascentschools.mobile.ui.components.PullToRefresh
 import com.ascentschools.mobile.ui.attendance.AttendanceScreen
 import com.ascentschools.mobile.ui.attendance.AttendanceViewModel
@@ -82,13 +84,14 @@ private data class Feature(
 )
 
 private val features = listOf(
-    Feature("Home",       Icons.Default.Home,          0, Color(0xFF1E3A8A) to Color(0xFF3B82F6)),
+    Feature("Profile",    Icons.Default.Person,        0, Color(0xFF1E3A8A) to Color(0xFF3B82F6)),
     Feature("Attendance", Icons.Default.CalendarToday, 1, Color(0xFF0E7490) to Color(0xFF06B6D4)),
     Feature("Marks",      Icons.Default.Grade,         2, Color(0xFF4F46E5) to Color(0xFF6366F1)),
     Feature("Fees",       Icons.Default.Payments,      3, Color(0xFFB45309) to Color(0xFFF59E0B)),
     Feature("Homework",   Icons.Default.MenuBook,      4, Color(0xFF047857) to Color(0xFF10B981)),
     Feature("Notices",    Icons.Default.Notifications, 5, Color(0xFFBE123C) to Color(0xFFF43F5E)),
     Feature("Events",     Icons.Default.PhotoLibrary,  6, Color(0xFF6D28D9) to Color(0xFF8B5CF6)),
+    Feature("Calendar",   Icons.Default.DateRange,     8, Color(0xFF0F766E) to Color(0xFF14B8A6)),
     Feature("Messages",   Icons.Default.Chat,          7, Color(0xFF0369A1) to Color(0xFF0EA5E9))
 )
 
@@ -144,6 +147,7 @@ fun HomeScreen(
     val homeworkVm      = remember { HomeworkViewModel(repo) }
     val announcementsVm = remember { AnnouncementsViewModel(repo) }
     val eventsVm        = remember { EventsViewModel(repo) }
+    val calendarVm      = remember { CalendarViewModel(repo) }
     val messagesVm      = remember { MessagesViewModel(repo) }
 
     // ── Live badges (tiles mode) — derived from already-loaded VM state ──────────
@@ -174,6 +178,7 @@ fun HomeScreen(
             4 -> PullToRefresh(onRefresh = { homeworkVm.load() })      { HomeworkScreen(viewModel = homeworkVm) }
             5 -> PullToRefresh(onRefresh = { announcementsVm.load() }) { AnnouncementsScreen(viewModel = announcementsVm) }
             6 -> PullToRefresh(onRefresh = { eventsVm.load() })        { EventsScreen(viewModel = eventsVm) }
+            8 -> PullToRefresh(onRefresh = { calendarVm.load() })      { CalendarScreen(viewModel = calendarVm) }
             7 -> MessagesScreen(viewModel = messagesVm)
         }
     }
@@ -286,8 +291,15 @@ fun HomeScreen(
     ) { innerPadding ->
         if (tilesView) {
             if (openedFeature == null) {
+                // Ticker shows the latest two announcements as "date: notice" (createdAt is
+                // IST — Phase 104). Not date-filtered, so a notice posted for a future day
+                // (e.g. tomorrow's holiday) still shows. The Notices tab shows the full list.
                 val ticker = (annState as? AnnouncementsUiState.Success)?.announcements
-                    ?.mapNotNull { it.title }?.filter { it.isNotBlank() }
+                    ?.sortedByDescending { it.createdAt ?: "" }
+                    ?.take(2)
+                    ?.mapNotNull { a ->
+                        a.title?.takeIf { it.isNotBlank() }?.let { "${tickerDate(a.createdAt)}: $it" }
+                    }
                     ?.joinToString("        •        ")
                     ?.takeIf { it.isNotBlank() }
                     ?: "Welcome to ${tokenStore.brandingName ?: "our school"}."
@@ -445,6 +457,13 @@ private fun LogoBand(bandColor: Color, logoModel: Any, name: String) {
             )
         }
     }
+}
+
+/** Formats an ISO createdAt string (e.g. "2026-07-28T09:15:00") as dd-MM-yyyy for the ticker. */
+private fun tickerDate(raw: String?): String {
+    val d = raw?.take(10) ?: return ""          // yyyy-MM-dd
+    val p = d.split("-")
+    return if (p.size == 3) "${p[2]}-${p[1]}-${p[0]}" else d
 }
 
 /** A red "News" chip + an auto-scrolling latest-announcements line; tap opens Notices. */

@@ -11,6 +11,7 @@
     "build:holyspiritjm": "vite build --mode holyspiritjm",
     "build:stannsasf":    "vite build --mode stannsasf",
     "build:stannsbng":    "vite build --mode stannsbng",
+     "build:sfsgwk":    "vite build --mode sfsgwk",
     "preview": "vite preview"
   },
   "dependencies": {

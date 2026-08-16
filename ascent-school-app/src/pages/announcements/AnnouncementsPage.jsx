@@ -5,7 +5,7 @@ import {
 } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, PushpinOutlined, PaperClipOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 import MediaUploader from '../../components/MediaUploader'
 
 const { Title, Text } = Typography
@@ -97,7 +97,7 @@ export default function AnnouncementsPage() {
       message.success('Announcement deleted.')
       load()
     } catch (e) {
-      message.error('Failed to delete.')
+      message.error(apiError(e, 'Failed to delete.'))
     }
   }
 

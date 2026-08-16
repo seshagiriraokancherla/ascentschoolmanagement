@@ -5,7 +5,7 @@ import {
 } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, PaperClipOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 import MediaUploader from '../../components/MediaUploader'
 
 const { Title, Text } = Typography
@@ -116,7 +116,7 @@ export default function HomeworkPage() {
       message.success('Homework deleted.')
       loadHomework(classFilter, page, pageSize)
     } catch (e) {
-      message.error('Failed to delete.')
+      message.error(apiError(e, 'Failed to delete.'))
     }
   }
 

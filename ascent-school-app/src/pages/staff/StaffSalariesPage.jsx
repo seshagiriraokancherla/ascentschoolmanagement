@@ -11,7 +11,7 @@ import {
 import dayjs from 'dayjs'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 import { useBrandingStore } from '../../store/brandingStore'
 
 const { Option } = Select
@@ -191,8 +191,8 @@ function SalaryStructureTab({ staffList }) {
     try {
       const res = await api.get(`/school/staff/salary-components?staffId=${staffId}`)
       setComponents(res.data.data || [])
-    } catch {
-      message.error('Failed to load salary structure.')
+    } catch (e) {
+      message.error(apiError(e, 'Failed to load salary structure.'))
     } finally {
       setLoading(false)
     }
@@ -241,8 +241,8 @@ function SalaryStructureTab({ staffList }) {
       })
       message.success('Salary structure saved.')
       loadComponents(selectedStaffId)
-    } catch {
-      message.error('Failed to save salary structure.')
+    } catch (e) {
+      message.error(apiError(e, 'Failed to save salary structure.'))
     } finally {
       setSaving(false)
     }
@@ -464,8 +464,8 @@ function MonthlySalariesTab({ staffList }) {
       if (status) params.set('status', status)
       const res = await api.get(`/school/staff/salaries?${params}`)
       setSalaries(res.data.data || [])
-    } catch {
-      message.error('Failed to load salaries.')
+    } catch (e) {
+      message.error(apiError(e, 'Failed to load salaries.'))
     } finally {
       setLoading(false)
     }
@@ -498,8 +498,8 @@ function MonthlySalariesTab({ staffList }) {
       message.success('Salary updated.')
       setEditRecord(null)
       load()
-    } catch {
-      message.error('Failed to update salary.')
+    } catch (e) {
+      message.error(apiError(e, 'Failed to update salary.'))
     } finally {
       setEditSaving(false)
     }
@@ -513,8 +513,8 @@ function MonthlySalariesTab({ staffList }) {
       message.success('Salary marked as Paid.')
       setPaidRecord(null)
       load()
-    } catch {
-      message.error('Failed to mark salary as Paid.')
+    } catch (e) {
+      message.error(apiError(e, 'Failed to mark salary as Paid.'))
     } finally {
       setPaidSaving(false)
     }
@@ -534,8 +534,8 @@ function MonthlySalariesTab({ staffList }) {
     try {
       const res = await api.get(`/school/staff/salaries/${record.salaryId}/slip`)
       generateSalarySlipPdf(res.data.data, schoolName)
-    } catch {
-      message.error('Failed to load salary slip.')
+    } catch (e) {
+      message.error(apiError(e, 'Failed to load salary slip.'))
     }
   }
 

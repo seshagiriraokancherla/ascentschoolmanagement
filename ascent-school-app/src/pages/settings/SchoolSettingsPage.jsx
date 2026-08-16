@@ -4,7 +4,7 @@ import {
   Button, Divider, message, Spin, Typography,
 } from 'antd'
 import { SaveOutlined } from '@ant-design/icons'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 
 const { Title } = Typography
 const { Option } = Select
@@ -29,7 +29,7 @@ export default function SchoolSettingsPage() {
         const d = res.data.data || {}
         form.setFieldsValue(d)
       })
-      .catch(() => message.error('Failed to load settings.'))
+      .catch((e) => message.error(apiError(e, 'Failed to load settings.')))
       .finally(() => setLoading(false))
   }, [])
 

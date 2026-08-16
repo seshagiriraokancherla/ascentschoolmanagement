@@ -35,6 +35,7 @@ import com.ascentschools.mobile.ui.teacher.TeacherAttendanceScreen
 import com.ascentschools.mobile.ui.teacher.TeacherChatScreen
 import com.ascentschools.mobile.ui.teacher.TeacherHomeScreen
 import com.ascentschools.mobile.ui.teacher.TeacherHomeworkScreen
+import com.ascentschools.mobile.ui.teacher.TeacherMarksScreen
 import com.ascentschools.mobile.ui.teacher.TeacherMessagesScreen
 import com.ascentschools.mobile.ui.teacher.TeacherViewModel
 import com.ascentschools.mobile.ui.theme.AscentTheme
@@ -49,7 +50,8 @@ private sealed class TeacherScreen {
     object Home : TeacherScreen()
     object Messages : TeacherScreen()
     data class Attendance(val classId: Int, val sectionId: Int) : TeacherScreen()
-    data class Homework(val classId: Int) : TeacherScreen()
+    data class Marks(val classId: Int, val sectionId: Int) : TeacherScreen()
+    data class Homework(val classId: Int, val sectionId: Int?) : TeacherScreen()
     data class Announcement(val classId: Int) : TeacherScreen()
     data class Chat(val threadId: Int) : TeacherScreen()
 }
@@ -185,8 +187,11 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                             onAttendance = { classId, sectionId ->
                                 teacherScreen = TeacherScreen.Attendance(classId, sectionId)
                             },
-                            onHomework   = { classId ->
-                                teacherScreen = TeacherScreen.Homework(classId)
+                            onMarks      = { classId, sectionId ->
+                                teacherScreen = TeacherScreen.Marks(classId, sectionId)
+                            },
+                            onHomework   = { classId, sectionId ->
+                                teacherScreen = TeacherScreen.Homework(classId, sectionId)
                             },
                             onAnnouncements = { classId ->
                                 teacherScreen = TeacherScreen.Announcement(classId)
@@ -208,12 +213,21 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                             viewModel = teacherVm,
                             onBack    = { teacherScreen = TeacherScreen.Home }
                         )
-                        is TeacherScreen.Homework -> TeacherHomeworkScreen(
+                        is TeacherScreen.Marks -> TeacherMarksScreen(
                             classId   = screen.classId,
+                            sectionId = screen.sectionId,
                             className = teacherVm.classes.value
                                 .find { it.classId == screen.classId }?.className ?: "",
                             viewModel = teacherVm,
                             onBack    = { teacherScreen = TeacherScreen.Home }
+                        )
+                        is TeacherScreen.Homework -> TeacherHomeworkScreen(
+                            classId     = screen.classId,
+                            sectionId   = screen.sectionId,
+                            className   = teacherVm.classes.value
+                                .find { it.classId == screen.classId }?.className ?: "",
+                            viewModel   = teacherVm,
+                            onBack      = { teacherScreen = TeacherScreen.Home }
                         )
                         is TeacherScreen.Announcement -> TeacherAnnouncementScreen(
                             classId   = screen.classId,

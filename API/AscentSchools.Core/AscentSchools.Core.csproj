@@ -113,7 +113,11 @@
     <Compile Include="DTOs\School\Marks\MarksDto.cs" />
     <Compile Include="DTOs\School\Homework\HomeworkDto.cs" />
     <Compile Include="DTOs\School\Announcements\AnnouncementDto.cs" />
+    <Compile Include="DTOs\School\Calendar\CalendarDtos.cs" />
+    <Compile Include="DTOs\School\ClassSubjects\ClassSubjectDtos.cs" />
     <Compile Include="DTOs\School\ClassTeachers\ClassTeacherDtos.cs" />
+    <Compile Include="DTOs\School\ExamMaster\ExamMasterDtos.cs" />
+    <Compile Include="DTOs\School\GradeTypes\GradeTypeDtos.cs" />
     <Compile Include="DTOs\School\Messaging\MessagingDtos.cs" />
     <Compile Include="Models\ApiResponse.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

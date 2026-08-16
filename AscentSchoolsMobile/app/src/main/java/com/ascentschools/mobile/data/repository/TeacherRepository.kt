@@ -24,8 +24,8 @@ class TeacherRepository(private val api: ApiService) {
         if (!body.success) error(body.message ?: "Save failed")
     }
 
-    suspend fun getHomework(classId: Int): Result<List<TeacherHomeworkDto>> = runCatching {
-        api.getTeacherHomework(classId).bodyOrError().dataOrError()
+    suspend fun getHomework(classId: Int, sectionId: Int?, page: Int, pageSize: Int): Result<TeacherHomeworkPage> = runCatching {
+        api.getTeacherHomework(classId, sectionId, page, pageSize).bodyOrError().dataOrError()
     }
 
     suspend fun createHomework(request: TeacherCreateHomeworkRequest): Result<Unit> = runCatching {
@@ -40,6 +40,25 @@ class TeacherRepository(private val api: ApiService) {
     suspend fun createAnnouncement(request: TeacherCreateAnnouncementRequest): Result<Unit> = runCatching {
         val body = api.createTeacherAnnouncement(request).bodyOrError()
         if (!body.success) error(body.message ?: "Create failed")
+    }
+
+    // ── Marks ───────────────────────────────────────────────────────────────────
+
+    suspend fun getExamTypes(): Result<List<TeacherExamTypeDto>> = runCatching {
+        api.getTeacherExamTypes().bodyOrError().dataOrError()
+    }
+
+    suspend fun getMarksSubjects(classId: Int): Result<List<TeacherMarksSubjectDto>> = runCatching {
+        api.getTeacherMarksSubjects(classId).bodyOrError().dataOrError()
+    }
+
+    suspend fun getMarks(classId: Int, sectionId: Int, examTypeId: Int, subjectId: Int): Result<TeacherSubjectMarksDto> = runCatching {
+        api.getTeacherMarks(classId, sectionId, examTypeId, subjectId).bodyOrError().dataOrError()
+    }
+
+    suspend fun saveMarks(request: TeacherSaveMarksRequest): Result<Unit> = runCatching {
+        val body = api.saveTeacherMarks(request).bodyOrError()
+        if (!body.success) error(body.message ?: "Save failed")
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

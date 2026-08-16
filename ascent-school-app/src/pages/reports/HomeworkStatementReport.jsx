@@ -6,7 +6,7 @@ import { exportCsv } from './reportUtils'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import dayjs from 'dayjs'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 
 const { RangePicker } = DatePicker
 const { Text } = Typography
@@ -41,7 +41,7 @@ export default function HomeworkStatementReport() {
       if (classId) params.append('classId', classId)
       const r = await api.get(`/school/reports/homework-statement?${params}`)
       setRows(r.data?.data || [])
-    } catch { message.error('Failed to load homework statement.') }
+    } catch (e) { message.error(apiError(e, 'Failed to load homework statement.')) }
     finally { setLoading(false) }
   }
 

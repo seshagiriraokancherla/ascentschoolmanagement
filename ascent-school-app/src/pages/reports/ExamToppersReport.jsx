@@ -3,7 +3,7 @@ import { Select, Button, Space, Row, Col, Table, Typography, Tag, App as AntApp 
 import { FilePdfOutlined, FileTextOutlined, TrophyOutlined } from '@ant-design/icons'
 import { useBrandingStore } from '../../store/brandingStore'
 import { exportToppersPdf, exportCsv } from './reportUtils'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 
 const { Text, Title } = Typography
 
@@ -66,7 +66,7 @@ export default function ExamToppersReport() {
       if (classId) params.append('classId', classId)
       const r = await api.get(`/school/reports/exam-toppers?${params}`)
       setData(r.data?.data)
-    } catch { message.error('Failed to load toppers report.') }
+    } catch (e) { message.error(apiError(e, 'Failed to load toppers report.')) }
     finally { setLoading(false) }
   }
 

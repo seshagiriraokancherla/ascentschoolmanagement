@@ -43,6 +43,12 @@ class StudentRepository(private val api: ApiService) {
         body.data ?: emptyList()
     }
 
+    suspend fun getCalendar(month: Int, year: Int): Result<List<CalendarEventDto>> = runCatching {
+        val body = api.getCalendar(month, year).bodyOrError()
+        if (!body.success) error(body.message ?: "Failed to load calendar")
+        body.data ?: emptyList()
+    }
+
     // ── Messaging (parent side — scoped to the selected child) ────────────
 
     suspend fun getMessageThread(): Result<ParentThreadViewDto> = runCatching {

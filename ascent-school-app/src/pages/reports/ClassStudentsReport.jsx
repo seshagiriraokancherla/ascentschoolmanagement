@@ -3,7 +3,7 @@ import { Table, Select, Button, Space, Row, Col, Tag, Typography, Divider, App a
 import { FilePdfOutlined, FileExcelOutlined } from '@ant-design/icons'
 import { useBrandingStore } from '../../store/brandingStore'
 import { exportPdf, exportCsv } from './reportUtils'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 import dayjs from 'dayjs'
 
 const { Text } = Typography
@@ -69,7 +69,7 @@ export default function ClassStudentsReport() {
       const r = await api.get(`/school/students?${q}`)
       setRows(r.data?.data || [])
       setLoaded(true)
-    } catch { message.error('Failed to load students.') }
+    } catch (e) { message.error(apiError(e, 'Failed to load students.')) }
     finally { setLoading(false) }
   }
 

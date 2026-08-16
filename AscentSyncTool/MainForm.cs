@@ -15,7 +15,7 @@ namespace AscentSyncTool
 {
     public class MainForm : Form
     {
-        public const string Version = "1.1";
+        public const string Version = "1.2";
 
         private readonly LegacyDb _legacy = new LegacyDb();
 
@@ -25,13 +25,16 @@ namespace AscentSyncTool
         private AscentApiClient Api => _api ?? (_api = new AscentApiClient());
 
         // Last-shown data per tab (used by Save)
-        private List<LegacyFeeReceipt> _exportReceipts = new List<LegacyFeeReceipt>();
-        private List<LegacyStudent>    _exportStudents = new List<LegacyStudent>();
-        private List<ReceiptListItem>  _downloadReceipts = new List<ReceiptListItem>();
+        private List<LegacyFeeReceipt>   _exportReceipts   = new List<LegacyFeeReceipt>();
+        private List<LegacyStudent>      _exportStudents   = new List<LegacyStudent>();
+        private List<ReceiptListItem>    _downloadReceipts = new List<ReceiptListItem>();
+        private List<AttendanceExportRow> _attendance      = new List<AttendanceExportRow>();
+        private DateTime _attendanceMonth;   // first day of the month shown in the grid
 
-        private readonly SyncTab _tabReceipts = new SyncTab();
-        private readonly SyncTab _tabStudents = new SyncTab();
-        private readonly SyncTab _tabDownload = new SyncTab();
+        private readonly SyncTab _tabReceipts   = new SyncTab();
+        private readonly SyncTab _tabStudents   = new SyncTab();
+        private readonly SyncTab _tabDownload   = new SyncTab();
+        private readonly SyncTab _tabAttendance = new SyncTab();
 
         public MainForm()
         {
@@ -55,10 +58,14 @@ namespace AscentSyncTool
             tabs.TabPages.Add(MakePage("Export Students",   _tabStudents));
             tabs.TabPages.Add(MakePage("Download Receipts", _tabDownload));
             tabs.TabPages.Add(MakePage("Export Receipts",   _tabReceipts));
+            tabs.TabPages.Add(MakePage("Download Attendance", _tabAttendance));
 
             // The academic-year filter applies only to the legacy-source tabs.
             _tabStudents.ShowAcademicYearFilter = true;
             _tabReceipts.ShowAcademicYearFilter = true;
+
+            // Attendance is summarised per calendar month, not a free date range.
+            _tabAttendance.UseMonthYearFilter = true;
 
             Controls.Add(tabs);
             Controls.Add(header);   // added after tabs so Dock=Top sits above the fill
@@ -66,6 +73,7 @@ namespace AscentSyncTool
             WireExportReceipts();
             WireExportStudents();
             WireDownloadReceipts();
+            WireAttendanceSummary();
 
             Load += (s, e) => LoadAcademicYears();
         }
@@ -215,6 +223,65 @@ namespace AscentSyncTool
                     if (errors.Count > 20) sb.AppendLine($"  …and {errors.Count - 20} more.");
                 }
                 MessageBox.Show(sb.ToString(), "Download Receipts",
+                    MessageBoxButtons.OK, errors.Count > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+            };
+        }
+
+        // ── Tab 4: Download Attendance (new app → legacy) ─────────────────────
+        private void WireAttendanceSummary()
+        {
+            // Month/year filter → OnShowPeriod (not OnShow).
+            _tabAttendance.OnShowPeriod = async (month, year) =>
+            {
+                _attendanceMonth = new DateTime(year, month, 1);
+                _attendance = await Api.GetAttendanceSummaryAsync(month, year);
+                _tabAttendance.Grid.DataSource = _attendance;
+                return _attendance.Count;
+            };
+
+            _tabAttendance.OnSave = async () =>
+            {
+                // One branch id for the whole batch (it never varies per row).
+                var branchId = await Task.Run(() => _legacy.GetBranchId());
+
+                int inserted = 0, superseded = 0, failed = 0, processed = 0;
+                var errors = new List<string>();
+
+                foreach (var row in _attendance)
+                {
+                    processed++;
+                    if (processed % 25 == 0 || processed == _attendance.Count)
+                        _tabAttendance.SetStatus($"Saving to legacy… ({processed}/{_attendance.Count})");
+                    try
+                    {
+                        var replaced = await Task.Run(
+                            () => _legacy.SaveBulkAttendance(row, _attendanceMonth, branchId));
+                        superseded += replaced;
+                        inserted++;
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"{row.AdmissionNo}: {ex.Message}");
+                        failed++;
+                    }
+                }
+
+                _tabAttendance.SetStatus(
+                    $"Done. Inserted {inserted} row(s), superseded {superseded} earlier row(s), failed {failed}.");
+
+                var sb = new StringBuilder();
+                sb.AppendLine($"Month: {_attendanceMonth:MMMM yyyy}");
+                sb.AppendLine($"Inserted: {inserted}");
+                sb.AppendLine($"Superseded (marked 'D'): {superseded}");
+                sb.AppendLine($"Failed: {failed}");
+                if (errors.Count > 0)
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("Errors:");
+                    foreach (var e in errors.Take(20)) sb.AppendLine("  " + e);
+                    if (errors.Count > 20) sb.AppendLine($"  …and {errors.Count - 20} more.");
+                }
+                MessageBox.Show(sb.ToString(), "Download Attendance",
                     MessageBoxButtons.OK, errors.Count > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
             };
         }
