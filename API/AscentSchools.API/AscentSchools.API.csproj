@@ -213,8 +213,13 @@
     <Compile Include="Controllers\School\MarksController.cs" />
     <Compile Include="Controllers\School\HomeworkController.cs" />
     <Compile Include="Controllers\School\AnnouncementsController.cs" />
+    <Compile Include="Controllers\School\CalendarController.cs" />
+    <Compile Include="Controllers\School\ClassSubjectsController.cs" />
     <Compile Include="Controllers\School\ClassTeachersController.cs" />
+    <Compile Include="Controllers\School\ExamMasterController.cs" />
+    <Compile Include="Controllers\School\GradeTypesController.cs" />
     <Compile Include="Controllers\School\MessageReportsController.cs" />
+    <Compile Include="Controllers\School\SchoolMessagesAdminController.cs" />
     <Compile Include="Filters\ControlAuthAttribute.cs" />
     <Compile Include="Filters\MobileTeacherAuthAttribute.cs" />
     <Compile Include="Filters\RequireModuleAttribute.cs" />

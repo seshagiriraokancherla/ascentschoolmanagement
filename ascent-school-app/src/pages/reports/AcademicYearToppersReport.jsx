@@ -3,7 +3,7 @@ import { Select, Button, Space, Row, Col, Table, Typography, Tag, Divider, App a
 import { FilePdfOutlined, FileTextOutlined, TrophyOutlined } from '@ant-design/icons'
 import { useBrandingStore } from '../../store/brandingStore'
 import { exportToppersPdf, exportCsv } from './reportUtils'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 
 const { Text, Title } = Typography
 
@@ -68,7 +68,7 @@ export default function AcademicYearToppersReport() {
       if (sectionId) params.append('sectionId', sectionId)
       const r = await api.get(`/school/reports/academic-year-toppers?${params}`)
       setData(r.data?.data)
-    } catch { message.error('Failed to load academic year toppers.') }
+    } catch (e) { message.error(apiError(e, 'Failed to load academic year toppers.')) }
     finally { setLoading(false) }
   }
 

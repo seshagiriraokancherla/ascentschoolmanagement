@@ -14,13 +14,16 @@
     "dev:depaulemyv": "vite --mode depaulemyv",
     "dev:stannsbng": "vite --mode stannsbng",
     "dev:stmaryym": "vite --mode stmaryym",
+     "dev:sfspamidi": "vite --mode sfspamidi",
     "build:demo": "vite build --mode demo",
     "build:stannsasf": "vite build --mode stannsasf",
     "build:holyspiritjm": "vite build --mode holyspiritjm",
     "build:depaulemyv": "vite build --mode depaulemyv",
     "build:stannsbng": "vite build --mode stannsbng",
     "build:stmaryym": "vite build --mode stmaryym",
-    "build:all": "npm run build:demo && npm run build:stannsasf && npm run build:holyspiritjm && npm run build:stannsbng"
+    "build:sfsgwk": "vite build --mode sfsgwk",
+    "build:sfspamidi":"vite build --mode sfspamidi",
+    "build:all": "npm run build:demo && npm run build:stannsasf && npm run build:holyspiritjm && npm run build:stannsbng &&  npm run build:stmaryym && npm run build:sfsgwk && npm run buuild:sfspamidi"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",

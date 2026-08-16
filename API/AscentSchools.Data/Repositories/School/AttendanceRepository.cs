@@ -184,6 +184,35 @@ namespace AscentSchools.Data.Repositories.School
                     new { schoolId, classId, sectionId, month, year });
         }
 
+        // ── Monthly present-days export (legacy sync) ─────────────────────────
+        // One row per admission_no + academic year with the count of days marked
+        // 'Present' in the month. Grouped by admission_no (not student_id) because
+        // the legacy SAS_BulkAttendance table keys on the admission number.
+
+        public IEnumerable<AttendanceMonthlyExportDto> GetMonthlyPresentExport(
+            string tenantDbName, int schoolId, int month, int year)
+        {
+            var from = new DateTime(year, month, 1);
+            var to   = from.AddMonths(1).AddDays(-1);
+
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.Query<AttendanceMonthlyExportDto>(
+                    @"SELECT s.admission_no AdmissionNo,
+                             COUNT(sa.status) NoOfDaysPresent,
+                             a.academic_year  AcademicYear
+                      FROM student_attendance sa
+                      JOIN students s       ON s.student_id       = sa.student_id
+                      JOIN academic_years a ON a.academic_year_id = s.academic_year_id
+                      WHERE sa.attendance_date >= @from
+                        AND sa.attendance_date <= @to
+                        AND sa.status    = 'Present'
+                        AND sa.school_id = @schoolId
+                        AND s.school_id  = @schoolId
+                      GROUP BY s.admission_no, a.academic_year
+                      ORDER BY s.admission_no",
+                    new { from, to, schoolId });
+        }
+
         // ── Internal row types ────────────────────────────────────────────────
 
         private class StudentRow

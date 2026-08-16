@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Upload, Button, List, Typography, Popconfirm, App as AntApp, Tag, Space } from 'antd'
 import { UploadOutlined, DeleteOutlined, FileImageOutlined, FilePdfOutlined, SoundOutlined, VideoCameraOutlined, PaperClipOutlined } from '@ant-design/icons'
-import api from '../api/axiosInstance'
+import api, { apiError } from '../api/axiosInstance'
 import { uploadToR2, MAX_IMAGE_BYTES, MAX_DOC_BYTES, MAX_VIDEO_BYTES } from '../api/r2Upload'
 
 const { Text } = Typography
@@ -90,7 +90,7 @@ export default function MediaUploader({ entityType, entityId, classes = ['image'
     try {
       await api.delete(`/school/media/${uploadId}`)
       setItems(prev => prev.filter(i => i.uploadId !== uploadId))
-    } catch { message.error('Failed to remove file.') }
+    } catch (e) { message.error(apiError(e, 'Failed to remove file.')) }
   }
 
   return (

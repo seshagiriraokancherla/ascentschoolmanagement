@@ -11,10 +11,16 @@ namespace AscentSyncTool
     /// </summary>
     public class SyncTab : UserControl
     {
+        private readonly Label          _fromLbl = new Label { Text = "From:", AutoSize = true, Margin = new Padding(0, 6, 4, 0) };
         private readonly DateTimePicker _from = new DateTimePicker { Format = DateTimePickerFormat.Short, Width = 120 };
+        private readonly Label          _toLbl = new Label { Text = "To:", AutoSize = true, Margin = new Padding(12, 6, 4, 0) };
         private readonly DateTimePicker _to   = new DateTimePicker { Format = DateTimePickerFormat.Short, Width = 120 };
         private readonly Label    _yearLbl  = new Label    { Text = "Academic Year:", AutoSize = true, Margin = new Padding(12, 6, 4, 0) };
         private readonly ComboBox _year     = new ComboBox { Width = 120, DropDownStyle = ComboBoxStyle.DropDownList };
+        private readonly Label    _monthLbl = new Label    { Text = "Month:", AutoSize = true, Margin = new Padding(0, 6, 4, 0) };
+        private readonly ComboBox _month    = new ComboBox { Width = 120, DropDownStyle = ComboBoxStyle.DropDownList };
+        private readonly Label    _calYearLbl = new Label  { Text = "Year:", AutoSize = true, Margin = new Padding(12, 6, 4, 0) };
+        private readonly ComboBox _calYear  = new ComboBox { Width = 90, DropDownStyle = ComboBoxStyle.DropDownList };
         private readonly Button _btnShow   = new Button { Text = "Show",   Width = 80 };
         private readonly Button _btnSave   = new Button { Text = "Save",   Width = 80, Enabled = false };
         private readonly Button _btnCancel = new Button { Text = "Cancel", Width = 80, Enabled = false };
@@ -30,6 +36,8 @@ namespace AscentSyncTool
 
         /// <summary>Called on Show: receives From/To, returns the row count loaded into the grid.</summary>
         public Func<DateTime, DateTime, Task<int>> OnShow { get; set; }
+        /// <summary>Called on Show when the tab uses the Month/Year filter: receives month (1-12) and year.</summary>
+        public Func<int, int, Task<int>> OnShowPeriod { get; set; }
         /// <summary>Called on Save: persists the shown rows.</summary>
         public Func<Task> OnSave { get; set; }
 
@@ -56,19 +64,59 @@ namespace AscentSyncTool
             if (_year.Items.Count > 0) _year.SelectedIndex = 0;
         }
 
+        /// <summary>
+        /// Swaps the From/To date range for Month + Year dropdowns (defaults to the
+        /// current month). Show then calls <see cref="OnShowPeriod"/> instead of OnShow.
+        /// </summary>
+        public bool UseMonthYearFilter
+        {
+            get => _monthLbl.Visible;
+            set
+            {
+                _monthLbl.Visible = _month.Visible = _calYearLbl.Visible = _calYear.Visible = value;
+                _fromLbl.Visible  = _from.Visible  = _toLbl.Visible      = _to.Visible      = !value;
+            }
+        }
+
+        /// <summary>Selected month (1-12).</summary>
+        public int SelectedMonth => _month.SelectedIndex + 1;
+        /// <summary>Selected calendar year.</summary>
+        public int SelectedYear => _calYear.SelectedItem != null
+            ? int.Parse(_calYear.SelectedItem.ToString())
+            : DateTime.Today.Year;
+
         public SyncTab()
         {
             Dock = DockStyle.Fill;
 
             var bar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 44, Padding = new Padding(8, 8, 8, 8) };
-            bar.Controls.Add(new Label { Text = "From:", AutoSize = true, Margin = new Padding(0, 6, 4, 0) });
+            bar.Controls.Add(_fromLbl);
             bar.Controls.Add(_from);
-            bar.Controls.Add(new Label { Text = "To:", AutoSize = true, Margin = new Padding(12, 6, 4, 0) });
+            bar.Controls.Add(_toLbl);
             bar.Controls.Add(_to);
+            bar.Controls.Add(_monthLbl);
+            bar.Controls.Add(_month);
+            bar.Controls.Add(_calYearLbl);
+            bar.Controls.Add(_calYear);
             bar.Controls.Add(_yearLbl);
             bar.Controls.Add(_year);
             _yearLbl.Visible = false;
             _year.Visible = false;
+            _monthLbl.Visible = false;
+            _month.Visible = false;
+            _calYearLbl.Visible = false;
+            _calYear.Visible = false;
+
+            // Month/year dropdown contents (harmless when the filter stays hidden).
+            for (int m = 1; m <= 12; m++)
+                _month.Items.Add(System.Globalization.CultureInfo.CurrentCulture
+                    .DateTimeFormat.GetMonthName(m));
+            _month.SelectedIndex = DateTime.Today.Month - 1;
+
+            for (int y = DateTime.Today.Year + 1; y >= DateTime.Today.Year - 5; y--)
+                _calYear.Items.Add(y.ToString());
+            _calYear.SelectedItem = DateTime.Today.Year.ToString();
+
             bar.Controls.Add(_btnShow);
             bar.Controls.Add(_btnSave);
             bar.Controls.Add(_btnCancel);
@@ -97,8 +145,8 @@ namespace AscentSyncTool
 
         private async Task RunShow()
         {
-            if (OnShow == null) return;
-            if (_to.Value.Date < _from.Value.Date)
+            if (UseMonthYearFilter ? OnShowPeriod == null : OnShow == null) return;
+            if (!UseMonthYearFilter && _to.Value.Date < _from.Value.Date)
             {
                 MessageBox.Show("'To' date cannot be before 'From' date.", "Invalid range",
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -108,7 +156,9 @@ namespace AscentSyncTool
             _status.Text = "Loading…";
             try
             {
-                var count = await OnShow(_from.Value, _to.Value);
+                var count = UseMonthYearFilter
+                    ? await OnShowPeriod(SelectedMonth, SelectedYear)
+                    : await OnShow(_from.Value, _to.Value);
                 _status.Text = $"Loaded {count} row(s).";
                 _btnSave.Enabled = count > 0;
                 _btnCancel.Enabled = count > 0;
@@ -149,9 +199,11 @@ namespace AscentSyncTool
             _btnShow.Enabled   = !busy;
             _btnSave.Enabled   = !busy && _grid.DataSource != null;
             _btnCancel.Enabled = !busy && keepCancel && _grid.DataSource != null;
-            _from.Enabled = !busy;
-            _to.Enabled   = !busy;
-            _year.Enabled = !busy;
+            _from.Enabled    = !busy;
+            _to.Enabled      = !busy;
+            _year.Enabled    = !busy;
+            _month.Enabled   = !busy;
+            _calYear.Enabled = !busy;
             Cursor = busy ? Cursors.WaitCursor : Cursors.Default;
         }
     }

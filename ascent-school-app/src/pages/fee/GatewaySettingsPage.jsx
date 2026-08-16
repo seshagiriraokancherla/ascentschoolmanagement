@@ -3,7 +3,7 @@ import {
   Card, Form, Select, Input, Button, Alert, Space, Typography, Divider, App as AntApp,
 } from 'antd'
 import { SaveOutlined, EyeOutlined, EyeInvisibleOutlined, InfoCircleOutlined } from '@ant-design/icons'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 
 const { Text, Paragraph } = Typography
 
@@ -58,8 +58,8 @@ export default function GatewaySettingsPage() {
       const res = await api.get('/school/fees/gateway-settings')
       setExisting(res.data?.data)
       form.setFieldsValue({ keySecret: '', webhookSecret: '' })
-    } catch {
-      message.error('Failed to save gateway settings.')
+    } catch (e) {
+      message.error(apiError(e, 'Failed to save gateway settings.'))
     } finally {
       setSaving(false)
     }

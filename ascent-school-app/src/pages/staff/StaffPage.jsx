@@ -5,7 +5,7 @@ import {
 } from 'antd'
 import { PlusOutlined, EditOutlined, UserOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 
 const { Text } = Typography
 const { Search } = Input
@@ -38,7 +38,7 @@ export default function StaffPage() {
       if (statusFilter) params.append('status', statusFilter)
       const r = await api.get(`/school/staff?${params}`)
       setStaff(r.data?.data || [])
-    } catch { message.error('Failed to load staff.') }
+    } catch (e) { message.error(apiError(e, 'Failed to load staff.')) }
     finally { setLoading(false) }
   }
 
@@ -82,7 +82,7 @@ export default function StaffPage() {
       }
       setModalOpen(false)
       loadStaff()
-    } catch { message.error('Failed to save.') }
+    } catch (e) { message.error(apiError(e, 'Failed to save.')) }
     finally { setSaving(false) }
   }
 
@@ -92,7 +92,7 @@ export default function StaffPage() {
       await api.put(`/school/staff/${record.staffId}/status`, { status: newStatus })
       message.success(`Staff member ${newStatus === 'Active' ? 'activated' : 'deactivated'}.`)
       loadStaff()
-    } catch { message.error('Failed to update status.') }
+    } catch (e) { message.error(apiError(e, 'Failed to update status.')) }
   }
 
   const columns = [

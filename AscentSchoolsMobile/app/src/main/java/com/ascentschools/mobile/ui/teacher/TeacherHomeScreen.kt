@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.MoreVert
@@ -33,7 +34,8 @@ fun TeacherHomeScreen(
     viewModel      : TeacherViewModel,
     tokenStore     : TokenStore,
     onAttendance   : (classId: Int, sectionId: Int) -> Unit,
-    onHomework     : (classId: Int) -> Unit,
+    onMarks        : (classId: Int, sectionId: Int) -> Unit,
+    onHomework     : (classId: Int, sectionId: Int?) -> Unit,
     onAnnouncements: (classId: Int) -> Unit,
     onMessages     : () -> Unit,
     onLogout       : () -> Unit
@@ -194,10 +196,18 @@ fun TeacherHomeScreen(
                         gradient  = Color(0xFF047857) to Color(0xFF10B981),
                         enabled   = cls != null,
                         modifier  = Modifier.weight(1f),
-                        onClick   = { onHomework(cls!!.classId) }
+                        onClick   = { onHomework(cls!!.classId, sec?.sectionId) }
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    IconTile(
+                        label     = "Marks Entry",
+                        icon      = Icons.Default.EditNote,
+                        gradient  = Color(0xFF6D28D9) to Color(0xFF8B5CF6),
+                        enabled   = cls != null && sec != null,
+                        modifier  = Modifier.weight(1f),
+                        onClick   = { onMarks(cls!!.classId, sec!!.sectionId) }
+                    )
                     IconTile(
                         label     = "Announcements",
                         icon      = Icons.Default.Campaign,
@@ -206,6 +216,8 @@ fun TeacherHomeScreen(
                         modifier  = Modifier.weight(1f),
                         onClick   = { onAnnouncements(cls!!.classId) }
                     )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     IconTile(
                         label     = "Messages",
                         icon      = Icons.Default.Chat,
@@ -214,6 +226,7 @@ fun TeacherHomeScreen(
                         modifier  = Modifier.weight(1f),
                         onClick   = onMessages
                     )
+                    Spacer(Modifier.weight(1f))
                 }
                 if (cls == null) {
                     Text(
@@ -233,11 +246,18 @@ fun TeacherHomeScreen(
                         onClick  = { onAttendance(cls.classId, sec!!.sectionId) }
                     )
                     ActionCard(
+                        title    = "Marks Entry",
+                        subtitle = if (sec != null) "${cls.className} · Section ${sec.sectionName}" else "Select a section to continue",
+                        icon     = Icons.Default.EditNote,
+                        enabled  = sec != null,
+                        onClick  = { onMarks(cls.classId, sec!!.sectionId) }
+                    )
+                    ActionCard(
                         title    = "Homework",
-                        subtitle = cls.className,
+                        subtitle = if (sec != null) "${cls.className} · Section ${sec.sectionName}" else cls.className,
                         icon     = Icons.Default.Book,
                         enabled  = true,
-                        onClick  = { onHomework(cls.classId) }
+                        onClick  = { onHomework(cls.classId, sec?.sectionId) }
                     )
                     ActionCard(
                         title    = "Announcements",

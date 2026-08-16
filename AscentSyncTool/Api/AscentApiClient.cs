@@ -48,6 +48,17 @@ namespace AscentSyncTool.Api
             return parsed.data;
         }
 
+        // ── Attendance summary (download) ─────────────────────────────────────
+        public async Task<List<AttendanceExportRow>> GetAttendanceSummaryAsync(int month, int year)
+        {
+            var resp = await _http.GetAsync($"school/attendance/monthly-export?month={month}&year={year}");
+            var body = await resp.Content.ReadAsStringAsync();
+            var parsed = JsonConvert.DeserializeObject<ApiResponse<List<AttendanceExportRow>>>(body);
+            if (parsed == null || !parsed.success)
+                throw new Exception(parsed?.message ?? $"GET attendance summary failed ({(int)resp.StatusCode}).");
+            return parsed.data ?? new List<AttendanceExportRow>();
+        }
+
         // ── Bulk receipt import (export) ──────────────────────────────────────
         public Task<BulkImportResult> BulkImportReceiptsAsync(List<BulkReceiptRow> rows)
             => PostBulkAsync("school/fees/receipts/bulk", new BulkReceiptImportRequest { Rows = rows });

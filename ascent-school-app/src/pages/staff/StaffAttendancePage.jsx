@@ -5,7 +5,7 @@ import {
 } from 'antd'
 import { SaveOutlined, CheckCircleOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 
 const { Text } = Typography
 
@@ -63,7 +63,7 @@ export default function StaffAttendancePage() {
         init[s.staffId] = { status: s.status || 'Present', remarks: s.remarks || '' }
       })
       setEntries(init)
-    } catch { message.error('Failed to load attendance.') }
+    } catch (e) { message.error(apiError(e, 'Failed to load attendance.')) }
     finally { setLoading(false) }
   }
 
@@ -97,7 +97,7 @@ export default function StaffAttendancePage() {
       message.success(`Attendance saved for ${date.format('DD-MM-YYYY')}.`)
       // Refresh to reflect IsMarked
       handleLoad()
-    } catch { message.error('Failed to save attendance.') }
+    } catch (e) { message.error(apiError(e, 'Failed to save attendance.')) }
     finally { setSaving(false) }
   }
 

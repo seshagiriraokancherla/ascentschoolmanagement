@@ -9,7 +9,7 @@ import { exportCsv } from '../reports/reportUtils'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import dayjs from 'dayjs'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 
 const { Text } = Typography
 
@@ -38,7 +38,7 @@ export default function StaffAttendanceSummaryPage() {
     try {
       const r = await api.get(`/school/staff/attendance/summary?month=${month}&year=${year}`)
       setRows(r.data?.data || [])
-    } catch { message.error('Failed to load summary.') }
+    } catch (e) { message.error(apiError(e, 'Failed to load summary.')) }
     finally { setLoading(false) }
   }
 

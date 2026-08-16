@@ -7,9 +7,12 @@ import SectionsTab       from './SectionsTab'
 import FeeTypesTab       from './FeeTypesTab'
 import TermsTab          from './TermsTab'
 import SubjectsTab       from './SubjectsTab'
+import ClassSubjectsTab  from './ClassSubjectsTab'
 import PaymentModesTab   from './PaymentModesTab'
 import FeePeriodsTab     from './FeePeriodsTab'
 import ExamTypesTab      from './ExamTypesTab'
+import GradeTypesTab     from './GradeTypesTab'
+import ExamMasterTab     from './ExamMasterTab'
 import ClassTeachersTab  from './ClassTeachersTab'
 
 const items = [
@@ -23,7 +26,10 @@ const items = [
   { key: 'terms',           label: 'Terms',           children: <TermsTab /> },
   { key: 'fee-periods',     label: 'Fee Periods',     children: <FeePeriodsTab /> },
   { key: 'subjects',        label: 'Subjects',        children: <SubjectsTab /> },
+  { key: 'class-subjects',  label: 'Class Subjects',  children: <ClassSubjectsTab /> },
   { key: 'exam-types',      label: 'Exam Types',      children: <ExamTypesTab /> },
+  { key: 'grade-types',     label: 'Grade Types',     children: <GradeTypesTab /> },
+  { key: 'exam-master',     label: 'Exam Master',     children: <ExamMasterTab /> },
   { key: 'payment-modes',   label: 'Payment Modes',   children: <PaymentModesTab /> },
 ]
 

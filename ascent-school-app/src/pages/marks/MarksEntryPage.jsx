@@ -1,10 +1,10 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Card, Select, InputNumber, Button, Table, Checkbox,
-  Space, Typography, Spin, App as AntApp, Row, Col, Form,
+  Space, Typography, Spin, App as AntApp, Row, Col, Tag,
 } from 'antd'
 import { SaveOutlined, SearchOutlined } from '@ant-design/icons'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 
 const { Title, Text } = Typography
 
@@ -20,14 +20,13 @@ export default function MarksEntryPage() {
   const [selectedExamType, setSelectedExamType] = useState(null)
   const [selectedClass,    setSelectedClass]    = useState(null)
   const [selectedSection,  setSelectedSection]  = useState(null)
-  const [maxMarks,         setMaxMarks]         = useState(100)
 
   const [grid,    setGrid]    = useState(null)   // { subjects: [], rows: [] }
-  const [marks,   setMarks]   = useState({})     // key: `${studentId}_${subjectId}` → { marks, absent }
+  // key: `${studentId}_${subjectId}` → { marks, activity, absent }
+  const [marks,   setMarks]   = useState({})
   const [loading, setLoading] = useState(false)
   const [saving,  setSaving]  = useState(false)
 
-  // Load dropdowns on mount
   useEffect(() => {
     api.get('/school/master/academic-years?activeOnly=true').then(r => {
       const years = r.data?.data || []
@@ -38,7 +37,6 @@ export default function MarksEntryPage() {
     api.get('/school/master/classes').then(r => setClasses(r.data?.data || []))
   }, [])
 
-  // Load exam types when year changes
   useEffect(() => {
     if (!selectedYear) { setExamTypes([]); setSelectedExamType(null); return }
     api.get(`/school/marks/exam-types?academicYearId=${selectedYear}`)
@@ -55,7 +53,7 @@ export default function MarksEntryPage() {
 
   const loadGrid = async () => {
     if (!selectedYear || !selectedExamType || !selectedClass || !selectedSection) {
-      message.warning('Please select Academic Year, Exam Type, Class and Section.')
+      message.warning('Please select Academic Year, Exam, Class and Section.')
       return
     }
     setLoading(true)
@@ -66,40 +64,32 @@ export default function MarksEntryPage() {
       const g = r.data.data
       setGrid(g)
 
-      // Initialise marks state from existing data
       const initial = {}
       g.rows.forEach(row => {
         row.marks.forEach(cell => {
           initial[`${row.studentId}_${cell.subjectId}`] = {
-            marks:  cell.marksObtained ?? '',
-            absent: cell.isAbsent,
+            marks:    cell.marksObtained ?? '',
+            activity: cell.activityMarks ?? '',
+            absent:   cell.isAbsent,
           }
         })
       })
       setMarks(initial)
-      if (g.rows.length > 0 && g.rows[0].marks.length > 0) {
-        const firstMax = g.rows[0].marks[0].maxMarks
-        if (firstMax > 0) setMaxMarks(firstMax)
-      }
     } catch (e) {
-      message.error('Failed to load marks grid.')
+      message.error(apiError(e, 'Failed to load marks grid.'))
     } finally {
       setLoading(false)
     }
   }
 
-  const handleMarkChange = (studentId, subjectId, value) => {
-    setMarks(prev => ({
-      ...prev,
-      [`${studentId}_${subjectId}`]: { ...prev[`${studentId}_${subjectId}`], marks: value },
-    }))
+  const patchCell = (studentId, subjectId, patch) => {
+    const key = `${studentId}_${subjectId}`
+    setMarks(prev => ({ ...prev, [key]: { ...prev[key], ...patch } }))
   }
 
-  const handleAbsentChange = (studentId, subjectId, checked) => {
-    setMarks(prev => ({
-      ...prev,
-      [`${studentId}_${subjectId}`]: { ...prev[`${studentId}_${subjectId}`], marks: checked ? 0 : '', absent: checked },
-    }))
+  const handleAbsent = (studentId, subjectId, checked) => {
+    patchCell(studentId, subjectId,
+      checked ? { absent: true, marks: '', activity: '' } : { absent: false })
   }
 
   const handleSave = async () => {
@@ -110,20 +100,34 @@ export default function MarksEntryPage() {
       grid.rows.forEach(row => {
         grid.subjects.forEach(sub => {
           const cell = marks[`${row.studentId}_${sub.subjectId}`] || {}
+          const hasMark     = cell.marks    !== '' && cell.marks    != null
+          const hasActivity = cell.activity !== '' && cell.activity != null
+          // Skip cells with nothing entered (and not marked absent) — no junk 0 rows.
+          if (!cell.absent && !hasMark && !hasActivity) return
           entries.push({
-            studentId:     row.studentId,
-            subjectId:     sub.subjectId,
-            marksObtained: cell.absent ? 0 : (parseFloat(cell.marks) || 0),
-            isAbsent:      cell.absent || false,
+            studentId:        row.studentId,
+            subjectId:        sub.subjectId,
+            examId:           sub.examId ?? null,
+            marksObtained:    cell.absent ? 0 : (parseFloat(cell.marks) || 0),
+            maxMarks:         sub.maxMarks,
+            activityMarks:    (sub.hasActivity && !cell.absent && hasActivity)
+                                ? parseFloat(cell.activity) : null,
+            activityMaxMarks: sub.hasActivity ? sub.activityMaxMarks : null,
+            isAbsent:         cell.absent || false,
           })
         })
       })
+
+      if (entries.length === 0) {
+        message.warning('Enter at least one mark before saving.')
+        setSaving(false)
+        return
+      }
 
       await api.post('/school/marks', {
         classId:        selectedClass,
         examTypeId:     selectedExamType,
         academicYearId: selectedYear,
-        maxMarks,
         entries,
       })
       message.success('Marks saved successfully.')
@@ -134,7 +138,6 @@ export default function MarksEntryPage() {
     }
   }
 
-  // Build Ant Design Table columns dynamically
   const columns = grid
     ? [
         {
@@ -151,28 +154,49 @@ export default function MarksEntryPage() {
           ),
         },
         ...grid.subjects.map(sub => ({
-          title: sub.subjectName,
+          title: (
+            <div style={{ textAlign: 'center' }}>
+              <div>{sub.subjectName}</div>
+              <Text type="secondary" style={{ fontSize: 11, fontWeight: 400 }}>
+                Marks /{sub.maxMarks}{sub.hasActivity ? ` · Act /${sub.activityMaxMarks}` : ''}
+              </Text>
+            </div>
+          ),
           key:   `sub_${sub.subjectId}`,
-          width: 140,
+          width: sub.hasActivity ? 200 : 130,
           align: 'center',
           render: (_, row) => {
-            const key    = `${row.studentId}_${sub.subjectId}`
-            const cell   = marks[key] || { marks: '', absent: false }
+            const key  = `${row.studentId}_${sub.subjectId}`
+            const cell = marks[key] || { marks: '', activity: '', absent: false }
             return (
-              <Space direction="vertical" size={2}>
-                <InputNumber
-                  size="small"
-                  min={0}
-                  max={maxMarks}
-                  value={cell.absent ? null : cell.marks}
-                  disabled={cell.absent}
-                  onChange={v => handleMarkChange(row.studentId, sub.subjectId, v)}
-                  style={{ width: 70 }}
-                  placeholder="—"
-                />
+              <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                <Space size={4} style={{ justifyContent: 'center' }}>
+                  {sub.hasActivity && (
+                    <InputNumber
+                      size="small"
+                      min={0}
+                      max={sub.activityMaxMarks}
+                      value={cell.absent ? null : cell.activity}
+                      disabled={cell.absent}
+                      onChange={v => patchCell(row.studentId, sub.subjectId, { activity: v })}
+                      style={{ width: 64 }}
+                      placeholder="Act"
+                    />
+                  )}
+                  <InputNumber
+                    size="small"
+                    min={0}
+                    max={sub.maxMarks}
+                    value={cell.absent ? null : cell.marks}
+                    disabled={cell.absent}
+                    onChange={v => patchCell(row.studentId, sub.subjectId, { marks: v })}
+                    style={{ width: 70 }}
+                    placeholder="Marks"
+                  />
+                </Space>
                 <Checkbox
                   checked={cell.absent}
-                  onChange={e => handleAbsentChange(row.studentId, sub.subjectId, e.target.checked)}
+                  onChange={e => handleAbsent(row.studentId, sub.subjectId, e.target.checked)}
                 >
                   <Text style={{ fontSize: 11 }}>Absent</Text>
                 </Checkbox>
@@ -200,7 +224,7 @@ export default function MarksEntryPage() {
             />
           </Col>
           <Col>
-            <Text strong>Exam Type</Text>
+            <Text strong>Exam</Text>
             <Select
               style={{ display: 'block', width: 160, marginTop: 4 }}
               placeholder="Select exam"
@@ -236,22 +260,8 @@ export default function MarksEntryPage() {
               options={sections.map(s => ({ label: s.sectionName, value: s.sectionId }))}
             />
           </Col>
-          <Col>
-            <Text strong>Max Marks</Text>
-            <InputNumber
-              style={{ display: 'block', width: 100, marginTop: 4 }}
-              min={1}
-              value={maxMarks}
-              onChange={setMaxMarks}
-            />
-          </Col>
           <Col style={{ marginTop: 20 }}>
-            <Button
-              type="primary"
-              icon={<SearchOutlined />}
-              onClick={loadGrid}
-              loading={loading}
-            >
+            <Button type="primary" icon={<SearchOutlined />} onClick={loadGrid} loading={loading}>
               Load
             </Button>
           </Col>
@@ -260,16 +270,11 @@ export default function MarksEntryPage() {
 
       {loading && <Spin />}
 
-      {grid && !loading && (
+      {grid && !loading && grid.subjects.length > 0 && (
         <Card
           title={`${grid.rows.length} students · ${grid.subjects.length} subjects`}
           extra={
-            <Button
-              type="primary"
-              icon={<SaveOutlined />}
-              loading={saving}
-              onClick={handleSave}
-            >
+            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleSave}>
               Save All
             </Button>
           }
@@ -285,7 +290,15 @@ export default function MarksEntryPage() {
         </Card>
       )}
 
-      {grid && grid.rows.length === 0 && !loading && (
+      {grid && !loading && grid.subjects.length === 0 && (
+        <Card>
+          <Text type="secondary">
+            No subjects mapped to this class. Set them in <Tag>Master Data → Class Subjects</Tag> first.
+          </Text>
+        </Card>
+      )}
+
+      {grid && grid.rows.length === 0 && grid.subjects.length > 0 && !loading && (
         <Card>
           <Text type="secondary">No active students found for this class and section.</Text>
         </Card>

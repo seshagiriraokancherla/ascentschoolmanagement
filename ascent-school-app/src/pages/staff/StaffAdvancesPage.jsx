@@ -6,7 +6,7 @@ import {
 } from 'antd'
 import { PlusOutlined, DollarOutlined, UndoOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 
 const { Text, Title } = Typography
 const { RangePicker } = DatePicker
@@ -39,7 +39,7 @@ export default function StaffAdvancesPage() {
       if (filterDates?.[1]) params.append('dateTo',   filterDates[1].format('YYYY-MM-DD'))
       const r = await api.get(`/school/staff/advances?${params}`)
       setAdvances(r.data?.data || [])
-    } catch { message.error('Failed to load advances.') }
+    } catch (e) { message.error(apiError(e, 'Failed to load advances.')) }
     finally { setLoadingAdv(false) }
   }
 
@@ -54,7 +54,7 @@ export default function StaffAdvancesPage() {
     try {
       const r = await api.get('/school/staff/advances/summary')
       setSummary(r.data?.data || [])
-    } catch { message.error('Failed to load summary.') }
+    } catch (e) { message.error(apiError(e, 'Failed to load summary.')) }
     finally { setLoadingSum(false) }
   }
 
@@ -77,7 +77,7 @@ export default function StaffAdvancesPage() {
       advForm.resetFields()
       loadAdvances()
       loadSummary()
-    } catch { message.error('Failed to record advance.') }
+    } catch (e) { message.error(apiError(e, 'Failed to record advance.')) }
     finally { setAdvSaving(false) }
   }
 
@@ -132,7 +132,7 @@ export default function StaffAdvancesPage() {
       message.success('Advance cancelled.')
       loadAdvances()
       loadSummary()
-    } catch { message.error('Failed to cancel advance.') }
+    } catch (e) { message.error(apiError(e, 'Failed to cancel advance.')) }
   }
 
   // ── Advance table columns ──────────────────────────────────────────────────

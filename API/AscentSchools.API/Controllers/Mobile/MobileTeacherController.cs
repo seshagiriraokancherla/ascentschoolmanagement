@@ -3,6 +3,7 @@ using AscentSchools.API.Middleware;
 using AscentSchools.Core.DTOs.School.Announcements;
 using AscentSchools.Core.DTOs.School.Attendance;
 using AscentSchools.Core.DTOs.School.Homework;
+using AscentSchools.Core.DTOs.School.Marks;
 using AscentSchools.Core.Models;
 using AscentSchools.Data.ConnectionFactory;
 using AscentSchools.Data.Repositories.School;
@@ -23,6 +24,8 @@ namespace AscentSchools.API.Controllers.Mobile
         private readonly AttendanceRepository    _attendance;
         private readonly HomeworkRepository      _homework;
         private readonly AnnouncementsRepository _announcements;
+        private readonly MarksRepository         _marks;
+        private readonly ClassSubjectRepository  _classSubjects;
         private readonly TenantConnectionFactory _db;
 
         private TeacherContext Teacher => TeacherContext.Current;
@@ -33,6 +36,8 @@ namespace AscentSchools.API.Controllers.Mobile
             _attendance    = new AttendanceRepository(_db);
             _homework      = new HomeworkRepository(_db);
             _announcements = new AnnouncementsRepository(_db);
+            _marks         = new MarksRepository(_db);
+            _classSubjects = new ClassSubjectRepository(_db);
         }
 
         // ── GET /mobile/teacher/classes ───────────────────────────────────────
@@ -124,12 +129,31 @@ namespace AscentSchools.API.Controllers.Mobile
 
         // ── GET /mobile/teacher/homework?classId= ────────────────────────────
 
+        // Legacy unpaged list — kept for older app builds (< versionCode 36) that
+        // expect a bare array. New builds use the paged route below.
         [HttpGet, Route("homework")]
         public HttpResponseMessage GetHomework([FromUri] int classId)
         {
             if (classId <= 0) return Fail(HttpStatusCode.BadRequest, "classId is required.");
             var list = _homework.GetHomework(Teacher.DbName, Teacher.SchoolId, classId);
             return Ok(list);
+        }
+
+        // Paged homework — bounds the payload as history grows (Option B).
+        // When a section is selected, returns that section's homework plus class-wide
+        // (section_id NULL) entries; with no section, returns all of the class.
+        // Newest-first.
+        [HttpGet, Route("homework/paged")]
+        public HttpResponseMessage GetHomeworkPaged(
+            [FromUri] int classId, [FromUri] int? sectionId = null,
+            [FromUri] int page = 1, [FromUri] int pageSize = 20)
+        {
+            if (classId <= 0) return Fail(HttpStatusCode.BadRequest, "classId is required.");
+            var sec = (sectionId.HasValue && sectionId.Value > 0) ? sectionId : null;
+            var result = _homework.GetHomeworkPaged(
+                Teacher.DbName, Teacher.SchoolId, classId, sec, null, page, pageSize,
+                includeClassWide: true);
+            return Ok(new { items = result.Items, total = result.Total, page, pageSize });
         }
 
         // ── POST /mobile/teacher/homework ─────────────────────────────────────
@@ -150,6 +174,9 @@ namespace AscentSchools.API.Controllers.Mobile
                 Description  = request.Description?.Trim(),
                 SubjectId    = null,
                 ClassId      = request.ClassId,
+                // NULL/0 = whole class; otherwise the homework is scoped to the section.
+                SectionId    = (request.SectionId.HasValue && request.SectionId.Value > 0)
+                                   ? request.SectionId : null,
                 AssignedDate = assignedDate,
                 DueDate      = null,
             };
@@ -202,6 +229,77 @@ namespace AscentSchools.API.Controllers.Mobile
                 ApiResponse<object>.Ok(new { announcementId = id }, "Announcement posted."));
         }
 
+        // ── Marks ─────────────────────────────────────────────────────────────
+        // Mobile has no year picker — everything uses the current active year.
+
+        // GET /mobile/teacher/exam-types
+        [HttpGet, Route("exam-types")]
+        public HttpResponseMessage GetExamTypes()
+        {
+            var yearId = _marks.GetCurrentAcademicYearId(Teacher.DbName, Teacher.SchoolId);
+            var list = _marks.GetExamTypes(Teacher.DbName, Teacher.SchoolId, yearId)
+                             .Select(e => new { e.ExamTypeId, e.ExamTypeName });
+            return Ok(list);
+        }
+
+        // GET /mobile/teacher/marks-subjects?classId=  (the class's mapped subjects)
+        [HttpGet, Route("marks-subjects")]
+        public HttpResponseMessage GetMarksSubjects([FromUri] int classId)
+        {
+            if (classId <= 0) return Fail(HttpStatusCode.BadRequest, "classId is required.");
+            var list = _classSubjects.GetSubjectsForClass(Teacher.DbName, Teacher.SchoolId, classId)
+                                     .Select(s => new { s.SubjectId, s.SubjectName });
+            return Ok(list);
+        }
+
+        // GET /mobile/teacher/marks?classId=&sectionId=&examTypeId=&subjectId=
+        // One subject at a time (mobile-friendly): subject config + each student's mark.
+        [HttpGet, Route("marks")]
+        public HttpResponseMessage GetMarks(
+            [FromUri] int classId, [FromUri] int sectionId, [FromUri] int examTypeId, [FromUri] int subjectId)
+        {
+            if (classId <= 0 || sectionId <= 0 || examTypeId <= 0 || subjectId <= 0)
+                return Fail(HttpStatusCode.BadRequest, "classId, sectionId, examTypeId and subjectId are required.");
+
+            var yearId = _marks.GetCurrentAcademicYearId(Teacher.DbName, Teacher.SchoolId);
+            var data = _marks.GetSubjectMarks(Teacher.DbName, Teacher.SchoolId,
+                classId, sectionId, examTypeId, subjectId, yearId);
+            if (data == null) return Fail(HttpStatusCode.NotFound, "Subject not found.");
+            return Ok(data);
+        }
+
+        // POST /mobile/teacher/marks — save marks for one subject
+        [HttpPost, Route("marks")]
+        public HttpResponseMessage SaveMarks([FromBody] TeacherSaveMarksRequest request)
+        {
+            if (request == null || request.ClassId <= 0 || request.ExamTypeId <= 0 || request.SubjectId <= 0)
+                return Fail(HttpStatusCode.BadRequest, "classId, examTypeId and subjectId are required.");
+            if (request.Entries == null || !request.Entries.Any())
+                return Fail(HttpStatusCode.BadRequest, "No entries provided.");
+
+            var yearId = _marks.GetCurrentAcademicYearId(Teacher.DbName, Teacher.SchoolId);
+            var saveReq = new SaveMarksRequest
+            {
+                ClassId        = request.ClassId,
+                ExamTypeId     = request.ExamTypeId,
+                AcademicYearId = yearId,
+                Entries        = request.Entries.Select(e => new StudentMarkEntry
+                {
+                    StudentId        = e.StudentId,
+                    SubjectId        = request.SubjectId,
+                    ExamId           = request.ExamId,
+                    MarksObtained    = e.MarksObtained ?? 0,
+                    MaxMarks         = request.MaxMarks,
+                    ActivityMarks    = e.ActivityMarks,
+                    ActivityMaxMarks = request.ActivityMaxMarks,
+                    IsAbsent         = e.IsAbsent,
+                }),
+            };
+
+            _marks.SaveMarks(Teacher.DbName, Teacher.SchoolId, Teacher.FullName, saveReq);
+            return Ok(true, "Marks saved.");
+        }
+
         // ── Helpers ───────────────────────────────────────────────────────────
 
         private HttpResponseMessage Ok<T>(T data, string message = null) =>
@@ -243,6 +341,7 @@ namespace AscentSchools.API.Controllers.Mobile
     public class TeacherCreateHomeworkRequest
     {
         public int    ClassId      { get; set; }
+        public int?   SectionId    { get; set; }   // optional; NULL/0 = whole class
         public string Title        { get; set; }
         public string Description  { get; set; }
         public string AssignedDate { get; set; }
@@ -254,5 +353,27 @@ namespace AscentSchools.API.Controllers.Mobile
         public int?   SectionId   { get; set; }   // optional; NULL/0 = whole class
         public string Title       { get; set; }
         public string Description { get; set; }
+    }
+
+    // Marks save (one subject). Subject-level exam config (examId/max/activityMax)
+    // is echoed back from the GET marks header and applied to every entry.
+    public class TeacherSaveMarksRequest
+    {
+        public int      ClassId          { get; set; }
+        public int      SectionId        { get; set; }
+        public int      ExamTypeId       { get; set; }
+        public int      SubjectId        { get; set; }
+        public int?     ExamId           { get; set; }
+        public decimal  MaxMarks         { get; set; }
+        public decimal? ActivityMaxMarks { get; set; }
+        public IEnumerable<TeacherMarkEntry> Entries { get; set; }
+    }
+
+    public class TeacherMarkEntry
+    {
+        public long     StudentId     { get; set; }
+        public decimal? MarksObtained { get; set; }
+        public decimal? ActivityMarks { get; set; }
+        public bool     IsAbsent      { get; set; }
     }
 }

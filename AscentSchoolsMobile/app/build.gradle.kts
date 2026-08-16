@@ -24,8 +24,8 @@ android {
         applicationId = "in.educare.mobile"   // overridden by each flavor
         minSdk        = 24
         targetSdk     = 35
-        versionCode   = 35
-        versionName   = "3.5"
+        versionCode   = 41
+        versionName   = "4.1"
     }
 
     // ── White-label school flavors ────────────────────────────────────────────

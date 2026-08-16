@@ -73,6 +73,53 @@ namespace AscentSyncTool.Data
                     }).AsList();
         }
 
+        // ── Branch id from the licence table (same value for every inserted row) ──
+        public string GetBranchId()
+        {
+            using (var conn = Open())
+                return conn.ExecuteScalar<string>("SELECT TOP 1 BranchID FROM SAS_LicenceDet");
+        }
+
+        // ── Attendance summary: push one month into SAS_BulkAttendance ────────
+        // Re-running a month does NOT delete anything: the previous rows for that
+        // admission no + month + academic year are marked AttnStatus='D' and a fresh
+        // 'A' row is inserted, so the legacy side keeps its own history.
+        // Returns the number of rows superseded (marked 'D').
+        public int SaveBulkAttendance(AttendanceExportRow row, DateTime monthStart, string branchId)
+        {
+            var attnMonth = monthStart.ToString("yyyy-MM-dd");
+
+            using (var conn = Open())
+            {
+                var superseded = conn.Execute(
+                    @"UPDATE SAS_BulkAttendance
+                      SET AttnStatus = 'D'
+                      WHERE StuAdmn = @admn AND AttnMonth = @month
+                        AND AttnAcdYear = @acdYear AND ISNULL(AttnStatus, 'A') <> 'D'",
+                    new { admn = row.AdmissionNo, month = attnMonth, acdYear = row.AcademicYear });
+
+                conn.Execute(
+                    @"INSERT INTO SAS_BulkAttendance
+                        (AttnDat, AttnMonth, StuAdmn, AttnDys, AttnStatus,
+                         CrtBy, CrtDat, BranchID, MachID, DeltBy, TraId, AttnAcdYear)
+                      VALUES
+                        (@attnDat, @month, @admn, @days, 'A',
+                         'SyncTool', @crtDat, @branchId, '', '', '', @acdYear)",
+                    new
+                    {
+                        attnDat  = DateTime.Today,
+                        month    = attnMonth,
+                        admn     = row.AdmissionNo,
+                        days     = (double)row.NoOfDaysPresent,
+                        crtDat   = DateTime.Now,
+                        branchId = branchId ?? "",
+                        acdYear  = row.AcademicYear
+                    });
+
+                return superseded;
+            }
+        }
+
         // ── Download: does a receipt already exist in legacy? ─────────────────
         public bool ReceiptExists(string feeReceiptId)
         {

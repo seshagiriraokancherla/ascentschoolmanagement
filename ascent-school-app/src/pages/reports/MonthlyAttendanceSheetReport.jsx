@@ -3,7 +3,7 @@ import { Select, Button, Space, Row, Col, Table, Typography, Divider, App as Ant
 import { FilePdfOutlined, FileTextOutlined } from '@ant-design/icons'
 import { useBrandingStore } from '../../store/brandingStore'
 import { exportPdf, exportCsv } from './reportUtils'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 import dayjs from 'dayjs'
 
 const { Text } = Typography
@@ -63,7 +63,7 @@ export default function MonthlyAttendanceSheetReport() {
       const q = new URLSearchParams({ academicYearId: yearId, classId, sectionId })
       const r = await api.get(`/school/reports/monthly-attendance-sheet?${q}`)
       setSheet(r.data?.data)
-    } catch { message.error('Failed to load report.') }
+    } catch (e) { message.error(apiError(e, 'Failed to load report.')) }
     finally { setLoading(false) }
   }
 

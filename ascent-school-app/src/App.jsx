@@ -27,6 +27,7 @@ import MarksEntryPage        from './pages/marks/MarksEntryPage'
 import HomeworkPage          from './pages/homework/HomeworkPage'
 import DailyHomeworkPage     from './pages/homework/DailyHomeworkPage'
 import AnnouncementsPage     from './pages/announcements/AnnouncementsPage'
+import CalendarPage          from './pages/calendar/CalendarPage'
 import EventsPage            from './pages/events/EventsPage'
 import StudentsImportPage    from './pages/students/StudentsImportPage'
 import PromoteStudentsPage   from './pages/students/PromoteStudentsPage'
@@ -44,6 +45,7 @@ import FeeConcessionPage          from './pages/fee/FeeConcessionPage'
 import SchoolSettingsPage         from './pages/settings/SchoolSettingsPage'
 import SmsGatewayPage             from './pages/settings/SmsGatewayPage'
 import MessageReportsPage         from './pages/settings/MessageReportsPage'
+import ConversationsPage          from './pages/messages/ConversationsPage'
 import R2StoragePage              from './pages/settings/R2StoragePage'
 import NoAccess                   from './pages/NoAccess'
 import { PATH_PERM }              from './config/permissions'
@@ -181,6 +183,7 @@ function App() {
               <Route path="homework/daily"           element={<Protected path="/homework/daily"><DailyHomeworkPage /></Protected>} />
               <Route path="homework"                 element={<Protected path="/homework"><HomeworkPage /></Protected>} />
               <Route path="announcements"            element={<Protected path="/announcements"><AnnouncementsPage /></Protected>} />
+              <Route path="calendar"                 element={<Protected path="/calendar"><CalendarPage /></Protected>} />
               <Route path="events"                  element={<Protected path="/events"><EventsPage /></Protected>} />
               <Route path="reports"                   element={<Protected path="/reports"><ReportsPage /></Protected>} />
               <Route path="staff"                        element={<Protected path="/staff"><StaffPage /></Protected>} />
@@ -189,6 +192,7 @@ function App() {
               <Route path="staff/advances"               element={<Protected path="/staff/advances"><StaffAdvancesPage /></Protected>} />
               <Route path="staff/salaries"               element={<Protected path="/staff/salaries"><StaffSalariesPage /></Protected>} />
               <Route path="sms"                          element={<Protected path="/sms"><SMSPage /></Protected>} />
+              <Route path="messages/conversations"       element={<Protected path="/messages/conversations"><ConversationsPage /></Protected>} />
               <Route path="settings/school"          element={<Protected path="/settings/school"><SchoolSettingsPage /></Protected>} />
               <Route path="settings/roles"           element={<Protected path="/settings/roles"><RolesPage /></Protected>} />
               <Route path="settings/users"           element={<Protected path="/settings/users"><UsersPage /></Protected>} />

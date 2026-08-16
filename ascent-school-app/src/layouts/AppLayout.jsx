@@ -6,7 +6,7 @@ import {
   SafetyOutlined, SettingOutlined, DatabaseOutlined, SolutionOutlined,
   DollarOutlined, FormOutlined, BookOutlined, NotificationOutlined,
   CalendarOutlined, CarOutlined, VideoCameraOutlined, BarChartOutlined,
-  IdcardOutlined, MessageOutlined, HomeOutlined,
+  IdcardOutlined, MessageOutlined, HomeOutlined, CommentOutlined,
 } from '@ant-design/icons'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import api from '../api/axiosInstance'
@@ -98,6 +98,11 @@ const NAV_ITEMS = [
     label: 'Announcements',
   },
   {
+    key:   '/calendar',
+    icon:  <CalendarOutlined />,
+    label: 'Calendar',
+  },
+  {
     key:   '/events',
     icon:  <VideoCameraOutlined />,
     label: 'Events Gallery',
@@ -116,6 +121,11 @@ const NAV_ITEMS = [
     key:   '/sms',
     icon:  <MessageOutlined />,
     label: 'SMS Center',
+  },
+  {
+    key:   '/messages/conversations',
+    icon:  <CommentOutlined />,
+    label: 'Conversations',
   },
   {
     key: 'settings',

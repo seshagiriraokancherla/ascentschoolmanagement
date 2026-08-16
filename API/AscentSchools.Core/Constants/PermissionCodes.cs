@@ -105,6 +105,11 @@ namespace AscentSchools.Core.Constants
             public const string Manage = "SETTINGS.MANAGE";
         }
 
+        public static class Messages
+        {
+            public const string View = "MESSAGES.VIEW";   // read-only admin view of parent↔teacher conversations
+        }
+
         public static class UserManagement
         {
             public const string Manage = "USER_MGMT.MANAGE";

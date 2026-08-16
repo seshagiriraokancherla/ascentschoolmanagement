@@ -36,6 +36,16 @@ namespace AscentSchools.Core.DTOs.School.Attendance
         public string Remarks   { get; set; }
     }
 
+    // One row per student per academic year: how many days they were present in a
+    // given month. Consumed by the sync tool's Attendance Summary tab, which pushes
+    // it into the legacy SAS_BulkAttendance table.
+    public class AttendanceMonthlyExportDto
+    {
+        public string AdmissionNo      { get; set; }
+        public int    NoOfDaysPresent  { get; set; }
+        public string AcademicYear     { get; set; }
+    }
+
     // Monthly summary — used by reports / dashboard
     public class AttendanceMonthlySummaryDto
     {

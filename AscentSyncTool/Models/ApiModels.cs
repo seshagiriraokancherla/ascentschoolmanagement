@@ -150,6 +150,14 @@ namespace AscentSyncTool.Models
         public decimal NetAmount        { get; set; }
     }
 
+    // ── Attendance summary (GET /school/attendance/monthly-export) ─────────────
+    public class AttendanceExportRow
+    {
+        public string AdmissionNo     { get; set; }   // → SAS_BulkAttendance.StuAdmn
+        public int    NoOfDaysPresent { get; set; }   // → AttnDys
+        public string AcademicYear    { get; set; }   // → AttnAcdYear
+    }
+
     // ── Standard API envelope ──────────────────────────────────────────────────
     public class ApiResponse<T>
     {

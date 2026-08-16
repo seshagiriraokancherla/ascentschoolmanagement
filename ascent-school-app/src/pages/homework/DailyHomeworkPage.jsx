@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   Card, Select, DatePicker, Button, Input, Typography, App as AntApp,
-  Row, Col, Space, Spin, Empty,
+  Row, Col, Space, Spin, Empty, Alert,
 } from 'antd'
 import { SaveOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -10,21 +10,25 @@ import api from '../../api/axiosInstance'
 const { Title, Text } = Typography
 const { TextArea } = Input
 
-// Treat both new ('Active') and legacy ('Y') as active subjects.
+// Treat both new ('Active') and legacy ('Y') as active rows.
 const isActive = (s) => ['Active', 'Y', null, undefined, ''].includes(s.status)
+
+// Sentinel option value meaning "the whole class" (stored as section_id NULL).
+const ALL_SECTIONS = 0
 
 export default function DailyHomeworkPage() {
   const { message } = AntApp.useApp()
 
-  const [date,      setDate]      = useState(dayjs())
-  const [classes,   setClasses]   = useState([])
-  const [sections,  setSections]  = useState([])
-  const [subjects,  setSubjects]  = useState([])
-  const [classId,   setClassId]   = useState(null)
-  const [sectionId, setSectionId] = useState(null)
-  const [texts,     setTexts]     = useState({})   // { [subjectId]: description }
-  const [loading,   setLoading]   = useState(false)
-  const [saving,    setSaving]    = useState(false)
+  const [date,       setDate]       = useState(dayjs())
+  const [classes,    setClasses]    = useState([])
+  const [sections,   setSections]   = useState([])
+  const [subjects,   setSubjects]   = useState([])
+  const [classId,    setClassId]    = useState(null)
+  const [sectionIds, setSectionIds] = useState([ALL_SECTIONS])
+  const [texts,      setTexts]      = useState({})   // { [subjectId]: description }
+  const [mixed,      setMixed]      = useState(false)
+  const [loading,    setLoading]    = useState(false)
+  const [saving,     setSaving]     = useState(false)
 
   // Lookups on mount
   useEffect(() => {
@@ -37,28 +41,45 @@ export default function DailyHomeworkPage() {
     if (!cid) { setSections([]); return }
     try {
       const r = await api.get(`/school/master/sections?classId=${cid}`)
-      setSections(r.data?.data || [])
+      setSections((r.data?.data || []).filter(isActive))
     } catch { setSections([]) }
   }
 
-  // Pre-fill the textboxes from any homework already saved for this Class+Section+Date.
-  const loadExisting = async (cid, secId, d) => {
-    if (!cid || !secId || !d) { setTexts({}); return }
+  const isClassWide = (secIds) => secIds.length === 0 || secIds.includes(ALL_SECTIONS)
+
+  // Pre-fill the textboxes from homework already saved for this Class+Date. The
+  // request omits sectionId so every section's rows come back, then we keep the
+  // ones the current selection would replace.
+  const loadExisting = async (cid, secIds, d) => {
+    if (!cid || !d) { setTexts({}); setMixed(false); return }
     setLoading(true)
     try {
       const params = new URLSearchParams({
         classId:      cid,
-        sectionId:    secId,
         assignedDate: dayjs(d).format('YYYY-MM-DD'),
         pageSize:     200,
       })
       const r = await api.get(`/school/homework?${params}`)
       const rows = r.data?.data?.items || []
+      const wide = isClassWide(secIds)
+
+      // Class-wide rows (sectionId null) reach every section, so they always apply.
+      const relevant = rows.filter(h =>
+        h.sectionId == null || wide || secIds.includes(h.sectionId))
+
       const map = {}
-      rows.forEach(h => { if (h.subjectId) map[h.subjectId] = h.description || '' })
+      let conflict = false
+      relevant.forEach(h => {
+        if (!h.subjectId) return
+        const text = h.description || ''
+        if (map[h.subjectId] === undefined) map[h.subjectId] = text
+        else if (map[h.subjectId] !== text) conflict = true
+      })
       setTexts(map)
+      setMixed(conflict)
     } catch {
       setTexts({})
+      setMixed(false)
     } finally {
       setLoading(false)
     }
@@ -66,28 +87,33 @@ export default function DailyHomeworkPage() {
 
   const onClassChange = (val) => {
     setClassId(val)
-    setSectionId(null)
+    setSectionIds([ALL_SECTIONS])
     setTexts({})
+    setMixed(false)
     loadSections(val)
+    loadExisting(val, [ALL_SECTIONS], date)
   }
 
-  const onSectionChange = (val) => {
-    setSectionId(val)
-    loadExisting(classId, val, date)
+  // "All Sections" and individual sections are mutually exclusive.
+  const onSectionChange = (vals) => {
+    const next = vals.includes(ALL_SECTIONS) && vals.length > 1
+      ? (sectionIds.includes(ALL_SECTIONS) ? vals.filter(v => v !== ALL_SECTIONS) : [ALL_SECTIONS])
+      : (vals.length === 0 ? [ALL_SECTIONS] : vals)
+    setSectionIds(next)
+    loadExisting(classId, next, date)
   }
 
   const onDateChange = (val) => {
     setDate(val)
-    loadExisting(classId, sectionId, val)
+    loadExisting(classId, sectionIds, val)
   }
 
   const setText = (subjectId, value) =>
     setTexts(prev => ({ ...prev, [subjectId]: value }))
 
   const handleSave = async () => {
-    if (!classId)   { message.warning('Select a class.');   return }
-    if (!sectionId) { message.warning('Select a section.'); return }
-    if (!date)      { message.warning('Select a date.');    return }
+    if (!classId) { message.warning('Select a class.'); return }
+    if (!date)    { message.warning('Select a date.');  return }
 
     const items = subjects
       .filter(s => (texts[s.subjectId] || '').trim())
@@ -95,16 +121,20 @@ export default function DailyHomeworkPage() {
 
     if (items.length === 0) { message.warning('Enter homework for at least one subject.'); return }
 
+    // Empty list = whole class; the server stores that as one section_id NULL row set.
+    const targets = isClassWide(sectionIds) ? [] : sectionIds
+
     setSaving(true)
     try {
       const r = await api.post('/school/homework/batch', {
         classId,
-        sectionId,
+        sectionId:  null,
+        sectionIds: targets,
         assignedDate: date.format('YYYY-MM-DD'),
         items,
       })
       message.success(r.data?.message || 'Homework saved.')
-      loadExisting(classId, sectionId, date)
+      loadExisting(classId, sectionIds, date)
     } catch (e) {
       message.error(e.message || 'Failed to save homework.')
     } finally {
@@ -112,7 +142,7 @@ export default function DailyHomeworkPage() {
     }
   }
 
-  const ready = classId && sectionId && date
+  const ready = classId && date
 
   return (
     <div>
@@ -134,19 +164,34 @@ export default function DailyHomeworkPage() {
               options={classes.map(c => ({ label: c.className, value: c.classId }))}
             />
           </Space>
-          <Space>
-            <Text strong>Section</Text>
+          <Space align="start">
+            <Text strong style={{ lineHeight: '32px' }}>Section</Text>
             <Select
-              style={{ width: 180 }}
-              placeholder="Select section"
-              value={sectionId}
+              mode="multiple"
+              style={{ minWidth: 260 }}
+              placeholder="All Sections (whole class)"
+              value={sectionIds}
               onChange={onSectionChange}
-              disabled={!classId || sections.length === 0}
-              options={sections.map(s => ({ label: s.sectionName, value: s.sectionId }))}
+              disabled={!classId}
+              maxTagCount="responsive"
+              options={[
+                { label: 'All Sections (whole class)', value: ALL_SECTIONS },
+                ...sections.map(s => ({ label: s.sectionName, value: s.sectionId })),
+              ]}
             />
           </Space>
         </Space>
       </Card>
+
+      {mixed && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="This date already has different homework across sections"
+          description="The boxes below show the first entry found for each subject. Saving replaces the day's homework for every section you selected."
+        />
+      )}
 
       <Card
         title="Subjects"
@@ -163,7 +208,7 @@ export default function DailyHomeworkPage() {
         }
       >
         {!ready ? (
-          <Empty description="Select date, class and section to enter homework" />
+          <Empty description="Select date and class to enter homework" />
         ) : subjects.length === 0 ? (
           <Empty description="No active subjects found. Add subjects in Master Data." />
         ) : (

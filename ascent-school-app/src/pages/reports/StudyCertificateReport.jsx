@@ -6,7 +6,7 @@ import {
 import { FilePdfOutlined, SearchOutlined } from '@ant-design/icons'
 import { useBrandingStore } from '../../store/brandingStore'
 import { generateStudyCertificate } from './reportUtils'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 import dayjs from 'dayjs'
 
 const { Text, Title } = Typography
@@ -55,7 +55,7 @@ export default function StudyCertificateReport() {
     try {
       const r = await api.get(`/school/students/${studentId}`)
       setStudent(r.data?.data)
-    } catch { message.error('Failed to load student details.') }
+    } catch (e) { message.error(apiError(e, 'Failed to load student details.')) }
     finally { setLoading(false) }
   }
 

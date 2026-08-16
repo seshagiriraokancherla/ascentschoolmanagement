@@ -3,7 +3,7 @@ import {
   Card, Table, Button, Tag, Space, Typography, Tooltip, DatePicker, Alert, Empty, App as AntApp,
 } from 'antd'
 import { ReloadOutlined, SyncOutlined, CheckCircleOutlined, ThunderboltOutlined } from '@ant-design/icons'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 
 const { Text } = Typography
 
@@ -44,8 +44,8 @@ export default function PendingPaymentsPage() {
     try {
       const res = await api.get(`/school/fees/payment-orders/pending?${qStr()}`)
       setOrders(res.data?.data || [])
-    } catch {
-      message.error('Failed to load pending payments.')
+    } catch (e) {
+      message.error(apiError(e, 'Failed to load pending payments.'))
     } finally {
       setLoading(false)
     }

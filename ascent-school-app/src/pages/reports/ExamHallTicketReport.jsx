@@ -6,7 +6,7 @@ import {
 import { FilePdfOutlined } from '@ant-design/icons'
 import { useBrandingStore } from '../../store/brandingStore'
 import { generateHallTickets } from './reportUtils'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 import dayjs from 'dayjs'
 
 const { Text } = Typography
@@ -90,7 +90,7 @@ export default function ExamHallTicketReport() {
       })))
       setLoaded(true)
       if (!studentList.length) message.warning('No active students found for this selection.')
-    } catch { message.error('Failed to load data.') }
+    } catch (e) { message.error(apiError(e, 'Failed to load data.')) }
     finally { setLoading(false) }
   }
 

@@ -52,8 +52,13 @@ interface ApiService {
     @POST("mobile/teacher/attendance")
     suspend fun saveTeacherAttendance(@Body request: TeacherSaveAttendanceRequest): Response<ApiResponse<Any>>
 
-    @GET("mobile/teacher/homework")
-    suspend fun getTeacherHomework(@Query("classId") classId: Int): Response<ApiResponse<List<TeacherHomeworkDto>>>
+    @GET("mobile/teacher/homework/paged")
+    suspend fun getTeacherHomework(
+        @Query("classId") classId: Int,
+        @Query("sectionId") sectionId: Int?,
+        @Query("page") page: Int,
+        @Query("pageSize") pageSize: Int
+    ): Response<ApiResponse<TeacherHomeworkPage>>
 
     @POST("mobile/teacher/homework")
     suspend fun createTeacherHomework(@Body request: TeacherCreateHomeworkRequest): Response<ApiResponse<Any>>
@@ -63,6 +68,25 @@ interface ApiService {
 
     @POST("mobile/teacher/announcements")
     suspend fun createTeacherAnnouncement(@Body request: TeacherCreateAnnouncementRequest): Response<ApiResponse<Any>>
+
+    // ── Marks ──────────────────────────────────────────────────────────────────
+
+    @GET("mobile/teacher/exam-types")
+    suspend fun getTeacherExamTypes(): Response<ApiResponse<List<TeacherExamTypeDto>>>
+
+    @GET("mobile/teacher/marks-subjects")
+    suspend fun getTeacherMarksSubjects(@Query("classId") classId: Int): Response<ApiResponse<List<TeacherMarksSubjectDto>>>
+
+    @GET("mobile/teacher/marks")
+    suspend fun getTeacherMarks(
+        @Query("classId") classId: Int,
+        @Query("sectionId") sectionId: Int,
+        @Query("examTypeId") examTypeId: Int,
+        @Query("subjectId") subjectId: Int
+    ): Response<ApiResponse<TeacherSubjectMarksDto>>
+
+    @POST("mobile/teacher/marks")
+    suspend fun saveTeacherMarks(@Body request: TeacherSaveMarksRequest): Response<ApiResponse<Any>>
 
     // ── Push notifications (FCM) — works for parent OR teacher token ───────────
 
@@ -124,6 +148,12 @@ interface ApiService {
 
     @GET("mobile/student/events")
     suspend fun getEvents(): Response<ApiResponse<List<SchoolEventDto>>>
+
+    @GET("mobile/student/calendar")
+    suspend fun getCalendar(
+        @Query("month") month: Int,
+        @Query("year")  year: Int
+    ): Response<ApiResponse<List<CalendarEventDto>>>
 
     // ── Fees (parent portal endpoints) ───────────────────────────────────────
 

@@ -29,13 +29,15 @@ namespace AscentSchools.API.Controllers.Mobile
         private readonly MobileDataRepository _data;
         private readonly FeeRepository        _feeRepo;
         private readonly GatewayRepository    _gwRepo;
+        private readonly CalendarRepository   _calendar;
 
         public MobileStudentController()
         {
             var factory = new TenantConnectionFactory();
-            _data    = new MobileDataRepository(factory);
-            _feeRepo = new FeeRepository(factory);
-            _gwRepo  = new GatewayRepository(factory);
+            _data     = new MobileDataRepository(factory);
+            _feeRepo  = new FeeRepository(factory);
+            _gwRepo   = new GatewayRepository(factory);
+            _calendar = new CalendarRepository(factory);
         }
 
         private MobileContext Mobile => MobileContext.Current;
@@ -136,6 +138,19 @@ namespace AscentSchools.API.Controllers.Mobile
                 classId = GetClassIdNullable(Mobile.DbName, Mobile.ClassName, Mobile.SchoolId);
 
             var events = _data.GetEvents(Mobile.DbName, Mobile.SchoolId, classId);
+            return Request.CreateResponse(HttpStatusCode.OK, ApiResponse<object>.Ok(events));
+        }
+
+        // GET mobile/student/calendar?month=7&year=2026 — the month's holidays/exams/events
+        // (school-wide). Defaults to the current IST month when not supplied.
+        [HttpGet, Route("calendar")]
+        public HttpResponseMessage GetCalendar([FromUri] int month = 0, [FromUri] int year = 0)
+        {
+            var istToday = TimeHelper.IstToday();
+            if (month <= 0 || month > 12) month = istToday.Month;
+            if (year  <= 0)              year  = istToday.Year;
+
+            var events = _calendar.GetEvents(Mobile.DbName, Mobile.SchoolId, month, year, null);
             return Request.CreateResponse(HttpStatusCode.OK, ApiResponse<object>.Ok(events));
         }
 

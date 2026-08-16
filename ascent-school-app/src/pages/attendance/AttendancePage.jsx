@@ -7,7 +7,7 @@ import {
   SearchOutlined, SaveOutlined, CheckCircleOutlined, DeleteOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 
 const { Title, Text } = Typography
 
@@ -75,8 +75,8 @@ export default function AttendancePage() {
         init[s.studentId] = { status: s.status || 'Present', remarks: s.remarks || '' }
       })
       setEntries(init)
-    } catch {
-      message.error('Failed to load attendance.')
+    } catch (e) {
+      message.error(apiError(e, 'Failed to load attendance.'))
     } finally {
       setLoading(false)
     }
@@ -197,8 +197,8 @@ export default function AttendancePage() {
       // query param is present — an absent optional param 405s in Web API action selection.
       const r = await api.get(`/school/attendance?classId=${delClass}&sectionId=${delSection || 0}&date=${date}`)
       setDelGrid(r.data.data)
-    } catch {
-      message.error('Failed to load attendance.')
+    } catch (e) {
+      message.error(apiError(e, 'Failed to load attendance.'))
     } finally {
       setDelLoading(false)
     }
