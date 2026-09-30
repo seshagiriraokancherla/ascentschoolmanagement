@@ -1,10 +1,13 @@
 import SwiftUI
 
-struct TeacherHomeworkView: View {
-    @State private var viewModel: TeacherHomeworkViewModel
+// Phase 90 (Android parity): teacher posts class/section announcements.
+// Mirrors TeacherHomeworkView (History | Create) with an added optional
+// "Target section" picker (defaults to whole class).
+struct TeacherAnnouncementView: View {
+    @State private var viewModel: TeacherAnnouncementViewModel
 
     init(classId: Int) {
-        _viewModel = State(initialValue: TeacherHomeworkViewModel(classId: classId))
+        _viewModel = State(initialValue: TeacherAnnouncementViewModel(classId: classId))
     }
 
     var body: some View {
@@ -18,7 +21,7 @@ struct TeacherHomeworkView: View {
                 }
             }
         }
-        .navigationTitle("Homework")
+        .navigationTitle("Announcements")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(AppTheme.Palette.navyBlue, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
@@ -27,11 +30,14 @@ struct TeacherHomeworkView: View {
             if case .idle = viewModel.historyState {
                 await viewModel.loadHistory()
             }
+            if viewModel.sections.isEmpty {
+                await viewModel.loadSections()
+            }
         }
-        .alert("Homework posted", isPresented: createSuccessBinding) {
+        .alert("Announcement posted", isPresented: createSuccessBinding) {
             Button("OK", role: .cancel) { viewModel.dismissCreateSuccess() }
         } message: {
-            Text("Students will see it in their feed.")
+            Text("Parents will see it in their notices feed.")
         }
         .alert("Couldn't post", isPresented: createErrorBinding) {
             Button("OK", role: .cancel) { viewModel.dismissCreateError() }
@@ -44,8 +50,8 @@ struct TeacherHomeworkView: View {
 
     private var tabPicker: some View {
         Picker("", selection: $viewModel.selectedTab) {
-            Text("History").tag(TeacherHomeworkViewModel.Tab.history)
-            Text("Create").tag(TeacherHomeworkViewModel.Tab.create)
+            Text("History").tag(TeacherAnnouncementViewModel.Tab.history)
+            Text("Create").tag(TeacherAnnouncementViewModel.Tab.create)
         }
         .pickerStyle(.segmented)
         .padding(.horizontal, 14)
@@ -67,9 +73,9 @@ struct TeacherHomeworkView: View {
                 case .success(let items):
                     if items.isEmpty {
                         EmptyState(
-                            systemImage: "tray",
-                            title: "No homework yet",
-                            message: "Switch to Create to post a new assignment."
+                            systemImage: "megaphone",
+                            title: "No announcements yet",
+                            message: "Switch to Create to post a notice to your class."
                         )
                         .frame(minHeight: 280)
                     } else {
@@ -93,19 +99,29 @@ struct TeacherHomeworkView: View {
         }
     }
 
-    private func historyCard(_ item: TeacherHomeworkDto) -> some View {
+    private func historyCard(_ item: TeacherAnnouncementDto) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Phase 93: due date retired — only the subject label remains here.
-            if let subject = item.subjectName, !subject.isEmpty {
-                Text(subject.uppercased())
+            HStack {
+                // Target scope: a section name if targeted, else "Whole class".
+                Text(item.sectionName.map { "Section \($0)" } ?? "Whole class")
                     .font(.appLabelSmall.bold())
-                    .foregroundStyle(AppTheme.Palette.navyBlue)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .foregroundStyle(AppTheme.Palette.onNavyContainer)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(AppTheme.Palette.navyContainer, in: Capsule())
+                Spacer()
+                if item.isPinned == true {
+                    Label("Pinned", systemImage: "pin.fill")
+                        .font(.appLabelSmall.bold())
+                        .foregroundStyle(AppTheme.Palette.gold)
+                }
             }
 
-            Text(item.title)
-                .font(.appTitleMedium)
-                .foregroundStyle(AppTheme.Palette.textPrimary)
+            if let title = item.title, !title.isEmpty {
+                Text(title)
+                    .font(.appTitleMedium)
+                    .foregroundStyle(AppTheme.Palette.textPrimary)
+            }
 
             if let desc = item.description, !desc.isEmpty {
                 Text(desc)
@@ -114,18 +130,19 @@ struct TeacherHomeworkView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            HStack(spacing: 14) {
-                if let assigned = item.assignedDate, !assigned.isEmpty {
-                    Label(assigned.friendlyDate(), systemImage: "calendar")
-                        .font(.appLabelSmall)
-                        .foregroundStyle(AppTheme.Palette.textSecondary)
-                }
-                if let creator = item.createdBy, !creator.isEmpty {
-                    Label(creator, systemImage: "person")
-                        .font(.appLabelSmall)
-                        .foregroundStyle(AppTheme.Palette.textSecondary)
-                }
-                Spacer()
+            if let published = item.publishedDate, !published.isEmpty {
+                Label(published.friendlyDate(), systemImage: "calendar")
+                    .font(.appLabelSmall)
+                    .foregroundStyle(AppTheme.Palette.textSecondary)
+            }
+
+            if let url = item.attachmentUrl, !url.isEmpty {
+                ExternalLinkButton(
+                    title: "View attachment",
+                    systemImage: "doc.text",
+                    urlString: url
+                )
+                .padding(.top, 2)
             }
         }
         .padding(14)
@@ -138,8 +155,37 @@ struct TeacherHomeworkView: View {
     private var createContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                field("Target section") {
+                    Menu {
+                        Button("All sections (whole class)") {
+                            viewModel.selectedSectionId = nil
+                        }
+                        ForEach(viewModel.sections) { section in
+                            Button(section.sectionName) {
+                                viewModel.selectedSectionId = section.sectionId
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Text(viewModel.selectedSectionName)
+                                .font(.appBodyMedium)
+                                .foregroundStyle(AppTheme.Palette.textPrimary)
+                            Spacer()
+                            Image(systemName: "chevron.up.chevron.down")
+                                .foregroundStyle(AppTheme.Palette.textSecondary)
+                        }
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 12)
+                        .background(AppTheme.Palette.appSurface, in: RoundedRectangle(cornerRadius: 10))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(AppTheme.Palette.surfaceVariant, lineWidth: 1)
+                        )
+                    }
+                }
+
                 field("Title") {
-                    TextField("e.g. Chapter 4 — exercises 1–10", text: $viewModel.title)
+                    TextField("e.g. PTM on Friday", text: $viewModel.title)
                         .textInputAutocapitalization(.sentences)
                         .padding(.vertical, 10)
                         .padding(.horizontal, 12)
@@ -150,8 +196,8 @@ struct TeacherHomeworkView: View {
                         )
                 }
 
-                field("Description") {
-                    TextEditor(text: $viewModel.description)
+                field("Message") {
+                    TextEditor(text: $viewModel.body)
                         .scrollContentBackground(.hidden)
                         .frame(minHeight: 110)
                         .padding(8)
@@ -162,18 +208,6 @@ struct TeacherHomeworkView: View {
                         )
                 }
 
-                field("Assigned date") {
-                    DatePicker(
-                        "",
-                        selection: $viewModel.assignedDate,
-                        displayedComponents: .date
-                    )
-                    .labelsHidden()
-                    .datePickerStyle(.compact)
-                }
-
-                // Phase 93: "Due date" picker removed — schools didn't use it.
-
                 Button {
                     Task { await viewModel.create() }
                 } label: {
@@ -181,7 +215,7 @@ struct TeacherHomeworkView: View {
                         if viewModel.isCreating {
                             ProgressView().progressViewStyle(.circular).tint(.white)
                         }
-                        Text(viewModel.isCreating ? "Posting…" : "Post homework")
+                        Text(viewModel.isCreating ? "Posting…" : "Post announcement")
                             .font(.appLabelLarge.bold())
                     }
                     .frame(maxWidth: .infinity)

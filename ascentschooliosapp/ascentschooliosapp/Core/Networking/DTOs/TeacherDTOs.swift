@@ -75,5 +75,34 @@ struct TeacherCreateHomeworkRequest: Encodable {
     let title: String
     let description: String?
     let assignedDate: String
-    let dueDate: String
+    // Phase 93: due date retired — server no longer collects it (column made
+    // nullable). Field dropped from the request entirely.
+}
+
+// MARK: - Announcements (Phase 90 — teacher class/section announcements)
+
+// GET /mobile/teacher/announcements?classId= . Mirrors the parent AnnouncementDto
+// plus the Phase 90 section fields. All optional except the id so a missing
+// field never fails decode. A NULL `sectionId` means the announcement is
+// class-wide (reaches every section); a set `sectionId` targets that section.
+struct TeacherAnnouncementDto: Decodable, Identifiable {
+    let announcementId: Int
+    let title: String?
+    let description: String?
+    let sectionId: Int?
+    let sectionName: String?
+    let isPinned: Bool?
+    let publishedDate: String?
+    let attachmentUrl: String?
+
+    var id: Int { announcementId }
+}
+
+// POST /mobile/teacher/announcements. The server forces scope = 'Class';
+// `sectionId` nil = whole class, set = that section only.
+struct TeacherCreateAnnouncementRequest: Encodable {
+    let classId: Int
+    let sectionId: Int?
+    let title: String
+    let description: String?
 }

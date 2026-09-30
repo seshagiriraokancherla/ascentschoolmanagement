@@ -57,11 +57,18 @@ final class APIClient {
                     try await self?.performRefresh()
                 }
             } catch {
-                // Refresh cookie expired / network failure / no userType — treat as
-                // full logout so RootView (which observes KeychainTokenStore) swaps
-                // back to AuthFlow.
-                KeychainTokenStore.shared.clear()
-                CookiePersistence.clear()
+                // Phase 97 rule: a mobile app must NEVER delete its own credentials
+                // because a network call failed — ONLY an explicit server rejection
+                // (401/403) may end a session. A live call 401'd AND the follow-up
+                // refresh was explicitly rejected → two independent rejections →
+                // genuinely dead session → clear (RootView observes the store and
+                // swaps back to AuthFlow). Any transient failure (network offline,
+                // 5xx while IIS recycles, decode error) keeps the session; this
+                // request just surfaces its error and the user stays logged in.
+                if isExplicitAuthRejection(error) {
+                    KeychainTokenStore.shared.clear()
+                    CookiePersistence.clear()
+                }
                 throw APIError.unauthorized
             }
 
@@ -111,6 +118,21 @@ final class APIClient {
         }
     }
 
+    // Phase 97: only an HTTP 401/403 counts as the server explicitly rejecting
+    // the session. Everything else (network offline, timeout, 5xx, decode) is
+    // transient and must NOT end the session.
+    private func isExplicitAuthRejection(_ error: Error) -> Bool {
+        guard let apiError = error as? APIError else { return false }
+        switch apiError {
+        case .unauthorized:
+            return true
+        case .http(let statusCode, _):
+            return statusCode == 401 || statusCode == 403
+        default:
+            return false
+        }
+    }
+
     private func shouldRetryOn401(path: String) -> Bool {
         // Substring match (paths can be with or without leading "/").
         let lower = path.lowercased()
@@ -140,25 +162,26 @@ final class APIClient {
                 method: .post
             )
             store.updateAccessToken(auth.accessToken)
+            store.updateRefreshToken(auth.refreshToken)   // Phase 88 (stable per Phase 96)
 
             // Phase 68 parity: re-establish child context after refresh. The
-            // refresh cookie is parent-level and returns a parent-only JWT, so
-            // /mobile/student/* would 401 again with "Please select a child
-            // first." link_id is stable across promotions.
+            // refresh endpoint returns a parent-only JWT, so /mobile/student/*
+            // would 401 again with "Please select a child first." link_id is
+            // stable across promotions.
             if let linkId = store.childLinkId {
                 let childAuth: AuthResponse = try await sendOnce(
                     "mobile/auth/parent/select-child",
                     method: .post,
                     body: SelectChildRequest(linkId: linkId)
                 )
-                store.saveParentAuth(childAuth)
+                store.saveParentAuth(childAuth)   // also persists childAuth.refreshToken
             }
         case .teacher:
             let auth: TeacherAuthResponse = try await sendOnce(
                 "mobile/auth/teacher/refresh",
                 method: .post
             )
-            store.saveTeacherAuth(auth)
+            store.saveTeacherAuth(auth)   // also persists auth.refreshToken
         case .none:
             // Had a token in the store but no userType — inconsistent, force re-auth.
             throw APIError.unauthorized
@@ -213,6 +236,19 @@ final class APIClient {
 
         if let token = tokenProvider?() {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        // Phase 88: on refresh calls, send the app-held refresh token as a header.
+        // The server (Phase 88) reads `X-Refresh-Token` FIRST, then the cookie —
+        // the header is the reliable copy that survives app kills (the HttpOnly
+        // cookie round-trip is fragile). Only attached to refresh endpoints.
+        let lowerPath = trimmed.lowercased()
+        if lowerPath.contains("auth/parent/refresh")
+            || lowerPath.contains("auth/teacher/refresh")
+            || lowerPath.contains("auth/student/refresh") {
+            if let refresh = KeychainTokenStore.shared.refreshToken, !refresh.isEmpty {
+                request.setValue(refresh, forHTTPHeaderField: "X-Refresh-Token")
+            }
         }
 
         if let body {

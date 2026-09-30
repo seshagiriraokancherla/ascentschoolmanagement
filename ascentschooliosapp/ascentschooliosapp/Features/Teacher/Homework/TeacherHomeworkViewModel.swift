@@ -18,11 +18,10 @@ final class TeacherHomeworkViewModel {
     var selectedTab: Tab = .history
     var historyState: HistoryState = .idle
 
-    // Create form
+    // Create form (Phase 93: due date retired — no dueDate field)
     var title: String = ""
     var description: String = ""
     var assignedDate: Date = Date()
-    var dueDate: Date = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
 
     var isCreating: Bool = false
     var createError: String?
@@ -48,10 +47,6 @@ final class TeacherHomeworkViewModel {
             createError = "Enter a title."
             return
         }
-        guard assignedDate <= dueDate else {
-            createError = "Due date must be on or after the assigned date."
-            return
-        }
 
         isCreating = true
         createError = nil
@@ -67,8 +62,7 @@ final class TeacherHomeworkViewModel {
             subjectId: nil,
             title: trimmedTitle,
             description: description.isEmpty ? nil : description,
-            assignedDate: df.string(from: assignedDate),
-            dueDate: df.string(from: dueDate)
+            assignedDate: df.string(from: assignedDate)
         )
 
         do {
@@ -86,7 +80,6 @@ final class TeacherHomeworkViewModel {
         title = ""
         description = ""
         assignedDate = Date()
-        dueDate = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
     }
 
     func dismissCreateSuccess() { createSuccess = false }

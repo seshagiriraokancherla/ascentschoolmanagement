@@ -22,12 +22,26 @@ struct BrandedTopBar: ToolbarContent {
     // coded and never expose the option). Adding this callback forces the
     // overflow menu on even for single-child parents.
     var onChangeSchool: (() -> Void)? = nil
+    // Phase 65 pt2/3 (Android parity): global Refresh — reloads the current
+    // screen's data AND re-runs the app-version check. Shown as a separate
+    // leading-of-the-menu icon when supplied.
+    var onRefresh: (() -> Void)? = nil
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .principal) {
             Text(title)
                 .font(.appTitleLarge)
                 .foregroundStyle(.white)
+        }
+        if let onRefresh {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(action: onRefresh) {
+                    Image(systemName: "arrow.clockwise")
+                        .imageScale(.large)
+                }
+                .tint(.white)
+                .accessibilityLabel("Refresh")
+            }
         }
         if onLogout != nil {
             ToolbarItem(placement: .topBarTrailing) {

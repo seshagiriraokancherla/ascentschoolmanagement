@@ -17,7 +17,7 @@ struct TeacherHomeView: View {
             }
             .background(AppTheme.Palette.appBackground)
             .toolbar {
-                BrandedTopBar(title: AppInfo.displayName, onLogout: logout)
+                BrandedTopBar(title: AppInfo.displayName, onLogout: logout, onRefresh: globalRefresh)
             }
             .toolbarBackground(AppTheme.Palette.navyBlue, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
@@ -192,6 +192,46 @@ struct TeacherHomeView: View {
                     TeacherHomeworkView(classId: classId)
                 }
             )
+            // Phase 90: announcements only need a class (section chosen inside,
+            // optional), so this card enables on class selection alone.
+            classActionCard(
+                icon: "megaphone",
+                title: "Announcements",
+                subtitle: "Post a notice to your class",
+                destination: { classId in
+                    TeacherAnnouncementView(classId: classId)
+                }
+            )
+            // Phase 92: messaging spans ALL assigned classes, so it's not gated
+            // by the class picker — always available.
+            NavigationLink {
+                TeacherMessagesView()
+            } label: {
+                actionCardBody(
+                    icon: "bubble.left.and.bubble.right",
+                    title: "Messages",
+                    subtitle: "Reply to parents",
+                    enabled: true
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func classActionCard<Destination: View>(
+        icon: String,
+        title: String,
+        subtitle: String,
+        @ViewBuilder destination: (Int) -> Destination
+    ) -> some View {
+        if let classId = viewModel.selectedClassId {
+            NavigationLink {
+                destination(classId)
+            } label: {
+                actionCardBody(icon: icon, title: title, subtitle: subtitle, enabled: true)
+            }
+        } else {
+            actionCardBody(icon: icon, title: title, subtitle: subtitle, enabled: false, disabledHint: "Pick a class first")
         }
     }
 
@@ -215,7 +255,7 @@ struct TeacherHomeView: View {
         }
     }
 
-    private func actionCardBody(icon: String, title: String, subtitle: String, enabled: Bool) -> some View {
+    private func actionCardBody(icon: String, title: String, subtitle: String, enabled: Bool, disabledHint: String = "Pick a class and section first") -> some View {
         HStack(spacing: 14) {
             Image(systemName: icon)
                 .font(.system(size: 26))
@@ -227,7 +267,7 @@ struct TeacherHomeView: View {
                 Text(title)
                     .font(.appTitleMedium)
                     .foregroundStyle(enabled ? AppTheme.Palette.textPrimary : AppTheme.Palette.textSecondary)
-                Text(enabled ? subtitle : "Pick a class and section first")
+                Text(enabled ? subtitle : disabledHint)
                     .font(.appLabelSmall)
                     .foregroundStyle(AppTheme.Palette.textSecondary)
             }
@@ -239,6 +279,15 @@ struct TeacherHomeView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.Palette.appSurface, in: RoundedRectangle(cornerRadius: 16))
         .opacity(enabled ? 1 : 0.65)
+    }
+
+    // Phase 65 pt2/3 (Android parity): reload classes + re-run the app-version
+    // check mid-session (a 180-day session may never cold-start).
+    private func globalRefresh() {
+        Task {
+            await viewModel.loadClasses()
+            await AppConfigStore.shared.refresh()
+        }
     }
 
     private func logout() {
