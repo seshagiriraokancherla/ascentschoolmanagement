@@ -7,6 +7,7 @@ import {
   DollarOutlined, FormOutlined, BookOutlined, NotificationOutlined,
   CalendarOutlined, CarOutlined, VideoCameraOutlined, BarChartOutlined,
   IdcardOutlined, MessageOutlined, HomeOutlined, CommentOutlined,
+  QuestionCircleOutlined,
 } from '@ant-design/icons'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import api from '../api/axiosInstance'
@@ -46,6 +47,7 @@ const NAV_ITEMS = [
       { key: '/fees/collect/hostel',      label: 'Hostel Fee' },
       { key: '/fees/collect/other',       label: 'Other Fee' },
       { key: '/fees/receipts',            label: 'Receipts' },
+      { key: '/fees/receipts/transport',  label: 'Transport Receipts' },
       { key: '/fees/receipts/import',     label: 'Legacy Receipt Import' },
       { key: '/fees/pending-payments',    label: 'Pending Online Payments' },
       { key: '/fees/concessions',         label: 'Fee Concession' },
@@ -126,6 +128,11 @@ const NAV_ITEMS = [
     key:   '/messages/conversations',
     icon:  <CommentOutlined />,
     label: 'Conversations',
+  },
+  {
+    key:   '/support-tickets',
+    icon:  <QuestionCircleOutlined />,
+    label: 'Support Tickets',
   },
   {
     key: 'settings',

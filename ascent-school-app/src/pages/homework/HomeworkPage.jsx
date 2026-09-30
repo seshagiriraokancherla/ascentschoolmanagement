@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Card, Table, Button, Modal, Form, Input, Select, DatePicker,
   Popconfirm, Space, Typography, App as AntApp, Row, Col,
@@ -11,6 +11,9 @@ import MediaUploader from '../../components/MediaUploader'
 const { Title, Text } = Typography
 const { TextArea } = Input
 
+// Treat both new ('Active') and legacy ('Y') as active rows.
+const isActive = (s) => ['Active', 'Y', null, undefined, ''].includes(s.status)
+
 export default function HomeworkPage() {
   const { message } = AntApp.useApp()
   const [form] = Form.useForm()
@@ -18,7 +21,10 @@ export default function HomeworkPage() {
   const [homework,  setHomework]  = useState([])
   const [classes,   setClasses]   = useState([])
   const [sections,  setSections]  = useState([])
-  const [subjects,  setSubjects]  = useState([])
+  const [subjects,  setSubjects]  = useState([])   // shown in the dropdown
+  const [subjectsAll, setSubjectsAll] = useState([]) // school master list (all statuses)
+  const [usingAll,  setUsingAll]  = useState(false)
+  const [subjLoading, setSubjLoading] = useState(false)
   const [loading,   setLoading]   = useState(false)
   const [modal,     setModal]     = useState({ open: false, editing: null })
   const [saving,    setSaving]    = useState(false)
@@ -45,9 +51,58 @@ export default function HomeworkPage() {
 
   useEffect(() => {
     api.get('/school/master/classes').then(r => setClasses(r.data.data || []))
-    api.get('/school/master/subjects').then(r => setSubjects(r.data.data || []))
+    api.get('/school/master/subjects').then(r => {
+      const all = r.data.data || []
+      setSubjectsAll(all)
+      setSubjects(all.filter(isActive))   // no class chosen yet
+    })
     loadHomework(null, 1, 20)
   }, [])
+
+  // Subject dropdown scoped to the class's class_subjects mapping:
+  //   no class chosen (allowed here — a homework row need not have one) → all active
+  //   class with a mapping                                             → that mapping
+  //   class with no mapping                                            → all active
+  // keepSubjectId is the record's own subject when editing: kept in the list even if it
+  // is no longer mapped or no longer active, so opening and saving an old row cannot
+  // silently blank its subject. Returns the list actually shown.
+  const subjReq = useRef(0)
+
+  const loadSubjects = async (classId, keepSubjectId) => {
+    const req = ++subjReq.current
+    const active = subjectsAll.filter(isActive)
+
+    const apply = (list) => {
+      let next = list
+      if (keepSubjectId && !next.some(s => s.subjectId === keepSubjectId)) {
+        const own = subjectsAll.find(s => s.subjectId === keepSubjectId)
+        if (own) next = [...next, own]
+      }
+      setSubjects(next)
+      return next
+    }
+
+    if (!classId) { setUsingAll(false); return apply(active) }
+
+    setSubjLoading(true)
+    try {
+      const r = await api.get(`/school/class-subjects/for-class?classId=${classId}`)
+      if (req !== subjReq.current) return null    // a newer class won the race
+      // for-class returns the mapping regardless of the subject's own status, so drop
+      // any that are no longer active (skip the filter until the master list loads).
+      const mapped = subjectsAll.length
+        ? (r.data?.data || []).filter(m => active.some(a => a.subjectId === m.subjectId))
+        : (r.data?.data || [])
+      setUsingAll(mapped.length === 0)
+      return apply(mapped.length ? mapped : active)
+    } catch {
+      if (req !== subjReq.current) return null
+      setUsingAll(true)
+      return apply(active)
+    } finally {
+      if (req === subjReq.current) setSubjLoading(false)
+    }
+  }
 
   const loadSections = async (classId) => {
     if (!classId) { setSections([]); return }
@@ -57,14 +112,21 @@ export default function HomeworkPage() {
     } catch { setSections([]) }
   }
 
-  const onClassChange = (val) => {
+  const onClassChange = async (val) => {
     form.setFieldsValue({ sectionId: null })
     loadSections(val)
+
+    // The subject picked for the previous class may not belong to the new one.
+    const list = await loadSubjects(val)
+    const current = form.getFieldValue('subjectId')
+    if (list && current && !list.some(s => s.subjectId === current))
+      form.setFieldsValue({ subjectId: null })
   }
 
   const openCreate = () => {
     form.resetFields()
     setSections([])
+    loadSubjects(null)
     form.setFieldsValue({ assignedDate: dayjs() })
     setModal({ open: true, editing: null })
   }
@@ -80,6 +142,7 @@ export default function HomeworkPage() {
       attachmentUrl: record.attachmentUrl,
     })
     loadSections(record.classId)
+    loadSubjects(record.classId, record.subjectId)   // keep the row's own subject
     setModal({ open: true, editing: record })
   }
 
@@ -240,10 +303,15 @@ export default function HomeworkPage() {
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item name="subjectId" label="Subject">
+              <Form.Item
+                name="subjectId"
+                label="Subject"
+                extra={usingAll ? 'No subjects mapped to this class — showing all.' : undefined}
+              >
                 <Select
                   placeholder="Select subject"
                   allowClear
+                  loading={subjLoading}
                   options={subjects.map(s => ({ label: s.subjectName, value: s.subjectId }))}
                 />
               </Form.Item>

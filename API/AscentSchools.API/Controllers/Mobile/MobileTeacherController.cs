@@ -1,4 +1,5 @@
 using AscentSchools.API.Filters;
+using AscentSchools.API.Helpers;
 using AscentSchools.API.Middleware;
 using AscentSchools.Core.DTOs.School.Announcements;
 using AscentSchools.Core.DTOs.School.Attendance;
@@ -6,6 +7,7 @@ using AscentSchools.Core.DTOs.School.Homework;
 using AscentSchools.Core.DTOs.School.Marks;
 using AscentSchools.Core.Models;
 using AscentSchools.Data.ConnectionFactory;
+using AscentSchools.Data.Repositories.Mobile;
 using AscentSchools.Data.Repositories.School;
 using Dapper;
 using System;
@@ -26,6 +28,7 @@ namespace AscentSchools.API.Controllers.Mobile
         private readonly AnnouncementsRepository _announcements;
         private readonly MarksRepository         _marks;
         private readonly ClassSubjectRepository  _classSubjects;
+        private readonly MobileDataRepository    _data;
         private readonly TenantConnectionFactory _db;
 
         private TeacherContext Teacher => TeacherContext.Current;
@@ -38,6 +41,7 @@ namespace AscentSchools.API.Controllers.Mobile
             _announcements = new AnnouncementsRepository(_db);
             _marks         = new MarksRepository(_db);
             _classSubjects = new ClassSubjectRepository(_db);
+            _data          = new MobileDataRepository(_db);
         }
 
         // ── GET /mobile/teacher/classes ───────────────────────────────────────
@@ -227,6 +231,45 @@ namespace AscentSchools.API.Controllers.Mobile
 
             return Request.CreateResponse(HttpStatusCode.Created,
                 ApiResponse<object>.Ok(new { announcementId = id }, "Announcement posted."));
+        }
+
+        // ── GET /mobile/teacher/events?classId= ───────────────────────────────
+        // School-wide events, plus this class's if a class is selected. classId is
+        // OPTIONAL (unlike announcements) — school-wide events are worth seeing
+        // even before a class is picked, mirroring Messages.
+
+        [HttpGet, Route("events")]
+        public HttpResponseMessage GetEvents([FromUri] int? classId = null)
+        {
+            var list = _data.GetEvents(Teacher.DbName, Teacher.SchoolId, classId);
+            return Ok(list);
+        }
+
+        // ── GET /mobile/teacher/birthdays?classId= ─────────────────────────────
+        // School-wide by default (classId OPTIONAL — same "no restriction" pattern as
+        // Events/Messages), narrows to one class when classId is given. "Today" is IST,
+        // not server-local (the box runs US Eastern) — Phase 98/103/105 rule.
+
+        [HttpGet, Route("birthdays")]
+        public HttpResponseMessage GetBirthdays([FromUri] int? classId = null)
+        {
+            var today = TimeHelper.IstToday();
+            var includeFeb29 = today.Month == 2 && today.Day == 28 && !DateTime.IsLeapYear(today.Year);
+            var list = _data.GetBirthdaysToday(Teacher.DbName, Teacher.SchoolId, classId, today.Month, today.Day, includeFeb29);
+            return Ok(list);
+        }
+
+        // ── GET /mobile/teacher/exam-timetable?classId= ───────────────────────
+        // Read-only — same schedule students see for the class (Master Data → Exam Master's
+        // exam_date). Mobile has no year picker — uses the current active year like Marks.
+
+        [HttpGet, Route("exam-timetable")]
+        public HttpResponseMessage GetExamTimetable([FromUri] int classId)
+        {
+            if (classId <= 0) return Fail(HttpStatusCode.BadRequest, "classId is required.");
+            var yearId = _marks.GetCurrentAcademicYearId(Teacher.DbName, Teacher.SchoolId);
+            var list = _data.GetExamTimetable(Teacher.DbName, Teacher.SchoolId, classId, yearId);
+            return Ok(list);
         }
 
         // ── Marks ─────────────────────────────────────────────────────────────

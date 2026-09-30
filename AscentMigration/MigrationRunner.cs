@@ -205,7 +205,7 @@ namespace AscentMigration
                 new FeeStructuresMigrator(_config),  // depends on academic_years, classes, fee_categories, fee_types, terms
                 new BusRoutesMigrator(_config),          // no FK deps on migrated tables
                 new BusesMigrator(_config),              // no FK deps on migrated tables
-                new BusFeeStructuresMigrator(_config),   // depends on bus_routes, academic_years, terms
+                new BusFeeStructuresMigrator(_config),   // depends on bus_routes, academic_years, terms, fee_periods
                 new SectionsMigrator(_config),           // depends on classes; reads distinct StuSect from source
                 new StudentsMigrator(_config),           // depends on academic_years, classes, sections, bus_routes
                 new PaymentModesMigrator(_config),       // no FK deps; appends fixed Online row (is_online=1) after legacy rows

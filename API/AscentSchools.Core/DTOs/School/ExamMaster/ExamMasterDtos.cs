@@ -17,6 +17,7 @@ namespace AscentSchools.Core.DTOs.School.ExamMaster
         public int?      AcademicYearId  { get; set; }
         public string    ExamCategory    { get; set; }
         public DateTime? ExamDate        { get; set; }
+        public string    ExamTime        { get; set; }   // "HH:mm" 24-hour, e.g. "10:00"
         public int?      ExamTotalMarks  { get; set; }
         public int?      ExamMinMarks    { get; set; }
         public int?      SubMaxMarks     { get; set; }
@@ -25,6 +26,8 @@ namespace AscentSchools.Core.DTOs.School.ExamMaster
         public string    ExamRemarks     { get; set; }
         public int?      GradeTypeId     { get; set; }
         public string    GradeName       { get; set; }
+        public int?      MarksGradeMasterId { get; set; }   // scale that grades the TOTAL
+        public string    MarksGradeScaleName { get; set; }
         public string    ExamStatus      { get; set; }
     }
 
@@ -41,6 +44,7 @@ namespace AscentSchools.Core.DTOs.School.ExamMaster
         public List<int> SubjectIds      { get; set; }
         public string    ExamCategory    { get; set; }
         public DateTime? ExamDate        { get; set; }
+        public string    ExamTime        { get; set; }
         public int?      ExamTotalMarks  { get; set; }
         public int?      ExamMinMarks    { get; set; }
         public int?      SubMaxMarks     { get; set; }
@@ -48,6 +52,7 @@ namespace AscentSchools.Core.DTOs.School.ExamMaster
         public decimal?  ActivityMaxMarks { get; set; }
         public string    ExamRemarks     { get; set; }
         public int?      GradeTypeId     { get; set; }
+        public int?      MarksGradeMasterId { get; set; }
         public string    ExamStatus      { get; set; }
     }
 
@@ -64,12 +69,14 @@ namespace AscentSchools.Core.DTOs.School.ExamMaster
         public string   ExamName     { get; set; }
         public string   Category     { get; set; }
         public string   ExamDate     { get; set; }   // parseable date, optional
+        public string   ExamTime     { get; set; }   // "HH:mm" 24-hour, optional
         public int?     TotalMarks   { get; set; }   // exam_total_marks
         public int?     ExamMinMarks { get; set; }
         public int?     SubjectMax   { get; set; }   // sub_max_marks
         public int?     SubjectMin   { get; set; }   // subject_min_marks
         public decimal? ActivityMax  { get; set; }   // activity_max_marks
         public string   GradeType    { get; set; }   // grade_name, optional
+        public string   MarksGradeMaster { get; set; }   // scale name (TOTAL grade), optional
         public string   Remarks      { get; set; }
         public string   Status       { get; set; }
     }
@@ -89,6 +96,7 @@ namespace AscentSchools.Core.DTOs.School.ExamMaster
         public int       SubjectId       { get; set; }
         public string    ExamCategory    { get; set; }
         public DateTime? ExamDate        { get; set; }
+        public string    ExamTime        { get; set; }
         public int?      ExamTotalMarks  { get; set; }
         public int?      ExamMinMarks    { get; set; }
         public int?      SubMaxMarks     { get; set; }
@@ -96,6 +104,7 @@ namespace AscentSchools.Core.DTOs.School.ExamMaster
         public decimal?  ActivityMaxMarks { get; set; }
         public string    ExamRemarks     { get; set; }
         public int?      GradeTypeId     { get; set; }
+        public int?      MarksGradeMasterId { get; set; }
         public string    ExamStatus      { get; set; }
     }
 }

@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ascentschools.mobile.data.api.*
 import com.ascentschools.mobile.data.repository.TeacherRepository
+import com.ascentschools.mobile.ui.events.EventsUiState
+import com.ascentschools.mobile.ui.marks.ExamTimetableUiState
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -77,6 +79,31 @@ class TeacherViewModel(private val repo: TeacherRepository) : ViewModel() {
     private val _announcements = MutableStateFlow<List<TeacherAnnouncementDto>>(emptyList())
     val announcements = _announcements.asStateFlow()
 
+    // ── Events (read-only — same gallery parents see, reuses EventsScreen) ─────
+
+    private val _eventsState = MutableStateFlow<EventsUiState>(EventsUiState.Loading)
+    val eventsState = _eventsState.asStateFlow()
+
+    // ── Birthdays (school-wide by default; classId narrows it) ─────────────────
+
+    private val _birthdays = MutableStateFlow<List<BirthdayStudentDto>>(emptyList())
+    val birthdays = _birthdays.asStateFlow()
+    private val _isLoadingBirthdays = MutableStateFlow(false)
+    val isLoadingBirthdays = _isLoadingBirthdays.asStateFlow()
+    private val _birthdaysError = MutableStateFlow<String?>(null)
+    val birthdaysError = _birthdaysError.asStateFlow()
+
+    fun loadBirthdays(classId: Int?) {
+        _isLoadingBirthdays.value = true
+        _birthdaysError.value = null
+        viewModelScope.launch {
+            repo.getBirthdays(classId)
+                .onSuccess { _birthdays.value = it }
+                .onFailure { _birthdaysError.value = it.message ?: "Failed to load birthdays" }
+            _isLoadingBirthdays.value = false
+        }
+    }
+
     // ── Marks ─────────────────────────────────────────────────────────────────
 
     private val _examTypes = MutableStateFlow<List<TeacherExamTypeDto>>(emptyList())
@@ -98,6 +125,16 @@ class TeacherViewModel(private val repo: TeacherRepository) : ViewModel() {
 
     private val _thread = MutableStateFlow<MessageThreadDetailDto?>(null)
     val thread = _thread.asStateFlow()
+
+    // Start-a-new-conversation picker — any student, no class assignment required.
+    private val _messagingClasses = MutableStateFlow<List<MessagingClassDto>>(emptyList())
+    val messagingClasses = _messagingClasses.asStateFlow()
+
+    private val _messagingStudents = MutableStateFlow<List<MessagingStudentDto>>(emptyList())
+    val messagingStudents = _messagingStudents.asStateFlow()
+
+    private val _isOpeningConversation = MutableStateFlow(false)
+    val isOpeningConversation = _isOpeningConversation.asStateFlow()
 
     // ── Shared UI state ───────────────────────────────────────────────────────
 
@@ -299,6 +336,29 @@ class TeacherViewModel(private val repo: TeacherRepository) : ViewModel() {
         }
     }
 
+    fun loadEvents(classId: Int?) {
+        _eventsState.value = EventsUiState.Loading
+        viewModelScope.launch {
+            repo.getEvents(classId)
+                .onSuccess { _eventsState.value = EventsUiState.Success(it) }
+                .onFailure { _eventsState.value = EventsUiState.Error(it.message ?: "Failed to load events") }
+        }
+    }
+
+    // ── Exam timetable (read-only — same schedule students see) ────────────────
+
+    private val _examTimetableState = MutableStateFlow<ExamTimetableUiState>(ExamTimetableUiState.Loading)
+    val examTimetableState = _examTimetableState.asStateFlow()
+
+    fun loadExamTimetable(classId: Int) {
+        _examTimetableState.value = ExamTimetableUiState.Loading
+        viewModelScope.launch {
+            repo.getExamTimetable(classId)
+                .onSuccess { _examTimetableState.value = ExamTimetableUiState.Success(it) }
+                .onFailure { _examTimetableState.value = ExamTimetableUiState.Error(it.message ?: "Failed to load exam timetable") }
+        }
+    }
+
     // ── Marks ─────────────────────────────────────────────────────────────────
 
     fun loadExamTypes() {
@@ -415,6 +475,40 @@ class TeacherViewModel(private val repo: TeacherRepository) : ViewModel() {
                 .onSuccess { _threads.value = it }
                 .onFailure { _uiState.value = TeacherUiState.Error(it.message ?: "Failed to load messages") }
             _isLoading.value = false
+        }
+    }
+
+    // ── Start a new conversation ────────────────────────────────────────────
+
+    fun loadMessagingClasses() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            repo.getMessagingClasses()
+                .onSuccess { _messagingClasses.value = it }
+                .onFailure { _uiState.value = TeacherUiState.Error(it.message ?: "Failed to load classes") }
+            _isLoading.value = false
+        }
+    }
+
+    fun loadMessagingStudents(classId: Int) {
+        _messagingStudents.value = emptyList()
+        viewModelScope.launch {
+            _isLoading.value = true
+            repo.getMessagingStudents(classId)
+                .onSuccess { _messagingStudents.value = it }
+                .onFailure { _uiState.value = TeacherUiState.Error(it.message ?: "Failed to load students") }
+            _isLoading.value = false
+        }
+    }
+
+    /** Resolves/creates the thread for a student, then hands the threadId to onOpened. */
+    fun openConversation(studentUniqueId: Int, onOpened: (threadId: Int) -> Unit) {
+        viewModelScope.launch {
+            _isOpeningConversation.value = true
+            repo.openConversation(studentUniqueId)
+                .onSuccess { onOpened(it) }
+                .onFailure { _uiState.value = TeacherUiState.Error(it.message ?: "Couldn't open conversation") }
+            _isOpeningConversation.value = false
         }
     }
 

@@ -28,17 +28,20 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.ascentschools.mobile.data.api.SchoolEventDto
 
+// Takes the UI state directly (not a concrete ViewModel) so both the parent flow
+// (EventsViewModel + StudentRepository) and the teacher flow (TeacherViewModel +
+// TeacherRepository) can share this screen without either depending on the other's
+// repository/auth.
 @Composable
 fun EventsScreen(
-    viewModel: EventsViewModel,
-    modifier : Modifier = Modifier
+    uiState: EventsUiState,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when (val s = uiState) {
             is EventsUiState.Loading -> CircularProgressIndicator()
-            is EventsUiState.Error   -> ErrorState(s.message) { viewModel.load() }
+            is EventsUiState.Error   -> ErrorState(s.message, onRetry)
             is EventsUiState.Success -> EventsContent(s.events)
         }
     }

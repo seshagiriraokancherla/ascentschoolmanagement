@@ -100,7 +100,10 @@ namespace AscentSchools.API.Controllers.School
 
         // ── Receipts ──────────────────────────────────────────────────────
 
-        // GET school/fees/receipts?search=&dateFrom=&dateTo=&status=&createdAfter=&createdBefore=&source=&paymentModeId=
+        // GET school/fees/receipts?search=&dateFrom=&dateTo=&status=&createdAfter=&createdBefore=&source=&paymentModeId=&category=
+        // category: currently only "Transport" is recognized (a receipt with at least one
+        // fee_receipt_items row carrying a bus_route_id) — for the separate Transport
+        // Receipts page. Omitted/unrecognized = no category filter (all receipts, as before).
         [HttpGet, Route("receipts")]
         public HttpResponseMessage GetReceipts(
             string    search        = null,
@@ -110,10 +113,11 @@ namespace AscentSchools.API.Controllers.School
             DateTime? createdAfter  = null,
             string    source        = null,
             DateTime? createdBefore = null,
-            int?      paymentModeId = null)
+            int?      paymentModeId = null,
+            string    category      = null)
         {
             var receipts = _repo.GetReceipts(
-                Tenant.TenantDbName, Tenant.SchoolId, search, dateFrom, dateTo, status, createdAfter, source, createdBefore, paymentModeId);
+                Tenant.TenantDbName, Tenant.SchoolId, search, dateFrom, dateTo, status, createdAfter, source, createdBefore, paymentModeId, category);
             return Ok(receipts);
         }
 

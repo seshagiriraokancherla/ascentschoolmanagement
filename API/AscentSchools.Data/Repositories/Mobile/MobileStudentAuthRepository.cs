@@ -32,7 +32,7 @@ namespace AscentSchools.Data.Repositories.Mobile
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 return conn.Query<StudentParentLookupRecord>(
-                    @"SELECT s.student_id StudentId, s.admission_no AdmissionNo,
+                    @"SELECT s.student_id StudentId, s.student_unique_id StudentUniqueId, s.admission_no AdmissionNo,
                              s.student_name StudentName, c.class_name ClassName,
                              COALESCE(NULLIF(LTRIM(RTRIM(s.father_name)), ''), 'Parent') ParentName
                       FROM students s
@@ -57,7 +57,7 @@ namespace AscentSchools.Data.Repositories.Mobile
                 // This supports the multi-year model where a student gets a new row each year.
                 return conn.QueryFirstOrDefault<StudentMobileRecord>(
                     @"SELECT TOP 1
-                             s.student_id StudentId, s.admission_no AdmissionNo,
+                             s.student_id StudentId, s.student_unique_id StudentUniqueId, s.admission_no AdmissionNo,
                              s.student_name StudentName, c.class_name ClassName,
                              s.section_id SectionId, sec.section_name SectionName,
                              s.academic_year_id AcademicYearId
@@ -194,13 +194,14 @@ namespace AscentSchools.Data.Repositories.Mobile
 
     public class StudentMobileRecord
     {
-        public long   StudentId      { get; set; }
-        public string AdmissionNo    { get; set; }
-        public string StudentName    { get; set; }
-        public string ClassName      { get; set; }
-        public int?   SectionId      { get; set; }
-        public string SectionName    { get; set; }
-        public int?   AcademicYearId { get; set; }
+        public long   StudentId       { get; set; }
+        public int?   StudentUniqueId { get; set; }
+        public string AdmissionNo     { get; set; }
+        public string StudentName     { get; set; }
+        public string ClassName       { get; set; }
+        public int?   SectionId       { get; set; }
+        public string SectionName     { get; set; }
+        public int?   AcademicYearId  { get; set; }
     }
 
     public class StudentAccountRecord
@@ -226,10 +227,11 @@ namespace AscentSchools.Data.Repositories.Mobile
     /// <summary>Student row returned when looking up by parent mobile number.</summary>
     public class StudentParentLookupRecord
     {
-        public long   StudentId   { get; set; }
-        public string AdmissionNo { get; set; }
-        public string StudentName { get; set; }
-        public string ClassName   { get; set; }
-        public string ParentName  { get; set; }   // father_name fallback to "Parent"
+        public long   StudentId       { get; set; }
+        public int?   StudentUniqueId { get; set; }
+        public string AdmissionNo     { get; set; }
+        public string StudentName     { get; set; }
+        public string ClassName       { get; set; }
+        public string ParentName      { get; set; }   // father_name fallback to "Parent"
     }
 }

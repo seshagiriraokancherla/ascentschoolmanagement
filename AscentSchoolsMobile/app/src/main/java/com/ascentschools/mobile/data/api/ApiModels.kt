@@ -275,6 +275,37 @@ data class SubjectMarkDto(
     val isAbsent: Boolean
 )
 
+// ── Birthdays ─────────────────────────────────────────────────────────────────
+// Matches backend BirthdayStudentDto. School-wide by default (classId param optional
+// on the teacher endpoint) — dateOfBirth is "yyyy-MM-dd", client computes "turning N".
+
+data class BirthdayStudentDto(
+    val studentId: Long,
+    val admissionNo: String?,
+    val studentName: String?,
+    val className: String?,
+    val sectionName: String?,
+    val dateOfBirth: String?
+)
+
+// ── Exam timetable ───────────────────────────────────────────────────────────
+// Matches backend: ExamTimetableGroupDto → ExamTimetableSubjectDto. Read-only, sourced
+// from Master Data → Exam Master's exam_date; shared by parent (Marks screen tab) and
+// teacher (its own screen).
+
+data class ExamTimetableGroupDto(
+    val examTypeId: Int,
+    val examTypeName: String,
+    val subjects: List<ExamTimetableSubjectDto>
+)
+
+data class ExamTimetableSubjectDto(
+    val subjectName: String,
+    val examDate: String,           // ISO date string (yyyy-MM-dd)
+    val examTime: String? = null,   // "HH:mm" 24-hour, or null if not set
+    val examRemarks: String? = null // syllabus/portion notes entered in Exam Master, or null
+)
+
 // ── Homework ──────────────────────────────────────────────────────────────────
 // Matches HomeworkDto on backend; assignedDate/dueDate serialised as ISO strings via Gson
 
@@ -525,3 +556,23 @@ data class ReportMessageRequest(
     val messageId : Int,
     val reason    : String?
 )
+
+// ── Start a new conversation — any staff member, any currently-enrolled student,
+// no class assignment required. Class → Student picker, then "open" resolves/creates
+// the thread; sending still goes through the normal reply flow once it's open.
+
+data class MessagingClassDto(
+    val classId  : Int,
+    val className: String
+)
+
+data class MessagingStudentDto(
+    val studentUniqueId: Int,
+    val studentName    : String?,
+    val admissionNo    : String?,
+    val sectionName    : String?
+)
+
+data class OpenConversationRequest(val studentUniqueId: Int)
+
+data class OpenConversationResponseDto(val threadId: Int)

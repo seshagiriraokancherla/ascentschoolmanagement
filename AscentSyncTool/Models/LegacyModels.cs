@@ -69,5 +69,9 @@ namespace AscentSyncTool.Models
         public string    StuThirdLang      { get; set; }
         public string    StuUdiseNo        { get; set; }
         public DateTime? CrtDat         { get; set; }
+        // Resolved by the query's LEFT JOINs (legacy StuBusRoute/BusID are just ids;
+        // these are the human-readable names, matched by name server-side on import).
+        public string    RouteName      { get; set; }
+        public string    BusName        { get; set; }
     }
 }

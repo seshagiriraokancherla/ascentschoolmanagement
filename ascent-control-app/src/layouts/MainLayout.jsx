@@ -3,6 +3,7 @@ import {
   BankOutlined,
   LogoutOutlined,
   UserOutlined,
+  QuestionCircleOutlined,
 } from '@ant-design/icons'
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
 import useAuthStore from '../store/authStore'
@@ -11,7 +12,8 @@ import api from '../api/axiosInstance'
 const { Sider, Header, Content, Footer } = Layout
 
 const NAV_ITEMS = [
-  { key: '/school-groups', icon: <BankOutlined />, label: 'School Groups' },
+  { key: '/school-groups',   icon: <BankOutlined />,           label: 'School Groups' },
+  { key: '/support-tickets', icon: <QuestionCircleOutlined />, label: 'Support Tickets' },
 ]
 
 export default function MainLayout() {

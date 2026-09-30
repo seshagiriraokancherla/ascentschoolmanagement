@@ -44,6 +44,49 @@ namespace AscentSchools.API.Controllers.School
             return Ok(_r2.GetConfig(Tenant.TenantDbName, Tenant.SchoolId));
         }
 
+        // GET school/uploads/image-data?path=/Uploads/branding/x.png
+        // Returns a server-hosted image as a data URL. PDF generation (jsPDF) must read the
+        // image's pixels, which the browser only allows cross-origin when the response carries
+        // CORS headers — and IIS serves /Uploads static files WITHOUT them (the CORS headers in
+        // Global.asax run for managed requests only). This managed route carries them.
+        // Restricted to image files under ~/Uploads (no remote URLs — not an open proxy).
+        [HttpGet, Route("uploads/image-data")]
+        public HttpResponseMessage GetImageData([FromUri] string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return BadRequest("path is required.");
+
+            path = path.Replace('\\', '/');
+            if (!path.StartsWith("/Uploads/", StringComparison.OrdinalIgnoreCase) || path.Contains(".."))
+                return BadRequest("Only files under /Uploads can be read.");
+
+            string mime;
+            switch (Path.GetExtension(path).ToLowerInvariant())
+            {
+                case ".png":  mime = "image/png";  break;
+                case ".jpg":
+                case ".jpeg": mime = "image/jpeg"; break;
+                case ".gif":  mime = "image/gif";  break;
+                case ".webp": mime = "image/webp"; break;
+                default: return BadRequest("Only image files can be read.");
+            }
+
+            var root = System.Web.Hosting.HostingEnvironment.MapPath("~/Uploads/");
+            var full = System.Web.Hosting.HostingEnvironment.MapPath("~" + path);
+            if (root == null || full == null
+                || !Path.GetFullPath(full).StartsWith(Path.GetFullPath(root), StringComparison.OrdinalIgnoreCase))
+                return BadRequest("Only files under /Uploads can be read.");
+            if (!File.Exists(full))
+                return NotFound("Image not found.");
+
+            var info = new FileInfo(full);
+            if (info.Length > 2 * 1024 * 1024)
+                return BadRequest("Image is larger than 2 MB.");
+
+            var bytes = File.ReadAllBytes(full);
+            return Ok(new { dataUrl = $"data:{mime};base64,{Convert.ToBase64String(bytes)}" });
+        }
+
         // POST school/uploads/presign — returns a presigned PUT URL + the permanent public URL.
         // Browser uploads the file directly to UploadUrl, then saves PublicUrl to the DB.
         [HttpPost, Route("uploads/presign")]

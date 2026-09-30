@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Tabs, Card, Table, Button, Modal, Form, Input, InputNumber,
   Select, Popconfirm, Space, Tag, Typography, App as AntApp,
@@ -244,6 +244,7 @@ function BusFeeTab() {
   const [amounts,      setAmounts]       = useState({})  // T_{termId} | P_{feePeriodId} → amount
   const [loading,      setLoading]       = useState(false)
   const [saving,       setSaving]        = useState(false)
+  const loadSeq = useRef(0)  // guards against a slow/out-of-order response overwriting a newer one
 
   useEffect(() => {
     api.get('/school/transport/routes').then(r => setRoutes(r.data.data || []))
@@ -262,19 +263,32 @@ function BusFeeTab() {
       message.warning('Select route and academic year first.')
       return
     }
+    const mySeq = ++loadSeq.current
     setLoading(true)
+    setStructure(null)   // clear the grid immediately — don't show stale rows while the new set loads
+    setAmounts({})
     try {
       const ptParam = ptOverride ? `&paymentType=${ptOverride}` : ''
       const r = await api.get(`/school/transport/fee-structure?routeId=${selectedRoute}&academicYearId=${selectedYear}${ptParam}`)
+      if (mySeq !== loadSeq.current) return  // a newer Load fired after this one — discard this stale response
       const s = r.data.data
       const pt = s.paymentType || 'Term'
-      setStructure(s)
+      // Dedupe defensively by row key — belt-and-suspenders in case the API ever
+      // returns more than one row for the same term/period (see backend fix).
+      const seen = new Set()
+      const terms = (s.terms || []).filter(t => {
+        const k = busColKey(pt, t)
+        if (seen.has(k)) return false
+        seen.add(k)
+        return true
+      })
+      setStructure({ ...s, terms })
       setPayType(pt)
       const init = {}
-      ;(s.terms || []).forEach(t => { init[busColKey(pt, t)] = t.amount ?? '' })
+      terms.forEach(t => { init[busColKey(pt, t)] = t.amount ?? '' })
       setAmounts(init)
     } finally {
-      setLoading(false)
+      if (mySeq === loadSeq.current) setLoading(false)
     }
   }
 

@@ -19,15 +19,19 @@ class MarksViewModel(private val repo: StudentRepository) : ViewModel() {
     private val _uiState = MutableStateFlow<MarksUiState>(MarksUiState.Loading)
     val uiState = _uiState.asStateFlow()
 
+    private val _timetableState = MutableStateFlow<ExamTimetableUiState>(ExamTimetableUiState.Loading)
+    val timetableState = _timetableState.asStateFlow()
+
     // 0 = load with default academic year (0 means current in backend)
     private val _academicYearId = MutableStateFlow(0)
     val academicYearId = _academicYearId.asStateFlow()
 
-    init { load() }
+    init { load(); loadTimetable() }
 
     fun setAcademicYear(id: Int) {
         _academicYearId.value = id
         load()
+        loadTimetable()
     }
 
     fun load() {
@@ -36,6 +40,15 @@ class MarksViewModel(private val repo: StudentRepository) : ViewModel() {
             repo.getMarks(_academicYearId.value)
                 .onSuccess { _uiState.value = MarksUiState.Success(it) }
                 .onFailure { _uiState.value = MarksUiState.Error(it.message ?: "Failed to load marks") }
+        }
+    }
+
+    fun loadTimetable() {
+        _timetableState.value = ExamTimetableUiState.Loading
+        viewModelScope.launch {
+            repo.getExamTimetable(_academicYearId.value)
+                .onSuccess { _timetableState.value = ExamTimetableUiState.Success(it) }
+                .onFailure { _timetableState.value = ExamTimetableUiState.Error(it.message ?: "Failed to load exam timetable") }
         }
     }
 }

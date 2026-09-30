@@ -64,10 +64,25 @@ Plus an **Enabled** toggle.
 
 - Replace `THE-SCHOOL-SITE-ORIGIN` with the **exact origin** staff use to open the school
   web app — open it and copy the address-bar origin (e.g. `https://stannsasf.edu-care.in`
-  or `https://edu-care.in`). No path, no trailing slash. List multiple origins if needed.
-- **Why:** the app asks our API for a presigned URL, then the browser does a direct **PUT**
-  to R2. Without this rule the PUT is blocked by CORS. The upload sends only a `Content-Type`
-  request header, so `"*"` (or `"Content-Type"`) covers it.
+  or `https://edu-care.in`). List multiple origins if needed.
+
+> ⚠️ **NO TRAILING SLASH.** `"https://depaul-em-yv.edu-care.in/"` is wrong;
+> `"https://depaul-em-yv.edu-care.in"` is right. An `Origin` header is scheme + host + port
+> **only** — the browser never sends a trailing slash, so a rule with one matches nothing,
+> R2 returns no CORS headers at all, and you get:
+> `Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present`.
+> Same for a path or a `www.` that the site doesn't actually use. Copy the origin from the
+> address bar and delete everything from the first `/` after the host.
+
+- **Why the rule is needed:** the app asks our API for a presigned URL, then the browser does a
+  direct **PUT** to R2. The PUT is preflighted (a `PUT` carrying `Content-Type: image/jpeg` is
+  not a CORS-"simple" request), so R2 must answer the `OPTIONS` — that's what this rule does.
+  Do **not** add `OPTIONS` to `AllowedMethods`; list the real methods and R2 handles the
+  preflight itself. The upload sends only a `Content-Type` request header, so `"*"`
+  (or `"Content-Type"`) covers `AllowedHeaders`.
+- The presigned URL signs **`host` only** (`X-Amz-SignedHeaders=host`), so the browser adding
+  its own `Content-Type` can never invalidate the signature — a CORS failure here is always
+  the rule, never the signing.
 
 ---
 

@@ -639,7 +639,7 @@ namespace AscentSchools.Data.Repositories.School
             string tenantDbName, int schoolId,
             string search, DateTime? dateFrom, DateTime? dateTo, string status,
             DateTime? createdAfter = null, string source = null, DateTime? createdBefore = null,
-            int? paymentModeId = null)
+            int? paymentModeId = null, string category = null)
         {
             var where = "r.school_id = @schoolId";
             if (!string.IsNullOrWhiteSpace(search))
@@ -651,6 +651,23 @@ namespace AscentSchools.Data.Repositories.School
             if (createdBefore.HasValue) where += " AND r.created_at <= @createdBefore";
             if (!string.IsNullOrWhiteSpace(source)) where += " AND r.source = @source";
             if (paymentModeId.HasValue) where += " AND r.payment_mode_id = @paymentModeId";
+            // A receipt is "Transport" if any of its line items either (a) carries a bus
+            // route — the structural signal CollectFee/BulkImportReceipts stamp on the
+            // dedicated Transport collection screen — or (b) references a fee_type whose
+            // name/description marks it as transport (a school that set up "Transport Fee"
+            // as a regular fee type, e.g. collected via School Fee, instead of the
+            // route-based module). The description LIKE pattern mirrors the existing
+            // Transport branch of BuildCategoryFilter below, for the same classification
+            // used when computing transport outstanding.
+            if (category == "Transport")
+                where += @" AND EXISTS (
+                                SELECT 1 FROM fee_receipt_items fri
+                                LEFT JOIN fee_types ft ON ft.fee_type_id = fri.fee_type_id
+                                WHERE fri.receipt_id = r.receipt_id
+                                  AND (fri.bus_route_id IS NOT NULL
+                                       OR LOWER(ISNULL(ft.fee_type_name,'')) LIKE '%transport%'
+                                       OR LOWER(ISNULL(ft.description,''))  LIKE '%transport%'
+                                       OR LOWER(ISNULL(ft.description,''))  LIKE '%bus%'))";
 
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 return conn.Query<FeeReceiptListDto>(

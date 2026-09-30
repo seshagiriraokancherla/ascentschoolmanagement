@@ -26,4 +26,21 @@ namespace AscentSchools.Core.DTOs.Mobile.Data
         public decimal MaxMarks       { get; set; }
         public bool    IsAbsent       { get; set; }
     }
+
+    // Exam timetable — read-only per-subject schedule for a class+exam type, sourced from
+    // exam_master.exam_date (the same field Master Data → Exam Master already captures).
+    public class ExamTimetableGroupDto
+    {
+        public int    ExamTypeId   { get; set; }
+        public string ExamTypeName { get; set; }
+        public IEnumerable<ExamTimetableSubjectDto> Subjects { get; set; }
+    }
+
+    public class ExamTimetableSubjectDto
+    {
+        public string SubjectName  { get; set; }
+        public string ExamDate     { get; set; }   // ISO date string (yyyy-MM-dd) — avoids timezone shifts
+        public string ExamTime     { get; set; }   // "HH:mm" 24-hour, or null if not set
+        public string ExamRemarks  { get; set; }   // exam_master.exam_remarks — syllabus/portion notes staff enter in Exam Master
+    }
 }

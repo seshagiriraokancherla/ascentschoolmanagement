@@ -89,6 +89,7 @@ export const PATH_PERM = {
   '/fees/collect/hostel':       P.FEE_COLLECT,
   '/fees/collect/other':        P.FEE_COLLECT,
   '/fees/receipts':             P.FEE_VIEW,
+  '/fees/receipts/transport':   P.FEE_VIEW,
   '/fees/receipts/import':      P.FEE_EDIT,
   '/fees/pending-payments':     P.FEE_COLLECT,
   '/fees/concessions':          P.FEE_CONCESSION,

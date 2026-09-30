@@ -32,11 +32,15 @@ import com.ascentschools.mobile.ui.school.SchoolCodeScreen
 import com.ascentschools.mobile.ui.school.SchoolCodeViewModel
 import com.ascentschools.mobile.ui.teacher.TeacherAnnouncementScreen
 import com.ascentschools.mobile.ui.teacher.TeacherAttendanceScreen
+import com.ascentschools.mobile.ui.teacher.TeacherBirthdaysScreen
 import com.ascentschools.mobile.ui.teacher.TeacherChatScreen
+import com.ascentschools.mobile.ui.teacher.TeacherEventsScreen
+import com.ascentschools.mobile.ui.teacher.TeacherExamTimetableScreen
 import com.ascentschools.mobile.ui.teacher.TeacherHomeScreen
 import com.ascentschools.mobile.ui.teacher.TeacherHomeworkScreen
 import com.ascentschools.mobile.ui.teacher.TeacherMarksScreen
 import com.ascentschools.mobile.ui.teacher.TeacherMessagesScreen
+import com.ascentschools.mobile.ui.teacher.TeacherNewMessageScreen
 import com.ascentschools.mobile.ui.teacher.TeacherViewModel
 import com.ascentschools.mobile.ui.theme.AscentTheme
 import com.razorpay.Checkout
@@ -49,10 +53,14 @@ import org.json.JSONObject
 private sealed class TeacherScreen {
     object Home : TeacherScreen()
     object Messages : TeacherScreen()
+    object NewMessage : TeacherScreen()
     data class Attendance(val classId: Int, val sectionId: Int) : TeacherScreen()
     data class Marks(val classId: Int, val sectionId: Int) : TeacherScreen()
     data class Homework(val classId: Int, val sectionId: Int?) : TeacherScreen()
     data class Announcement(val classId: Int) : TeacherScreen()
+    data class Events(val classId: Int?) : TeacherScreen()
+    data class ExamTimetable(val classId: Int) : TeacherScreen()
+    object Birthdays : TeacherScreen()
     data class Chat(val threadId: Int) : TeacherScreen()
 }
 
@@ -197,6 +205,9 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                                 teacherScreen = TeacherScreen.Announcement(classId)
                             },
                             onMessages = { teacherScreen = TeacherScreen.Messages },
+                            onEvents = { classId -> teacherScreen = TeacherScreen.Events(classId) },
+                            onExamTimetable = { classId -> teacherScreen = TeacherScreen.ExamTimetable(classId) },
+                            onBirthdays = { teacherScreen = TeacherScreen.Birthdays },
                             onLogout = {
                                 CoroutineScope(Dispatchers.IO).launch {
                                     runCatching { pushRepo.unregisterToken() }
@@ -236,10 +247,32 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                             viewModel = teacherVm,
                             onBack    = { teacherScreen = TeacherScreen.Home }
                         )
-                        is TeacherScreen.Messages -> TeacherMessagesScreen(
+                        is TeacherScreen.Events -> TeacherEventsScreen(
+                            classId   = screen.classId,
                             viewModel = teacherVm,
-                            onOpen    = { threadId -> teacherScreen = TeacherScreen.Chat(threadId) },
                             onBack    = { teacherScreen = TeacherScreen.Home }
+                        )
+                        is TeacherScreen.ExamTimetable -> TeacherExamTimetableScreen(
+                            classId   = screen.classId,
+                            className = teacherVm.classes.value
+                                .find { it.classId == screen.classId }?.className ?: "",
+                            viewModel = teacherVm,
+                            onBack    = { teacherScreen = TeacherScreen.Home }
+                        )
+                        is TeacherScreen.Birthdays -> TeacherBirthdaysScreen(
+                            viewModel = teacherVm,
+                            onBack    = { teacherScreen = TeacherScreen.Home }
+                        )
+                        is TeacherScreen.Messages -> TeacherMessagesScreen(
+                            viewModel    = teacherVm,
+                            onOpen       = { threadId -> teacherScreen = TeacherScreen.Chat(threadId) },
+                            onNewMessage = { teacherScreen = TeacherScreen.NewMessage },
+                            onBack       = { teacherScreen = TeacherScreen.Home }
+                        )
+                        is TeacherScreen.NewMessage -> TeacherNewMessageScreen(
+                            viewModel = teacherVm,
+                            onOpened  = { threadId -> teacherScreen = TeacherScreen.Chat(threadId) },
+                            onBack    = { teacherScreen = TeacherScreen.Messages }
                         )
                         is TeacherScreen.Chat -> TeacherChatScreen(
                             threadId  = screen.threadId,

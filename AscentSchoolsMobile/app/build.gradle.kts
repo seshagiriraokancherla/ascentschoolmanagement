@@ -18,14 +18,17 @@ val keystoreProperties = Properties().apply {
 
 android {
     namespace  = "com.ascentschools.mobile"
-    compileSdk = 35
+    // Android 16. Google Play requires the target API to stay within one year of the
+    // latest release — from 31 Aug 2026 an app targeting below API 36 can no longer be
+    // updated on Play. compileSdk 36 needs AGP 8.9.1+ (hence the toolchain bump).
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "in.educare.mobile"   // overridden by each flavor
         minSdk        = 24
-        targetSdk     = 35
-        versionCode   = 41
-        versionName   = "4.1"
+        targetSdk     = 36
+        versionCode   = 50
+        versionName   = "5.0"
     }
 
     // ── White-label school flavors ────────────────────────────────────────────

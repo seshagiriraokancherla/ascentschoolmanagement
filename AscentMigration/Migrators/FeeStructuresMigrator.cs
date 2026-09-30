@@ -84,14 +84,24 @@ namespace AscentMigration.Migrators
                     LogProgress(processed, result.Total);
 
                     // --- academic_year_id ---
-                    int academicYearId = defaultYearId;
+                    // Blank AcdYear still falls back to the default/latest year. But when
+                    // AcdYear HAS a value and it just isn't found in the dest academic_years,
+                    // insert NULL instead of guessing with the fallback — attaching the fee
+                    // structure row to the wrong (latest) year would be worse than leaving it
+                    // unassigned for manual review. (A NULL year also means the term/period
+                    // lookup below can't match by "{name}|{academicYearId}", so term_id and
+                    // fee_period_id correctly end up NULL too, rather than a wrong match.)
+                    int? academicYearId = defaultYearId;
                     var acdYear = row.AcdYear?.Trim();
                     if (!string.IsNullOrWhiteSpace(acdYear))
                     {
                         if (acadYearMap.TryGetValue(acdYear, out var ayId))
                             academicYearId = ayId;
                         else
-                            Log($"Warning: academic_year '{acdYear}' not found — using fallback academic_year_id={defaultYearId}");
+                        {
+                            academicYearId = null;
+                            Log($"Warning: academic_year '{acdYear}' not found — inserting with academic_year_id = NULL");
+                        }
                     }
 
                     // --- fee_category_id: two-step lookup ---

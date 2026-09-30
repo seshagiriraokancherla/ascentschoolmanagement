@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import {
-  Card, Form, Input, InputNumber, Select, Radio,
-  Button, Divider, message, Spin, Typography,
+  Card, Form, Input, InputNumber, Select, Radio, Switch,
+  Button, Divider, message, Spin, Typography, Upload, Image,
 } from 'antd'
-import { SaveOutlined } from '@ant-design/icons'
+import { SaveOutlined, UploadOutlined } from '@ant-design/icons'
 import api, { apiError } from '../../api/axiosInstance'
+import { useAuthStore } from '../../store/authStore'
+import { API_BASE } from '../../store/brandingStore'
 
 const { Title } = Typography
 const { Option } = Select
@@ -23,20 +25,52 @@ export default function SchoolSettingsPage() {
   const [loading, setLoading]  = useState(true)
   const [saving,  setSaving]   = useState(false)
 
+  // Tracked separately from the AntD form fields — the signature is a small
+  // file upload + preview widget, not a plain text input, so it's simplest to
+  // hold its value here and merge it into the payload on submit.
+  const [signatureUrl, setSignatureUrl]   = useState(null)
+  const [sigUploading, setSigUploading]   = useState(false)
+  const accessToken = useAuthStore(s => s.accessToken)
+
   useEffect(() => {
     api.get('/school/settings')
       .then(res => {
         const d = res.data.data || {}
         form.setFieldsValue(d)
+        setSignatureUrl(d.institutionHeadSignature || null)
       })
       .catch((e) => message.error(apiError(e, 'Failed to load settings.')))
       .finally(() => setLoading(false))
   }, [])
 
+  const handleSignatureUpload = async ({ file, onSuccess, onError }) => {
+    setSigUploading(true)
+    const formData = new FormData()
+    formData.append('file', file)
+    try {
+      const res  = await fetch(`${API_BASE}/school/settings/signature`, {
+        method:      'POST',
+        credentials: 'include',
+        headers:     { Authorization: `Bearer ${accessToken}` },
+        body:        formData,
+      })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body?.message || 'Upload failed.')
+      setSignatureUrl(body.data.url)
+      message.success('Signature uploaded — click Save Settings to apply it.')
+      onSuccess?.(body)
+    } catch (err) {
+      message.error(err.message || 'Failed to upload signature.')
+      onError?.(err)
+    } finally {
+      setSigUploading(false)
+    }
+  }
+
   const onFinish = async (values) => {
     setSaving(true)
     try {
-      await api.put('/school/settings', values)
+      await api.put('/school/settings', { ...values, institutionHeadSignature: signatureUrl })
       message.success('Settings saved.')
     } catch (err) {
       message.error(err.message || 'Failed to save settings.')
@@ -151,8 +185,54 @@ export default function SchoolSettingsPage() {
               <Input maxLength={10} />
             </Form.Item>
           </div>
-          <Form.Item name="institutionHeadSignature" label="Head Signature (file path or URL)">
-            <Input maxLength={255} placeholder="e.g. /signatures/principal.png or https://…" />
+          <Form.Item
+            label="Principal's Signature"
+            extra="Printed automatically on the Exam Hall Ticket report. PNG or JPG, up to 1 MB."
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {signatureUrl && (
+                <Image
+                  src={signatureUrl.startsWith('http') ? signatureUrl : `${API_BASE}${signatureUrl}`}
+                  width={100}
+                  height={44}
+                  style={{ objectFit: 'contain', border: '1px solid #f0f0f0', borderRadius: 4, background: '#fff' }}
+                  preview={{ mask: 'Preview' }}
+                />
+              )}
+              <Upload
+                accept="image/png,image/jpeg"
+                showUploadList={false}
+                customRequest={handleSignatureUpload}
+                beforeUpload={(file) => {
+                  if (file.size > 1024 * 1024) {
+                    message.error('Image must be 1 MB or smaller.')
+                    return Upload.LIST_IGNORE
+                  }
+                  return true
+                }}
+              >
+                <Button icon={<UploadOutlined />} loading={sigUploading} size="small">
+                  {signatureUrl ? 'Replace' : 'Upload'}
+                </Button>
+              </Upload>
+              {signatureUrl && (
+                <Button size="small" danger onClick={() => setSignatureUrl(null)}>
+                  Remove
+                </Button>
+              )}
+            </div>
+          </Form.Item>
+        </Card>
+
+        {/* ── Notifications ──────────────────────────────────────── */}
+        <Card title="Notifications" style={{ marginBottom: 24 }}>
+          <Form.Item
+            name="homeworkSmsEnabled"
+            label="Send SMS when Daily Homework is saved"
+            valuePropName="checked"
+            extra="Sends one SMS to each parent of every student in the section(s) the homework was saved for. Requires an active 'HOMEWORK' template with a DLT template id in Settings → SMS Gateway."
+          >
+            <Switch />
           </Form.Item>
         </Card>
 

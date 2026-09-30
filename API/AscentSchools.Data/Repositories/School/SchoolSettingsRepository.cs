@@ -9,6 +9,27 @@ namespace AscentSchools.Data.Repositories.School
         private readonly IConnectionFactory _db;
         public SchoolSettingsRepository(IConnectionFactory db) { _db = db; }
 
+        /// <summary>Branch identity (name/address/contact) from the master DB, for report headers.</summary>
+        public SchoolProfileDto GetProfile(int schoolId)
+        {
+            using (var conn = _db.GetMasterConnection())
+                return conn.QueryFirstOrDefault<SchoolProfileDto>(
+                    @"SELECT school_name    SchoolName,
+                             school_caption SchoolCaption,
+                             address        Address,
+                             city           City,
+                             district       District,
+                             state          State,
+                             pin_code       PinCode,
+                             mobile         Mobile,
+                             landline       Landline,
+                             email          Email,
+                             website        Website
+                      FROM schools
+                      WHERE school_id = @schoolId",
+                    new { schoolId });
+        }
+
         public SchoolSettingsDto Get(int schoolId)
         {
             using (var conn = _db.GetMasterConnection())
@@ -35,7 +56,8 @@ namespace AscentSchools.Data.Repositories.School
                         progress_report_type         ProgressReportType,
                         institution_head_name        InstitutionHeadName,
                         institution_head_signature   InstitutionHeadSignature,
-                        other_subjects_type          OtherSubjectsType
+                        other_subjects_type          OtherSubjectsType,
+                        homework_sms_enabled          HomeworkSmsEnabled
                       FROM school_settings
                       WHERE school_id = @schoolId",
                     new { schoolId });
@@ -71,6 +93,7 @@ namespace AscentSchools.Data.Repositories.School
                               institution_head_name        = @InstitutionHeadName,
                               institution_head_signature   = @InstitutionHeadSignature,
                               other_subjects_type          = @OtherSubjectsType,
+                              homework_sms_enabled          = @HomeworkSmsEnabled,
                               created_by                   = @updatedBy
                           WHERE school_id = @schoolId
                       ELSE
@@ -83,7 +106,8 @@ namespace AscentSchools.Data.Repositories.School
                               receipt_fee_type_separator, bill_no_series_type,
                               student_concession_enabled, fee_message_to_teacher,
                               billing_status, progress_report_type, institution_head_name,
-                              institution_head_signature, other_subjects_type, created_by
+                              institution_head_signature, other_subjects_type,
+                              homework_sms_enabled, created_by
                           ) VALUES (
                               @schoolId, @AdmissionNoType, @CategoryWiseAdmissions,
                               @NewStudentEntryMode, @PrePrimaryAdmissionPrefix,
@@ -93,7 +117,8 @@ namespace AscentSchools.Data.Repositories.School
                               @ReceiptFeeTypeSeparator, @BillNoSeriesType,
                               @StudentConcessionEnabled, @FeeMessageToTeacher,
                               @BillingStatus, @ProgressReportType, @InstitutionHeadName,
-                              @InstitutionHeadSignature, @OtherSubjectsType, @updatedBy
+                              @InstitutionHeadSignature, @OtherSubjectsType,
+                              @HomeworkSmsEnabled, @updatedBy
                           )",
                     new
                     {
@@ -108,7 +133,8 @@ namespace AscentSchools.Data.Repositories.School
                         r.StudentConcessionEnabled,   r.FeeMessageToTeacher,
                         r.BillingStatus,              r.ProgressReportType,
                         r.InstitutionHeadName,        r.InstitutionHeadSignature,
-                        r.OtherSubjectsType,          updatedBy
+                        r.OtherSubjectsType,          r.HomeworkSmsEnabled,
+                        updatedBy
                     });
         }
     }

@@ -39,20 +39,31 @@ namespace AscentSchools.Data.Repositories.School
 
         /// <summary>
         /// Distinct subjects mapped to a class across ALL academic years — used by
-        /// the exam setup, which picks subjects by class only (no year filter).
+        /// the exam setup (subjects by class only, no year filter) and by Daily/List
+        /// Homework. Ordered by display_order (the same order set in Master Data →
+        /// Class Subjects), not alphabetically — a subject can carry a different
+        /// display_order per year, so when it appears in more than one year the
+        /// MOST RECENT year's value wins (same "latest year wins on a collision"
+        /// convention used elsewhere for cross-year subject lookups).
         /// </summary>
         public IEnumerable<AvailableSubjectDto> GetSubjectsForClass(string tenantDbName, int schoolId, int classId)
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 return conn.Query<AvailableSubjectDto>(
-                    @"SELECT DISTINCT sub.subject_id SubjectId, sub.subject_name SubjectName,
+                    @";WITH ranked AS (
+                          SELECT cs.subject_id, cs.display_order,
+                                 ROW_NUMBER() OVER (PARTITION BY cs.subject_id ORDER BY cs.academic_year_id DESC) AS rn
+                          FROM class_subjects cs
+                          WHERE cs.school_id = @schoolId
+                            AND cs.class_id  = @classId
+                            AND cs.status    = 'Active'
+                      )
+                      SELECT sub.subject_id SubjectId, sub.subject_name SubjectName,
                              sub.short_name ShortName, sub.subject_type SubjectType
-                      FROM class_subjects cs
-                      JOIN subjects sub ON sub.subject_id = cs.subject_id
-                      WHERE cs.school_id = @schoolId
-                        AND cs.class_id = @classId
-                        AND cs.status = 'Active'
-                      ORDER BY sub.subject_name",
+                      FROM ranked r
+                      JOIN subjects sub ON sub.subject_id = r.subject_id
+                      WHERE r.rn = 1
+                      ORDER BY ISNULL(r.display_order, 9999), sub.subject_name",
                     new { schoolId, classId });
         }
 

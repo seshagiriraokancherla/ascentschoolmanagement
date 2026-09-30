@@ -67,6 +67,29 @@ namespace AscentSchools.Core.DTOs.School.Messaging
         public string Body { get; set; }
     }
 
+    // ── Teacher-initiated messaging (any staff w/ a mobile teacher login → any
+    // student in the school; no class_teacher_assignments requirement — that table
+    // still drives the ordinary shared-class inbox, this is a separate, open path) ──
+
+    public class MessagingClassDto
+    {
+        public int    ClassId   { get; set; }
+        public string ClassName { get; set; }
+    }
+
+    public class MessagingStudentDto
+    {
+        public int    StudentUniqueId { get; set; }
+        public string StudentName     { get; set; }
+        public string AdmissionNo     { get; set; }
+        public string SectionName     { get; set; }
+    }
+
+    public class OpenConversationRequest
+    {
+        public int StudentUniqueId { get; set; }
+    }
+
     /// <summary>
     /// A student's current-year placement — everything message routing needs,
     /// in one lookup. Data-layer row shape.

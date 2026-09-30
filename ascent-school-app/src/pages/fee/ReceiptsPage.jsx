@@ -3,11 +3,12 @@ import {
   Card, Table, Button, Input, Select, DatePicker, Tag, Drawer,
   Descriptions, Row, Col, Divider, Typography, Space, Modal, Form, App as AntApp,
 } from 'antd'
-import { SearchOutlined, EyeOutlined, StopOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons'
+import { SearchOutlined, EyeOutlined, StopOutlined, DownloadOutlined, PrinterOutlined, FilePdfOutlined } from '@ant-design/icons'
 import Papa from 'papaparse'
 import dayjs from 'dayjs'
 import api, { apiError } from '../../api/axiosInstance'
 import { useBrandingStore } from '../../store/brandingStore'
+import { exportListingPdf } from '../reports/reportUtils'
 
 const { Text, Title } = Typography
 const { RangePicker } = DatePicker
@@ -18,9 +19,11 @@ const STATUS_OPTIONS = [
   { value: 'Cancelled', label: 'Cancelled' },
 ]
 
-export default function ReceiptsPage() {
+export default function ReceiptsPage({ category = null, title = 'Fee Receipts' } = {}) {
   const { message }  = AntApp.useApp()
   const { branding } = useBrandingStore()
+  // File names / PDF title differ per category, e.g. 'transport_receipts.csv' vs 'receipts.csv'.
+  const fileSlug = category ? category.toLowerCase() + '_receipts' : 'receipts'
 
   const [receipts,  setReceipts]  = useState([])
   const [loading,   setLoading]   = useState(false)
@@ -33,6 +36,8 @@ export default function ReceiptsPage() {
   const [paymentModes,  setPaymentModes]  = useState([])
   const [page,         setPage]         = useState(1)
   const [pageSize,     setPageSize]     = useState(20)
+  const [schoolProfile, setSchoolProfile] = useState(null)  // name/address/contact for the PDF letterhead
+  const [exportingPdf,  setExportingPdf]  = useState(false)
 
   // Receipt detail drawer
   const [drawerOpen,  setDrawerOpen]  = useState(false)
@@ -55,6 +60,7 @@ export default function ReceiptsPage() {
       if (status)           q.set('status',       status)
       if (createdAfter)     q.set('createdAfter', createdAfter.format('YYYY-MM-DDTHH:mm:ss'))
       if (paymentModeId)    q.set('paymentModeId', paymentModeId)
+      if (category)         q.set('category',      category)
       const res = await api.get(`/school/fees/receipts?${q}`)
       setReceipts(res.data?.data || [])
     } finally {
@@ -68,6 +74,15 @@ export default function ReceiptsPage() {
   useEffect(() => {
     api.get('/school/master/payment-modes')
       .then(r => setPaymentModes((r.data?.data || []).filter(m => m.status === 'Active')))
+      .catch(() => {})
+  }, [])
+
+  // Branch name/address for the PDF letterhead. Branch-specific, so it can't come from
+  // /branding (that resolves group-wide, pre-login). Failure is non-fatal — the PDF
+  // falls back to the branding display name with no address block.
+  useEffect(() => {
+    api.get('/school/settings/profile')
+      .then(r => setSchoolProfile(r.data?.data || null))
       .catch(() => {})
   }, [])
 
@@ -139,8 +154,83 @@ export default function ReceiptsPage() {
     }))
     const csv = Papa.unparse(rows)
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
-    const a   = Object.assign(document.createElement('a'), { href: url, download: 'receipts.csv' })
+    const a   = Object.assign(document.createElement('a'), { href: url, download: `${fileSlug}.csv` })
     a.click(); URL.revokeObjectURL(url)
+  }
+
+  // Same columns as the grid / CSV, one row per receipt.
+  const exportPdf = async () => {
+    if (receipts.length === 0) { message.warning('No receipts to export.'); return }
+    setExportingPdf(true)
+    try {
+      const rows = receipts.map((r, i) => [
+        i + 1,
+        r.receiptNo,
+        r.studentName,
+        r.admissionNo,
+        r.className || '—',
+        r.paymentDate ? dayjs(r.paymentDate).format('DD-MM-YYYY') : '—',
+        Number(r.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        r.paymentModeName || '—',
+        r.status,
+      ])
+
+      // Cancelled receipts are voided money — they are listed but kept out of the
+      // collected total and its per-mode breakdown, and reported separately.
+      const active    = receipts.filter((r) => r.status !== 'Cancelled')
+      const cancelled = receipts.filter((r) => r.status === 'Cancelled')
+      const byModeMap = active.reduce((acc, r) => {
+        const k = r.paymentModeName || 'Unspecified'
+        acc[k] = (acc[k] || 0) + Number(r.totalAmount || 0)
+        return acc
+      }, {})
+
+      const addr = schoolProfile
+      const addressLines = [
+        [addr?.address, addr?.city, addr?.district, addr?.state].filter(Boolean).join(', ')
+          + (addr?.pinCode ? ` - ${addr.pinCode}` : ''),
+        [addr?.mobile, addr?.landline, addr?.email].filter(Boolean).join('  |  '),
+      ].filter((l) => l && l.trim())
+
+      const rangeLabel = dateRange?.[0] && dateRange?.[1]
+        ? `From ${dateRange[0].format('DD-MM-YYYY')} To ${dateRange[1].format('DD-MM-YYYY')}`
+        : ''
+
+      await exportListingPdf({
+        schoolName:   schoolProfile?.schoolName || branding?.displayName || 'School',
+        addressLines,
+        logoUrl:      branding?.logoPath,
+        title:        category ? `${category} Fee Collection Details (Receipt-wise)` : 'Fee Collection Details (Receipt-wise)',
+        rangeLabel,
+        columns:      ['S.No', 'Receipt No', 'Student', 'Adm No', 'Class', 'Date', 'Amount', 'Mode', 'Status'],
+        rows,
+        totals: {
+          collected:       active.reduce((s, r) => s + Number(r.totalAmount || 0), 0),
+          byMode:          Object.entries(byModeMap).map(([mode, amount]) => ({ mode, amount })),
+          cancelledAmount: cancelled.reduce((s, r) => s + Number(r.totalAmount || 0), 0),
+          cancelledCount:  cancelled.length,
+        },
+        tableOptions: {
+          // Portrait content width is 190mm; fixed columns take 147, leaving ~43mm
+          // for the auto-width Student column (the only one that needs to breathe).
+          columnStyles: {
+            0: { cellWidth: 11, halign: 'right' },   // S.No
+            1: { cellWidth: 24 },                    // Receipt No
+            3: { cellWidth: 16 },                    // Adm No
+            4: { cellWidth: 20 },                    // Class
+            5: { cellWidth: 20, halign: 'center' },  // Date
+            6: { cellWidth: 24, halign: 'right' },   // Amount
+            7: { cellWidth: 16 },                    // Mode
+            8: { cellWidth: 16, halign: 'center' },  // Status
+          },
+        },
+        fileName: `${fileSlug === 'receipts' ? 'fee_collection_receipts' : fileSlug}.pdf`,
+      })
+    } catch (e) {
+      message.error(apiError(e, 'Failed to generate PDF.'))
+    } finally {
+      setExportingPdf(false)
+    }
   }
 
   const columns = [
@@ -200,7 +290,7 @@ export default function ReceiptsPage() {
 
   return (
     <>
-      <Card title="Fee Receipts">
+      <Card title={title}>
         {/* Filters */}
         <Row gutter={12} style={{ marginBottom: 16 }}>
           <Col flex="auto">
@@ -253,6 +343,11 @@ export default function ReceiptsPage() {
           </Col>
           <Col>
             <Button icon={<DownloadOutlined />} onClick={exportCsv}>Export CSV</Button>
+          </Col>
+          <Col>
+            <Button icon={<FilePdfOutlined />} onClick={exportPdf} loading={exportingPdf}>
+              Export PDF
+            </Button>
           </Col>
         </Row>
 

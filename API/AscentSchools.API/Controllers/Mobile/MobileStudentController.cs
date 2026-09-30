@@ -88,6 +88,28 @@ namespace AscentSchools.API.Controllers.Mobile
             return Request.CreateResponse(HttpStatusCode.OK, ApiResponse<object>.Ok(marks));
         }
 
+        // GET mobile/student/exam-timetable?academicYearId=0 — a tab inside the Marks screen.
+        [HttpGet, Route("exam-timetable")]
+        public HttpResponseMessage GetExamTimetable([FromUri] int academicYearId = 0)
+        {
+            if (academicYearId <= 0)
+            {
+                using (var conn = new TenantConnectionFactory().GetTenantConnection(Mobile.DbName))
+                    academicYearId = Dapper.SqlMapper.QueryFirstOrDefault<int>(conn,
+                        "SELECT TOP 1 academic_year_id FROM academic_years ORDER BY academic_year_id DESC");
+            }
+
+            int? classId = null;
+            if (!string.IsNullOrEmpty(Mobile.ClassName))
+                classId = GetClassIdNullable(Mobile.DbName, Mobile.ClassName, Mobile.SchoolId);
+
+            if (academicYearId <= 0 || classId == null)
+                return Request.CreateResponse(HttpStatusCode.OK, ApiResponse<object>.Ok(new object[0]));
+
+            var timetable = _data.GetExamTimetable(Mobile.DbName, Mobile.SchoolId, classId.Value, academicYearId);
+            return Request.CreateResponse(HttpStatusCode.OK, ApiResponse<object>.Ok(timetable));
+        }
+
         // GET mobile/student/homework
         [HttpGet, Route("homework")]
         public HttpResponseMessage GetHomework()

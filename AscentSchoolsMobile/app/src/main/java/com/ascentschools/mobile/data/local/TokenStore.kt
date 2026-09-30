@@ -164,6 +164,15 @@ class TokenStore(context: Context) {
         get()      = prefs.getBoolean(KEY_TILES_VIEW, false)
         set(value) = prefs.edit().putBoolean(KEY_TILES_VIEW, value).apply()
 
+    /**
+     * Last calendar date ("yyyy-MM-dd", device-local) the birthday-wishes popup was shown,
+     * so reopening the app repeatedly on the birthday doesn't show it more than once. Not
+     * preserved across logout — a re-login same day re-showing it once more is harmless.
+     */
+    var lastBirthdayPopupDate: String?
+        get()      = prefs.getString(KEY_LAST_BIRTHDAY_POPUP, null)
+        set(value) = prefs.edit().putString(KEY_LAST_BIRTHDAY_POPUP, value).apply()
+
     /** Stable device identifier — auto-generated on first launch, never cleared on logout. */
     val deviceId: String
         get() {
@@ -229,5 +238,6 @@ class TokenStore(context: Context) {
         private const val KEY_BRANDING_LOGO = "branding_logo"
         private const val KEY_BRANDING_COLOR = "branding_color"
         private const val KEY_TILES_VIEW    = "tiles_view"
+        private const val KEY_LAST_BIRTHDAY_POPUP = "last_birthday_popup_date"
     }
 }

@@ -6,7 +6,20 @@ import { useAuthStore }     from '../../store/authStore'
 import { useBrandingStore } from '../../store/brandingStore'
 import api from '../../api/axiosInstance'
 
-const { Title, Text } = Typography
+const { Title, Text, Link } = Typography
+
+// Legal/policy links shown in the login footer — school-specific, keyed by VITE_SCHOOL_CODE.
+// Add another school's entry here (and its own set of links) as needed.
+const POLICY_LINKS = {
+  sfsgwk: [
+    { label: 'Privacy Policy',       url: 'https://sfsschoolgajuwaka.in/privacy-policy/' },
+    { label: 'Terms & Conditions',   url: 'https://sfsschoolgajuwaka.in/terms-conditions/' },
+    { label: 'Cancellation Policy',  url: 'https://sfsschoolgajuwaka.in/cancellation-policy/' },
+    { label: 'Refund Policy',        url: 'https://sfsschoolgajuwaka.in/refund-policy/' },
+  ],
+}
+const schoolCode = (import.meta.env.VITE_SCHOOL_CODE || '').toLowerCase()
+const policyLinks = POLICY_LINKS[schoolCode]
 
 export default function LoginPage() {
   const navigate           = useNavigate()
@@ -90,10 +103,12 @@ export default function LoginPage() {
 
   return (
     <div style={{
-      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      minHeight: '100vh', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
       background: branding.loginBgPath ? `url(${branding.loginBgPath}) center/cover` : '#f0f2f5',
+      padding: '24px 16px',
     }}>
-      <Card style={{ width: 400, boxShadow: '0 4px 24px rgba(0,0,0,0.12)' }}>
+      <Card style={{ width: 400, maxWidth: '100%', boxShadow: '0 4px 24px rgba(0,0,0,0.12)' }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           {branding.logoPath && (
             <img src={branding.logoPath} alt="logo" style={{ height: 60, marginBottom: 12 }} />
@@ -166,6 +181,19 @@ export default function LoginPage() {
           </Form>
         )}
       </Card>
+
+      {policyLinks && (
+        <div style={{ marginTop: 16, textAlign: 'center', maxWidth: 400 }}>
+          {policyLinks.map((l, i) => (
+            <span key={l.url}>
+              {i > 0 && <Text type="secondary" style={{ margin: '0 8px' }}>|</Text>}
+              <Link href={l.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>
+                {l.label}
+              </Link>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

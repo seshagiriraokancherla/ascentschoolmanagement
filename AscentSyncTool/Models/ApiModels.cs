@@ -77,6 +77,8 @@ namespace AscentSyncTool.Models
         public string   FirstLanguage        { get; set; }
         public string   ThirdLanguage        { get; set; }
         public string   UdiseNo              { get; set; }
+        public string   RouteName            { get; set; }   // → bus_route_id, matched by name server-side
+        public string   BusName              { get; set; }   // → bus_id, matched by name server-side
     }
 
     public class BulkStudentImportRequest
@@ -164,5 +166,30 @@ namespace AscentSyncTool.Models
         public bool   success { get; set; }
         public T      data    { get; set; }
         public string message { get; set; }
+
+        // An UNHANDLED server exception is NOT returned in the ApiResponse envelope --
+        // it comes back as Web API's HttpError, whose Message is the fixed placeholder
+        // "An error has occurred." and whose real text sits in ExceptionMessage.
+        // Deserialising that into this type yields success=false + the placeholder, so
+        // capture both spellings (whether the API's camel-case formatter renames
+        // HttpError's dictionary keys is an implementation detail) and surface the real
+        // reason instead of "An error has occurred.".
+        public string exceptionMessage { get; set; }
+        public string ExceptionMessage { get; set; }
+        public string Message          { get; set; }
+
+        /// <summary>Best available error text: business message, else server exception, else fallback.</summary>
+        public string ErrorText(string fallback)
+        {
+            const string Placeholder = "An error has occurred.";
+            var msg = !string.IsNullOrWhiteSpace(message) ? message : Message;
+            var exc = !string.IsNullOrWhiteSpace(exceptionMessage) ? exceptionMessage : ExceptionMessage;
+
+            if (!string.IsNullOrWhiteSpace(msg) && !msg.Trim().Equals(Placeholder, System.StringComparison.OrdinalIgnoreCase))
+                return msg;
+            if (!string.IsNullOrWhiteSpace(exc))
+                return string.IsNullOrWhiteSpace(msg) ? exc : msg.Trim() + " " + exc;
+            return !string.IsNullOrWhiteSpace(msg) ? msg : fallback;
+        }
     }
 }

@@ -20,6 +20,11 @@
 # Deploy secrets (FTP credentials) — never commit
 deploy/deploy.config.json
 
+# These are hand-edited per run with real DB connection strings / API keys for
+# whichever school is currently being migrated/synced — never commit.
+AscentMigration/App.config
+AscentSyncTool/App.config
+
 # NuGet
 *.nupkg
 .nuget/
@@ -45,15 +50,13 @@ TestResults/
 **/.env.production
 **/.env.production.local
 
-# School-specific env files
-ascent-school-app/.env.demo
-ascent-school-app/.env.stannsasf
-ascent-school-app/.env.holyspiritjm
-ascent-school-app/.env.holyspiritjm
-ascent-school-app/.env.depaulemyv
-# Parent app school-specific env files
-ascent-parent-app/.env.demo
-ascent-parent-app/.env.srividya
+# School-specific env files (per-flavor prod config; not secrets, but each new school
+# was needing a matching line added here by hand and kept getting missed).
+# .env.development is a shared dev template with no per-school data — stays tracked.
+ascent-school-app/.env.*
+!ascent-school-app/.env.development
+ascent-parent-app/.env.*
+!ascent-parent-app/.env.development
 
 # Package manager logs
 npm-debug.log*
@@ -78,6 +81,9 @@ nul
 
 # VS Code
 .vscode/
+# Android / Gradle local build cache — machine-specific, regenerated on every build
+**/.gradle/
+
 # Android signing (local only)
 keystore.properties
 **/keystore.properties

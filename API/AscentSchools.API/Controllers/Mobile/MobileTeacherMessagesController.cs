@@ -41,6 +41,46 @@ namespace AscentSchools.API.Controllers.Mobile
         public HttpResponseMessage GetThreads()
             => Ok(_messages.GetThreadsForTeacher(Teacher.DbName, Teacher.SchoolId, Teacher.UserId));
 
+        // ── Start a new conversation — any staff member, any currently-enrolled
+        // student, no class_teacher_assignments required. Picker: class → student →
+        // open (creates/finds the thread) → the caller then uses the normal
+        // GET/POST {threadId} actions below, same as any other conversation.
+
+        // GET /mobile/teacher/messages/classes
+        [HttpGet, Route("classes")]
+        public HttpResponseMessage GetClassesForMessaging()
+            => Ok(_messages.GetAllClassesForMessaging(Teacher.DbName, Teacher.SchoolId));
+
+        // GET /mobile/teacher/messages/students?classId=
+        [HttpGet, Route("students")]
+        public HttpResponseMessage GetStudentsForMessaging([FromUri] int classId)
+        {
+            if (classId <= 0) return Fail(HttpStatusCode.BadRequest, "classId is required.");
+            return Ok(_messages.GetStudentsInClassForMessaging(Teacher.DbName, Teacher.SchoolId, classId));
+        }
+
+        // POST /mobile/teacher/messages/open — resolves (creating if needed) the thread
+        // for a student, so the caller can navigate straight into the normal chat view.
+        // Does NOT send a message itself — sending still goes through Reply below,
+        // exactly like continuing any other conversation.
+        [HttpPost, Route("open")]
+        public HttpResponseMessage OpenConversation([FromBody] OpenConversationRequest request)
+        {
+            if (request == null || request.StudentUniqueId <= 0)
+                return Fail(HttpStatusCode.BadRequest, "studentUniqueId is required.");
+
+            var dbName   = Teacher.DbName;
+            var schoolId = Teacher.SchoolId;
+            var groupId  = Teacher.GroupId;
+
+            var parentId = _messages.GetParentIdForStudent(dbName, schoolId, groupId, request.StudentUniqueId);
+            if (parentId == null)
+                return Fail(HttpStatusCode.NotFound, "This student has no registered parent app account yet.");
+
+            var threadId = _messages.GetOrCreateThread(dbName, schoolId, request.StudentUniqueId, parentId.Value);
+            return Ok(new { threadId });
+        }
+
         // ── GET /mobile/teacher/messages/{threadId} ───────────────────────
 
         [HttpGet, Route("{threadId:int}")]

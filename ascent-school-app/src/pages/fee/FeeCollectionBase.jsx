@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import {
-  Card, Input, Button, Table, Select, DatePicker, Row, Col,
+  Card, Input, InputNumber, Button, Table, Select, DatePicker, Row, Col,
   Divider, Tag, Avatar, Typography, Space, Statistic, App as AntApp,
-  Tabs, Checkbox, Alert, Badge,
+  Tabs, Checkbox, Alert, Badge, Tooltip,
 } from 'antd'
 import {
   SearchOutlined, UserOutlined, DollarOutlined, WifiOutlined,
@@ -51,6 +51,7 @@ export default function FeeCollectionBase({ title, feeTypeCategory, joinTypeFilt
   const [remarks,       setRemarks]       = useState('')
   const [selectedKeys,     setSelectedKeys]     = useState([])
   const [selectedTermKeys, setSelectedTermKeys] = useState([])
+  const [payAmounts,       setPayAmounts]       = useState({})   // lineKey -> amount being paid now
   const [collecting,       setCollecting]       = useState(false)
 
   const selectedMode = paymentModes.find((m) => m.paymentModeId === paymentModeId)
@@ -58,9 +59,6 @@ export default function FeeCollectionBase({ title, feeTypeCategory, joinTypeFilt
 
   // Current year data being collected
   const yearData = summary?.years?.find((y) => y.academicYearId === selectedYear) || null
-
-  // Only items with outstanding > 0 are selectable
-  const collectibleItems = (yearData?.lineItems || []).filter((li) => li.outstanding > 0)
 
   // Key uniquely identifies a fee line item (works for both Term and Monthly)
   const lineKey = (li) => li.feePeriodId
@@ -72,60 +70,155 @@ export default function FeeCollectionBase({ title, feeTypeCategory, joinTypeFilt
     ? `P_${li.feePeriodId}`
     : `T_${li.termId ?? 0}`
 
+  // Line items with no term and no period (e.g. a one-off admission fee) sit outside
+  // the term sequence — they never lock and are never locked by it.
+  const NO_TERM_KEY = 'T_0'
+
+  const allItems = yearData?.lineItems || []
+
   // Distinct terms/periods from ALL line items for the selected year (incl. paid ones)
   const uniqueTerms = (() => {
     const seen = new Set()
     const result = []
-    for (const li of (yearData?.lineItems || [])) {
+    for (const li of allItems) {
       const k = termKey(li)
       if (!seen.has(k)) {
         seen.add(k)
-        result.push({ key: k, label: li.periodLabel || li.termName || '(No Term)', orderNo: li.orderNo ?? li.periodSequenceNo ?? 999 })
+        result.push({
+          key: k,
+          label: li.periodLabel || li.termName || '(No Term)',
+          orderNo: li.orderNo ?? li.periodSequenceNo ?? 999,
+          isSequenced: k !== NO_TERM_KEY,
+        })
       }
     }
+    // Stable sort — ties keep the server's ORDER BY (fee period sequence / term order)
     return result.sort((a, b) => a.orderNo - b.orderNo)
   })()
 
+  // Amount currently entered against a line (defaults to 0 when blank)
+  const payValue = (li) => {
+    const v = payAmounts[lineKey(li)]
+    return typeof v === 'number' && !Number.isNaN(v) ? v : 0
+  }
+
+  // Actual amount that will be sent for a line — never more than what is owed
+  const payNowOf = (li) => Math.min(payValue(li), li.outstanding)
+
+  // A term counts as settled when every still-owed line in it is selected AND paid in
+  // full. An already-cleared term has no owed lines, so `.every` on the empty set is
+  // true — it is settled by definition.
+  const termSettledIn = (tKey, keys, amounts) =>
+    allItems
+      .filter((li) => termKey(li) === tKey && li.outstanding > 0)
+      .every((li) => {
+        const k = lineKey(li)
+        return keys.includes(k) && (amounts[k] ?? 0) >= li.outstanding
+      })
+
+  // Terms must be paid in order. Walking the ordered list, the first term that is not
+  // fully settled stays payable (that's where a partial payment lands) and every term
+  // after it is locked until it clears.
+  const lockedTermsFor = (keys, amounts) => {
+    const locked = new Set()
+    let blocked = false
+    for (const t of uniqueTerms) {
+      if (!t.isSequenced) continue
+      if (blocked) { locked.add(t.key); continue }
+      if (!termSettledIn(t.key, keys, amounts)) blocked = true
+    }
+    return locked
+  }
+
+  const lockedTermKeys = lockedTermsFor(selectedKeys, payAmounts)
+
+  // Only items with outstanding > 0 in an unlocked term are collectible
+  const collectibleItems = allItems.filter(
+    (li) => li.outstanding > 0 && !lockedTermKeys.has(termKey(li))
+  )
+
   // Items visible in the table — filtered by which terms are selected
-  const visibleItems = (yearData?.lineItems || []).filter((li) => selectedTermKeys.includes(termKey(li)))
+  const visibleItems = allItems.filter((li) => selectedTermKeys.includes(termKey(li)))
 
   const totalToPay = collectibleItems
     .filter((li) => selectedKeys.includes(lineKey(li)))
-    .reduce((acc, li) => acc + li.outstanding, 0)
+    .reduce((acc, li) => acc + payNowOf(li), 0)
 
-  // Initialise term + item selection from a line-items array
+  // Single entry point for every selection/amount change: recomputes the lock chain
+  // against the candidate state and drops anything that has fallen behind an unsettled
+  // earlier term (e.g. the clerk lowers a Term 1 amount while Term 2 was selected).
+  const applySelection = (keys, amounts) => {
+    const locked = lockedTermsFor(keys, amounts)
+    const pruned = locked.size === 0
+      ? keys
+      : keys.filter((k) => {
+          const li = allItems.find((x) => lineKey(x) === k)
+          return !li || !locked.has(termKey(li))
+        })
+    setPayAmounts(amounts)
+    setSelectedKeys(pruned)
+  }
+
+  // Initialise term + item selection from a line-items array — everything owed,
+  // each at its full outstanding, so the default is the same full-payment flow as before
   const initSelection = (lineItems) => {
-    const termKeys = [...new Set(
-      lineItems
-        .filter((li) => li.outstanding > 0)
-        .map((li) => li.feePeriodId ? `P_${li.feePeriodId}` : `T_${li.termId ?? 0}`)
-    )]
-    setSelectedTermKeys(termKeys)
-    const itemKeys = lineItems
-      .filter((li) => li.outstanding > 0)
-      .map((li) => li.feePeriodId
-        ? `${li.feeTypeId}_P_${li.feePeriodId}`
-        : `${li.feeTypeId}_T_${li.termId ?? 0}`)
+    const owed    = (lineItems || []).filter((li) => li.outstanding > 0)
+    const amounts = {}
+    const itemKeys = []
+    for (const li of owed) {
+      const k = lineKey(li)
+      itemKeys.push(k)
+      amounts[k] = li.outstanding
+    }
+    setSelectedTermKeys([...new Set(owed.map(termKey))])
+    setPayAmounts(amounts)
     setSelectedKeys(itemKeys)
+  }
+
+  const toggleItem = (li, checked) => {
+    const k = lineKey(li)
+    const amounts = { ...payAmounts }
+    let keys
+    if (checked) {
+      keys = [...selectedKeys, k]
+      if (amounts[k] == null) amounts[k] = li.outstanding
+    } else {
+      keys = selectedKeys.filter((x) => x !== k)
+      delete amounts[k]
+    }
+    applySelection(keys, amounts)
+  }
+
+  const setPayAmount = (li, value) => {
+    const k = lineKey(li)
+    applySelection(selectedKeys, { ...payAmounts, [k]: value == null ? 0 : Number(value) })
   }
 
   const handleTermToggle = (tKey, checked) => {
     if (checked) {
       setSelectedTermKeys((prev) => [...prev, tKey])
-      // Auto-select outstanding items for this term
-      const newItemKeys = (yearData?.lineItems || [])
-        .filter((li) => (li.feePeriodId ? `P_${li.feePeriodId}` : `T_${li.termId ?? 0}`) === tKey && li.outstanding > 0)
-        .map((li) => li.feePeriodId ? `${li.feeTypeId}_P_${li.feePeriodId}` : `${li.feeTypeId}_T_${li.termId ?? 0}`)
-      setSelectedKeys((prev) => [...new Set([...prev, ...newItemKeys])])
+      // Auto-select outstanding items for this term at their full amount
+      const amounts = { ...payAmounts }
+      const newItemKeys = []
+      for (const li of allItems) {
+        if (termKey(li) !== tKey || li.outstanding <= 0) continue
+        const k = lineKey(li)
+        newItemKeys.push(k)
+        if (amounts[k] == null) amounts[k] = li.outstanding
+      }
+      applySelection([...new Set([...selectedKeys, ...newItemKeys])], amounts)
     } else {
       setSelectedTermKeys((prev) => prev.filter((k) => k !== tKey))
       // Deselect items for this term
-      const removeItemKeys = new Set(
-        (yearData?.lineItems || [])
-          .filter((li) => (li.feePeriodId ? `P_${li.feePeriodId}` : `T_${li.termId ?? 0}`) === tKey)
-          .map((li) => li.feePeriodId ? `${li.feeTypeId}_P_${li.feePeriodId}` : `${li.feeTypeId}_T_${li.termId ?? 0}`)
-      )
-      setSelectedKeys((prev) => prev.filter((k) => !removeItemKeys.has(k)))
+      const amounts = { ...payAmounts }
+      const removeItemKeys = new Set()
+      for (const li of allItems) {
+        if (termKey(li) !== tKey) continue
+        const k = lineKey(li)
+        removeItemKeys.add(k)
+        delete amounts[k]
+      }
+      applySelection(selectedKeys.filter((k) => !removeItemKeys.has(k)), amounts)
     }
   }
 
@@ -148,6 +241,7 @@ export default function FeeCollectionBase({ title, feeTypeCategory, joinTypeFilt
     setSummary(null)
     setSelectedKeys([])
     setSelectedTermKeys([])
+    setPayAmounts({})
     setSelectedYear(null)
     if (!student.studentUniqueId) {
       message.error('This student has no unique ID assigned. Run the student_unique_id_migration.sql first.')
@@ -185,23 +279,36 @@ export default function FeeCollectionBase({ title, feeTypeCategory, joinTypeFilt
   const buildItems = () =>
     collectibleItems
       .filter((li) => selectedKeys.includes(lineKey(li)))
-      .map((li) => ({
-        FeeTypeId:        li.feeTypeId   || null,
-        TermId:           li.termId      || null,
-        FeePeriodId:      li.feePeriodId || null,
-        BusRouteId:       li.busRouteId  || null,
-        HostelId:         li.hostelId    || null,
+      .map((li) => {
+        const payNow = payNowOf(li)
         // li.outstanding already nets out the concession (structure − paid − concession).
-        // Send Amount as the gross (outstanding + concession) and ConcessionAmount as the
-        // concession, so the server stores net_amount = Amount − Concession = outstanding
-        // (correct paid total) while the receipt still shows the concession line.
-        Amount:           (li.outstanding || 0) + (li.concessionAmount || 0),
-        ConcessionAmount: li.concessionAmount || 0,
-      }))
+        //
+        // Clearing a line in one payment keeps the original convention: Amount is the
+        // gross (outstanding + concession) and ConcessionAmount the concession, so the
+        // server stores net_amount = outstanding and the receipt still shows the
+        // concession line.
+        //
+        // A partial payment — or any follow-up payment on a line already part-paid —
+        // records only the cash received. Outstanding reads the concession from
+        // fee_concessions, never from the receipt item, so restating it on every
+        // instalment would print the same concession two or three times over.
+        const clearsLine  = li.paidAmount <= 0 && payNow >= li.outstanding
+        const concession  = clearsLine ? (li.concessionAmount || 0) : 0
+        return {
+          FeeTypeId:        li.feeTypeId   || null,
+          TermId:           li.termId      || null,
+          FeePeriodId:      li.feePeriodId || null,
+          BusRouteId:       li.busRouteId  || null,
+          HostelId:         li.hostelId    || null,
+          Amount:           payNow + concession,
+          ConcessionAmount: concession,
+        }
+      })
+      .filter((i) => i.Amount - i.ConcessionAmount > 0)
 
   const doCollect = async (isOnline) => {
     const items = buildItems()
-    if (items.length === 0) { message.warning('No items selected.'); return }
+    if (items.length === 0) { message.warning('Select at least one fee line with an amount to collect.'); return }
     if (!paymentModeId)     { message.warning('Select a payment mode.'); return }
 
     const payload = {
@@ -340,24 +447,30 @@ export default function FeeCollectionBase({ title, feeTypeCategory, joinTypeFilt
       key: 'check',
       width: 36,
       render: (_, li) => {
-        const k = lineKey(li)
-        return (
+        const k      = lineKey(li)
+        const locked = lockedTermKeys.has(termKey(li))
+        const box = (
           <Checkbox
             checked={selectedKeys.includes(k)}
-            disabled={li.outstanding <= 0}
-            onChange={(e) => {
-              setSelectedKeys((prev) =>
-                e.target.checked ? [...prev, k] : prev.filter((x) => x !== k)
-              )
-            }}
+            disabled={li.outstanding <= 0 || locked}
+            onChange={(e) => toggleItem(li, e.target.checked)}
           />
         )
+        // Tooltip needs a real element to hang off — a disabled input swallows hover
+        return locked
+          ? <Tooltip title="Clear the earlier term first"><span>{box}</span></Tooltip>
+          : box
       },
     },
     { title: 'Fee Type', dataIndex: 'feeTypeName', key: 'ft', width: 160 },
     {
-      title: 'Term / Period', key: 'term', width: 130,
-      render: (_, li) => li.periodLabel || li.termName || <Text type="secondary">—</Text>,
+      title: 'Term / Period', key: 'term', width: 150,
+      render: (_, li) => (
+        <Space size={4}>
+          {li.periodLabel || li.termName || <Text type="secondary">—</Text>}
+          {lockedTermKeys.has(termKey(li)) && <Tag>Locked</Tag>}
+        </Space>
+      ),
     },
     { title: 'Fee (₹)', dataIndex: 'structureAmount', key: 'sa', width: 100, render: (v) => v.toFixed(2) },
     { title: 'Paid (₹)', dataIndex: 'paidAmount',    key: 'pa', width: 100, render: (v) => v.toFixed(2) },
@@ -366,11 +479,39 @@ export default function FeeCollectionBase({ title, feeTypeCategory, joinTypeFilt
       render: (v) => <Text strong style={{ color: v > 0 ? '#cf1322' : '#52c41a' }}>{v.toFixed(2)}</Text>,
     },
     {
-      title: 'Pay Now (₹)', dataIndex: 'outstanding', key: 'pay', width: 110,
-      render: (v, li) =>
-        selectedKeys.includes(lineKey(li)) && v > 0
-          ? <Text strong style={{ color: '#1677ff' }}>₹{v.toFixed(2)}</Text>
-          : <Text type="secondary">—</Text>,
+      title: 'Pay Now (₹)', key: 'pay', width: 150,
+      render: (_, li) => {
+        if (li.outstanding <= 0) return <Text type="secondary">—</Text>
+        const selected = selectedKeys.includes(lineKey(li))
+        if (!selected) return <Text type="secondary">—</Text>
+        return (
+          <InputNumber
+            size="small"
+            style={{ width: '100%' }}
+            min={0}
+            max={li.outstanding}
+            precision={2}
+            step={100}
+            value={payAmounts[lineKey(li)]}
+            onChange={(v) => setPayAmount(li, v)}
+          />
+        )
+      },
+    },
+    {
+      title: 'Balance (₹)', key: 'bal', width: 110,
+      render: (_, li) => {
+        if (li.outstanding <= 0) return <Text type="secondary">—</Text>
+        const selected = selectedKeys.includes(lineKey(li))
+        const bal = li.outstanding - (selected ? payNowOf(li) : 0)
+        if (bal <= 0) return <Tag color="success">Clears</Tag>
+        return (
+          <Space size={4}>
+            <Text style={{ color: '#fa8c16' }}>{bal.toFixed(2)}</Text>
+            {selected && payNowOf(li) > 0 && <Tag color="orange">Partial</Tag>}
+          </Space>
+        )
+      },
     },
     {
       title: 'Concession (₹)', dataIndex: 'concessionAmount', key: 'con', width: 120,
@@ -493,17 +634,34 @@ export default function FeeCollectionBase({ title, feeTypeCategory, joinTypeFilt
                 <>
                   {/* Term filter — only shown when there are multiple terms/periods */}
                   {uniqueTerms.length > 1 && (
-                    <div style={{ marginBottom: 12, padding: '8px 14px', background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 6, display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
-                      <Text strong style={{ marginRight: 4 }}>Terms:</Text>
-                      {uniqueTerms.map((t) => (
-                        <Checkbox
-                          key={t.key}
-                          checked={selectedTermKeys.includes(t.key)}
-                          onChange={(e) => handleTermToggle(t.key, e.target.checked)}
-                        >
-                          {t.label}
-                        </Checkbox>
-                      ))}
+                    <div style={{ marginBottom: 12, padding: '8px 14px', background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 6 }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+                        <Text strong style={{ marginRight: 4 }}>Terms:</Text>
+                        {uniqueTerms.map((t) => {
+                          const locked  = lockedTermKeys.has(t.key)
+                          const cleared = t.isSequenced
+                            && allItems.some((li) => termKey(li) === t.key)
+                            && allItems.filter((li) => termKey(li) === t.key).every((li) => li.outstanding <= 0)
+                          const box = (
+                            <Checkbox
+                              checked={selectedTermKeys.includes(t.key)}
+                              disabled={locked}
+                              onChange={(e) => handleTermToggle(t.key, e.target.checked)}
+                            >
+                              {t.label}
+                              {cleared && <Tag color="success" style={{ marginLeft: 6 }}>Cleared</Tag>}
+                              {locked  && <Tag style={{ marginLeft: 6 }}>Locked</Tag>}
+                            </Checkbox>
+                          )
+                          return locked
+                            ? <Tooltip key={t.key} title="Pay the earlier term in full to unlock this one"><span>{box}</span></Tooltip>
+                            : <span key={t.key}>{box}</span>
+                        })}
+                      </div>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        Terms are collected in order — a term unlocks only once every earlier
+                        term is fully paid. Part payment is allowed on the earliest unpaid term.
+                      </Text>
                     </div>
                   )}
 

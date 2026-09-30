@@ -94,13 +94,17 @@ namespace AscentSchools.Data.Repositories.School
                       ORDER BY ISNULL(cs.display_order, 9999), sub.subject_name",
                     new { schoolId, academicYearId, examTypeId, classId }).ToList();
 
+                // Students of the SELECTED year only — promotion inserts a new row per year and
+                // leaves last year's row Active, and classes/sections are shared across years,
+                // so class+section alone would also list last year's students of this class.
                 var students = conn.Query<StudentRow>(
                     @"SELECT student_id StudentId, student_name StudentName, admission_no AdmissionNo
                       FROM students
                       WHERE class_id = @classId AND section_id = @sectionId
+                        AND academic_year_id = @academicYearId
                         AND school_id = @schoolId AND status IN ('Active', 'Y')
                       ORDER BY student_name",
-                    new { classId, sectionId, schoolId }).ToList();
+                    new { classId, sectionId, academicYearId, schoolId }).ToList();
 
                 var marks = conn.Query<MarkRow>(
                     @"SELECT sm.student_id StudentId, sm.subject_id SubjectId,
@@ -109,6 +113,7 @@ namespace AscentSchools.Data.Repositories.School
                       FROM student_marks sm
                       JOIN students s ON s.student_id = sm.student_id
                       WHERE s.class_id = @classId AND s.section_id = @sectionId
+                        AND s.academic_year_id = @academicYearId
                         AND sm.exam_type_id = @examTypeId
                         AND sm.academic_year_id = @academicYearId AND sm.school_id = @schoolId",
                     new { classId, sectionId, examTypeId, academicYearId, schoolId }).ToLookup(m => m.StudentId);
@@ -168,6 +173,7 @@ namespace AscentSchools.Data.Repositories.School
                             AND sm.exam_type_id = @examTypeId AND sm.academic_year_id = @academicYearId
                             AND sm.school_id = @schoolId
                       WHERE s.class_id = @classId AND s.section_id = @sectionId
+                        AND s.academic_year_id = @academicYearId   -- selected year only (see GetMarksGrid)
                         AND s.school_id = @schoolId AND s.status IN ('Active', 'Y')
                       ORDER BY s.student_name",
                     new { schoolId, academicYearId, examTypeId, classId, sectionId, subjectId }).ToList();

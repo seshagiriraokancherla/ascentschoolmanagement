@@ -52,19 +52,22 @@ namespace AscentSyncTool.Data
         {
             using (var conn = Open())
                 return conn.Query<LegacyStudent>(
-                    @"SELECT StuAmnNo, StuName, StuGender, StuDOB, StuAcdYear, StuClassNam,
-                             StuSect, StuClassRolNo, StuFatherName, StuMotherName,
-                             StuMobile1, StuMobile2, StuAdarNo, StuCaste, StuCasteCode,
-                             StuReligion, StuStartClass, MothrLang, StuStatus, StuUnqID,
-                             StuJoinTyp, StuFatherOccup, StuFatherEmpTyp, StuMotherOccup, StuDOJ,
-                             StuNationlity, StuDoorNo, StuAddrArea, StuAddrCity, StuAddrState,
-                             StuAddrPerminent, StuMailID, StuAnnualIncome, StuFamilyChildres,
-                             StuDOBStat, StuCasteStat, StuTransportTyp, AdminDate, StudentType,
-                             BloodGrp, JoinTerm, StuFirstLang, StuThirdLang, StuUdiseNo, CrtDat
-                      FROM SAS_StudentMaster
-                      WHERE CrtDat >= @from AND CrtDat < @toExclusive
-                        AND (@acdYear IS NULL OR StuAcdYear = @acdYear)
-                      ORDER BY CrtDat",
+                    @"SELECT s.StuAmnNo, s.StuName, s.StuGender, s.StuDOB, s.StuAcdYear, s.StuClassNam,
+                             s.StuSect, s.StuClassRolNo, s.StuFatherName, s.StuMotherName,
+                             s.StuMobile1, s.StuMobile2, s.StuAdarNo, s.StuCaste, s.StuCasteCode,
+                             s.StuReligion, s.StuStartClass, s.MothrLang, s.StuStatus, s.StuUnqID,
+                             s.StuJoinTyp, s.StuFatherOccup, s.StuFatherEmpTyp, s.StuMotherOccup, s.StuDOJ,
+                             s.StuNationlity, s.StuDoorNo, s.StuAddrArea, s.StuAddrCity, s.StuAddrState,
+                             s.StuAddrPerminent, s.StuMailID, s.StuAnnualIncome, s.StuFamilyChildres,
+                             s.StuDOBStat, s.StuCasteStat, s.StuTransportTyp, s.AdminDate, s.StudentType,
+                             s.BloodGrp, s.JoinTerm, s.StuFirstLang, s.StuThirdLang, s.StuUdiseNo, s.CrtDat,
+                             br.RouteNam AS RouteName, bd.BusNam AS BusName
+                      FROM SAS_StudentMaster s
+                      LEFT JOIN SAS_BusRoutes br ON br.RouteID = s.StuBusRoute
+                      LEFT JOIN SAS_BussData  bd ON bd.BusID   = s.BusID
+                      WHERE s.CrtDat >= @from AND s.CrtDat < @toExclusive
+                        AND (@acdYear IS NULL OR s.StuAcdYear = @acdYear)
+                      ORDER BY s.CrtDat",
                     new
                     {
                         from = from.Date,

@@ -82,7 +82,7 @@ namespace AscentSyncTool.Mappers
                 FamilyChildrenCount  = int.TryParse(s.StuFamilyChildres?.Trim(), out var fcc) ? (int?)fcc : null,
                 DobProofSubmitted    = Trim(s.StuDOBStat),
                 CasteCertSubmitted   = Trim(s.StuCasteStat),
-                TransportType        = Trim(s.StuTransportTyp),
+                TransportType        = MapTransportType(s.StuTransportTyp),
                 AdmissionDate        = s.AdminDate?.ToString("dd/MM/yyyy"),
                 StudentType          = Trim(s.StudentType),
                 BloodGroup           = Trim(s.BloodGrp),
@@ -90,6 +90,8 @@ namespace AscentSyncTool.Mappers
                 FirstLanguage        = Trim(s.StuFirstLang),
                 ThirdLanguage        = Trim(s.StuThirdLang),
                 UdiseNo              = Trim(s.StuUdiseNo),
+                RouteName            = Trim(s.RouteName),
+                BusName              = Trim(s.BusName),
             };
         }
 
@@ -101,6 +103,19 @@ namespace AscentSyncTool.Mappers
                 case "D": return "Inactive";
                 default:  return string.IsNullOrWhiteSpace(legacy) ? "Active" : legacy.Trim();
             }
+        }
+
+        // Legacy stores a plain "uses transport?" flag ("Yes"/"Y"); the new app's Transport
+        // Type dropdown only recognizes Bus/Walking/Van/Other, so a bare "Yes" would land
+        // unmatched (field shows blank on the student form). Map the affirmative flag to
+        // "Bus" (transport school-wide is bus-based); anything else passes through as-is.
+        private static string MapTransportType(string legacy)
+        {
+            var t = Trim(legacy);
+            if (t == null) return null;
+            return (t.Equals("Yes", StringComparison.OrdinalIgnoreCase) || t.Equals("Y", StringComparison.OrdinalIgnoreCase))
+                ? "Bus"
+                : t;
         }
 
         // ── Download Receipts: API receipt detail + item → legacy row ─────────

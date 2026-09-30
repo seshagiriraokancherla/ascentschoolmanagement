@@ -66,12 +66,15 @@ import com.ascentschools.mobile.ui.fee.FeeViewModel
 import com.ascentschools.mobile.ui.homework.HomeworkScreen
 import com.ascentschools.mobile.ui.homework.HomeworkUiState
 import com.ascentschools.mobile.ui.homework.HomeworkViewModel
+import com.ascentschools.mobile.ui.marks.ExamTimetableScreen
 import com.ascentschools.mobile.ui.marks.MarksScreen
 import com.ascentschools.mobile.ui.marks.MarksViewModel
 import com.ascentschools.mobile.ui.messages.MessagesScreen
 import com.ascentschools.mobile.ui.messages.MessagesViewModel
 import com.ascentschools.mobile.ui.profile.ProfileScreen
+import com.ascentschools.mobile.ui.profile.ProfileUiState
 import com.ascentschools.mobile.ui.profile.ProfileViewModel
+import java.time.LocalDate
 import com.ascentschools.mobile.ui.theme.NavyBlue
 
 // Single source of truth for the 8 parent destinations. Both the bottom tab bar and
@@ -92,7 +95,8 @@ private val features = listOf(
     Feature("Notices",    Icons.Default.Notifications, 5, Color(0xFFBE123C) to Color(0xFFF43F5E)),
     Feature("Events",     Icons.Default.PhotoLibrary,  6, Color(0xFF6D28D9) to Color(0xFF8B5CF6)),
     Feature("Calendar",   Icons.Default.DateRange,     8, Color(0xFF0F766E) to Color(0xFF14B8A6)),
-    Feature("Messages",   Icons.Default.Chat,          7, Color(0xFF0369A1) to Color(0xFF0EA5E9))
+    Feature("Messages",   Icons.Default.Chat,          7, Color(0xFF0369A1) to Color(0xFF0EA5E9)),
+    Feature("Exam Timetable", Icons.Default.Schedule,  9, Color(0xFF334155) to Color(0xFF64748B))
 )
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -150,6 +154,22 @@ fun HomeScreen(
     val calendarVm      = remember { CalendarViewModel(repo) }
     val messagesVm      = remember { MessagesViewModel(repo) }
 
+    // Birthday-wishes popup — fires once per calendar day when the CURRENTLY selected
+    // child's DOB matches today (device-local date; the parent's phone is physically in
+    // India, so no server-timezone conversion is needed here, unlike server-stamped dates).
+    var showBirthdayPopup by remember { mutableStateOf(false) }
+    val profileState by profileVm.uiState.collectAsState()
+    LaunchedEffect(profileState) {
+        val profile = (profileState as? ProfileUiState.Success)?.profile ?: return@LaunchedEffect
+        val dob     = profile.dateOfBirth?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return@LaunchedEffect
+        val today   = LocalDate.now()
+        if (dob.monthValue == today.monthValue && dob.dayOfMonth == today.dayOfMonth &&
+            tokenStore.lastBirthdayPopupDate != today.toString()
+        ) {
+            showBirthdayPopup = true
+        }
+    }
+
     // ── Live badges (tiles mode) — derived from already-loaded VM state ──────────
     val feeState by feeVm.uiState.collectAsState()
     val hwState  by homeworkVm.uiState.collectAsState()
@@ -177,9 +197,15 @@ fun HomeScreen(
             3 -> PullToRefresh(onRefresh = { feeVm.loadFees() })       { FeeScreen(viewModel = feeVm, onInitiatePayment = onInitiatePayment) }
             4 -> PullToRefresh(onRefresh = { homeworkVm.load() })      { HomeworkScreen(viewModel = homeworkVm) }
             5 -> PullToRefresh(onRefresh = { announcementsVm.load() }) { AnnouncementsScreen(viewModel = announcementsVm) }
-            6 -> PullToRefresh(onRefresh = { eventsVm.load() })        { EventsScreen(viewModel = eventsVm) }
+            6 -> PullToRefresh(onRefresh = { eventsVm.load() })        { EventsScreen(uiState = evState, onRetry = { eventsVm.load() }) }
             8 -> PullToRefresh(onRefresh = { calendarVm.load() })      { CalendarScreen(viewModel = calendarVm) }
             7 -> MessagesScreen(viewModel = messagesVm)
+            9 -> {
+                val timetableState by marksVm.timetableState.collectAsState()
+                PullToRefresh(onRefresh = { marksVm.loadTimetable() }) {
+                    ExamTimetableScreen(uiState = timetableState, onRetry = { marksVm.loadTimetable() })
+                }
+            }
         }
     }
 
@@ -214,7 +240,7 @@ fun HomeScreen(
                 actions = {
                     IconButton(onClick = {
                         // Global refresh — reload every tab's data.
-                        profileVm.load(); attendanceVm.load(); marksVm.load()
+                        profileVm.load(); attendanceVm.load(); marksVm.load(); marksVm.loadTimetable()
                         homeworkVm.load(); announcementsVm.load(); eventsVm.load()
                         messagesVm.load(); feeVm.loadFees()
                     }) {
@@ -353,6 +379,24 @@ fun HomeScreen(
                 FeatureContent(tab)
             }
         }
+    }
+
+    // ── Birthday wishes dialog ────────────────────────────────────────────────
+    if (showBirthdayPopup) {
+        val dismiss = {
+            showBirthdayPopup = false
+            tokenStore.lastBirthdayPopupDate = LocalDate.now().toString()
+        }
+        AlertDialog(
+            onDismissRequest = dismiss,
+            title = { Text("🎉 Happy Birthday!") },
+            text  = {
+                Text("Wishing ${tokenStore.studentName ?: "you"} a very happy birthday! 🎂🎈")
+            },
+            confirmButton = {
+                TextButton(onClick = dismiss) { Text("Thank you!") }
+            }
+        )
     }
 
     // ── Switch Child dialog ─────────────────────────────────────────────────

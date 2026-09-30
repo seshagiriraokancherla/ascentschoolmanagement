@@ -5,6 +5,7 @@ import LoginPage            from './pages/auth/LoginPage'
 import MainLayout           from './layouts/MainLayout'
 import SchoolGroupsPage     from './pages/school-groups/SchoolGroupsPage'
 import SchoolGroupDetailPage from './pages/school-groups/SchoolGroupDetailPage'
+import SupportTicketsPage   from './pages/support-tickets/SupportTicketsPage'
 
 const ASCENT_PRIMARY = '#1677ff'
 
@@ -29,6 +30,7 @@ function App() {
               <Route index element={<Navigate to="/school-groups" replace />} />
               <Route path="school-groups"     element={<SchoolGroupsPage />} />
               <Route path="school-groups/:id" element={<SchoolGroupDetailPage />} />
+              <Route path="support-tickets"   element={<SupportTicketsPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

@@ -32,8 +32,10 @@ namespace AscentMigration.Migrators
                 var sectionMap         = await LoadSectionMap(dest);          // "section_name|class_id" → section_id
                 var legacyRouteNameMap = await LoadLegacyRouteNameMap(src);   // legacy RouteID      → RouteNam
                 var destRouteIdMap     = await LoadDestRouteIdMap(dest);      // route_name          → route_id (Active wins on dup)
+                var legacyBusNameMap   = await LoadLegacyBusNameMap(src);     // legacy BusID        → BusNam
+                var destBusIdMap       = await LoadDestBusIdMap(dest);        // bus_name            → bus_id (Active wins on dup)
 
-                Log($"Lookups loaded — years:{acadYearMap.Count} classes:{classMap.Count} sections:{sectionMap.Count} legacyRoutes:{legacyRouteNameMap.Count} destRoutes:{destRouteIdMap.Count}");
+                Log($"Lookups loaded — years:{acadYearMap.Count} classes:{classMap.Count} sections:{sectionMap.Count} legacyRoutes:{legacyRouteNameMap.Count} destRoutes:{destRouteIdMap.Count} legacyBuses:{legacyBusNameMap.Count} destBuses:{destBusIdMap.Count}");
 
                 // 3. Handle Truncate vs Skip
                 var mode = Config.GetTableMode(Name);
@@ -129,6 +131,22 @@ namespace AscentMigration.Migrators
                             Log($"Warning: StuID={row.StuID} — StuBusRoute='{legacyRouteId}' not found in SAS_BusRoutes — bus_route_id set to NULL");
                     }
 
+                    // --- bus_id: two-step lookup (specific vehicle, distinct from the route above) ---
+                    int? busId = null;
+                    var legacyBusId = row.BusID?.Trim();
+                    if (!string.IsNullOrWhiteSpace(legacyBusId))
+                    {
+                        if (legacyBusNameMap.TryGetValue(legacyBusId, out var busName))
+                        {
+                            if (destBusIdMap.TryGetValue(busName, out var bId))
+                                busId = bId;
+                            else
+                                Log($"Warning: StuID={row.StuID} — bus_name '{busName}' not found in dest buses — bus_id set to NULL");
+                        }
+                        else
+                            Log($"Warning: StuID={row.StuID} — BusID='{legacyBusId}' not found in SAS_BussData — bus_id set to NULL");
+                    }
+
                     // --- family_children_count: varchar → int ---
                     int? familyChildrenCount = null;
                     var childrenRaw = row.StuFamilyChildres?.Trim();
@@ -170,7 +188,7 @@ namespace AscentMigration.Migrators
                                     door_no, address_area, address_city, address_state, permanent_address,
                                     email, annual_income, family_children_count,
                                     dob_proof_submitted, aadhar_no, caste_cert_submitted, other_certificates,
-                                    transport_type, bus_route_id, joining_class, remarks,
+                                    transport_type, bus_route_id, bus_id, joining_class, remarks,
                                     status, admission_date,
                                     disability_status, disability_type,
                                     reference_name, student_type,
@@ -190,7 +208,7 @@ namespace AscentMigration.Migrators
                                     @DoorNo, @AddressArea, @AddressCity, @AddressState, @PermanentAddress,
                                     @Email, @AnnualIncome, @FamilyChildrenCount,
                                     @DobProofSubmitted, @AadharNo, @CasteCertSubmitted, @OtherCertificates,
-                                    @TransportType, @BusRouteId, @JoiningClass, @Remarks,
+                                    @TransportType, @BusRouteId, @BusId, @JoiningClass, @Remarks,
                                     @Status, @AdmissionDate,
                                     @DisabilityStatus, @DisabilityType,
                                     @ReferenceName, @StudentType,
@@ -239,8 +257,9 @@ namespace AscentMigration.Migrators
                                     AadharNo              = row.StuAdarNo?.Trim(),
                                     CasteCertSubmitted    = row.StuCasteStat?.Trim(),
                                     OtherCertificates     = row.StuOtherCertificates?.Trim(),
-                                    TransportType         = row.StuTransportTyp?.Trim(),
+                                    TransportType         = MapTransportType(row.StuTransportTyp),
                                     BusRouteId            = busRouteId,
+                                    BusId                 = busId,
                                     JoiningClass          = row.StuStartClass?.Trim(),
                                     Remarks               = row.StuRemarks?.Trim(),
                                     Status                = MapStatus(row.StuStatus),
@@ -385,6 +404,47 @@ namespace AscentMigration.Migrators
             return map;
         }
 
+        // Loads legacy BusID → BusNam from source SAS_BussData
+        private async Task<Dictionary<string, string>> LoadLegacyBusNameMap(SqlConnection src)
+        {
+            var rows = await src.QueryAsync<LegacyBusRow>("SELECT BusID, BusNam FROM SAS_BussData");
+            var map  = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var r in rows)
+            {
+                var key = r.BusID?.Trim() ?? "";
+                if (!string.IsNullOrWhiteSpace(key) && !map.ContainsKey(key))
+                    map[key] = r.BusNam?.Trim() ?? "";
+            }
+            return map;
+        }
+
+        // Loads bus_name → bus_id from dest buses; Active row wins on duplicate name
+        private async Task<Dictionary<string, int>> LoadDestBusIdMap(SqlConnection dest)
+        {
+            var rows = await dest.QueryAsync<DestBusRow>(
+                "SELECT bus_id, bus_name, status FROM buses WHERE school_id = @SchoolId",
+                new { Config.SchoolId });
+            var map       = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var mapStatus = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var r in rows)
+            {
+                var key    = r.bus_name?.Trim() ?? "";
+                var status = r.status?.Trim() ?? "";
+                if (!map.ContainsKey(key))
+                {
+                    map[key]       = r.bus_id;
+                    mapStatus[key] = status;
+                }
+                else if (string.Equals(status, "Active", StringComparison.OrdinalIgnoreCase)
+                      && !string.Equals(mapStatus[key], "Active", StringComparison.OrdinalIgnoreCase))
+                {
+                    map[key]       = r.bus_id;
+                    mapStatus[key] = status;
+                }
+            }
+            return map;
+        }
+
         private static string MakeKey(string admissionNo, int? academicYearId)
             => $"{admissionNo ?? ""}|{academicYearId ?? 0}";
 
@@ -400,6 +460,19 @@ namespace AscentMigration.Migrators
             }
         }
 
+        // Legacy stores a plain "uses transport?" flag ("Yes"/"Y"); the new app's Transport
+        // Type dropdown only recognizes Bus/Walking/Van/Other, so a bare "Yes" would land
+        // unmatched (field shows blank on the student form). Map the affirmative flag to
+        // "Bus" (transport school-wide is bus-based); anything else passes through as-is.
+        private static string MapTransportType(string legacy)
+        {
+            var t = legacy?.Trim();
+            if (string.IsNullOrEmpty(t)) return null;
+            return (t.Equals("Yes", StringComparison.OrdinalIgnoreCase) || t.Equals("Y", StringComparison.OrdinalIgnoreCase))
+                ? "Bus"
+                : t;
+        }
+
         // ---------------------------------------------------------------
         // Private POCOs for typed Dapper queries
         // ---------------------------------------------------------------
@@ -409,6 +482,8 @@ namespace AscentMigration.Migrators
         private class SectionRow   { public int    section_id       { get; set; } public string section_name  { get; set; } public int class_id { get; set; } }
         private class LegacyRouteRow { public string RouteID        { get; set; } public string RouteNam      { get; set; } }
         private class DestRouteRow { public int    route_id         { get; set; } public string route_name    { get; set; } public string status { get; set; } }
+        private class LegacyBusRow  { public string BusID           { get; set; } public string BusNam        { get; set; } }
+        private class DestBusRow   { public int    bus_id           { get; set; } public string bus_name      { get; set; } public string status { get; set; } }
         private class StudentKey   { public string admission_no     { get; set; } public int    academic_year_id { get; set; } }
     }
 }

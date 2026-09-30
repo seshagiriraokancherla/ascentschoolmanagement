@@ -33,7 +33,7 @@ namespace AscentSyncTool.Api
             var body = await resp.Content.ReadAsStringAsync();
             var parsed = JsonConvert.DeserializeObject<ApiResponse<List<ReceiptListItem>>>(body);
             if (parsed == null || !parsed.success)
-                throw new Exception(parsed?.message ?? $"GET receipts failed ({(int)resp.StatusCode}).");
+                throw new Exception(Fail(parsed, resp, body, "GET receipts"));
             return parsed.data ?? new List<ReceiptListItem>();
         }
 
@@ -44,7 +44,7 @@ namespace AscentSyncTool.Api
             var body = await resp.Content.ReadAsStringAsync();
             var parsed = JsonConvert.DeserializeObject<ApiResponse<ReceiptDetail>>(body);
             if (parsed == null || !parsed.success)
-                throw new Exception(parsed?.message ?? $"GET receipt {receiptId} failed.");
+                throw new Exception(Fail(parsed, resp, body, $"GET receipt {receiptId}"));
             return parsed.data;
         }
 
@@ -55,7 +55,7 @@ namespace AscentSyncTool.Api
             var body = await resp.Content.ReadAsStringAsync();
             var parsed = JsonConvert.DeserializeObject<ApiResponse<List<AttendanceExportRow>>>(body);
             if (parsed == null || !parsed.success)
-                throw new Exception(parsed?.message ?? $"GET attendance summary failed ({(int)resp.StatusCode}).");
+                throw new Exception(Fail(parsed, resp, body, "GET attendance summary"));
             return parsed.data ?? new List<AttendanceExportRow>();
         }
 
@@ -74,8 +74,24 @@ namespace AscentSyncTool.Api
             var body = await resp.Content.ReadAsStringAsync();
             var parsed = JsonConvert.DeserializeObject<ApiResponse<BulkImportResult>>(body);
             if (parsed == null || !parsed.success)
-                throw new Exception(parsed?.message ?? $"POST {url} failed ({(int)resp.StatusCode}).");
+                throw new Exception(Fail(parsed, resp, body, $"POST {url}"));
             return parsed.data ?? new BulkImportResult();
+        }
+
+        // The API returns business failures in the ApiResponse envelope, but an UNHANDLED
+        // server exception comes back as Web API HttpError -- message is the placeholder
+        // "An error has occurred." and the real text is in exceptionMessage. Show whichever
+        // is meaningful, plus the HTTP status, so the operator sees the actual reason.
+        private static string Fail<T>(ApiResponse<T> parsed, HttpResponseMessage resp, string body, string what)
+        {
+            var status = $"{what} failed (HTTP {(int)resp.StatusCode} {resp.StatusCode}).";
+            var detail = parsed?.ErrorText(null);
+
+            // Body that is not our JSON at all (e.g. an IIS HTML error page) -- show a snippet.
+            if (string.IsNullOrWhiteSpace(detail) && !string.IsNullOrWhiteSpace(body))
+                detail = body.Length > 500 ? body.Substring(0, 500) + "..." : body;
+
+            return string.IsNullOrWhiteSpace(detail) ? status : status + " " + detail;
         }
     }
 }

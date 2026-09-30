@@ -1,5 +1,15 @@
 namespace AscentSchools.Core.DTOs.Mobile.Data
 {
+    public class BirthdayStudentDto
+    {
+        public long   StudentId   { get; set; }
+        public string AdmissionNo { get; set; }
+        public string StudentName { get; set; }
+        public string ClassName   { get; set; }
+        public string SectionName { get; set; }
+        public string DateOfBirth { get; set; }   // "yyyy-MM-dd" — client computes "turning N"
+    }
+
     public class StudentProfileDto
     {
         public long   StudentId     { get; set; }

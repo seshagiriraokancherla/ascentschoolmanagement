@@ -1,7 +1,20 @@
+using System;
 using System.Collections.Generic;
 
 namespace AscentSchools.Core.DTOs.School.Reports
 {
+    public class MobileAppAdoptionRowDto
+    {
+        public long     StudentId     { get; set; }
+        public string   AdmissionNo   { get; set; }
+        public string   StudentName   { get; set; }
+        public string   ClassName     { get; set; }
+        public string   SectionName   { get; set; }
+        public bool     HasApp        { get; set; }
+        public DateTime? LinkedAt     { get; set; }
+        public DateTime? LastActiveAt { get; set; }   // best-effort, from FCM token last-refresh; null when unavailable
+    }
+
     public class DetainedStudentRowDto
     {
         public long   StudentId      { get; set; }

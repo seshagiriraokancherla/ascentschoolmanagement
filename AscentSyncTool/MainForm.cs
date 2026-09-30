@@ -15,7 +15,7 @@ namespace AscentSyncTool
 {
     public class MainForm : Form
     {
-        public const string Version = "1.2";
+        public const string Version = "1.3";
 
         private readonly LegacyDb _legacy = new LegacyDb();
 
@@ -145,17 +145,23 @@ namespace AscentSyncTool
 
             _tabStudents.OnSave = async () =>
             {
-                var rows = _exportStudents.Select(Mappers.Mappers.ToBulkStudent).ToList();
-                var total = new BulkImportResult();
-                foreach (var batch in Chunk(rows, AppSettings.StudentBatchSize))
+                try
                 {
-                    _tabStudents.SetStatus($"Uploading… ({total.Imported + total.Updated + total.Failed}/{rows.Count})");
-                    var r = await Api.BulkImportStudentsAsync(batch);
-                    Accumulate(total, r);
+                    var rows = _exportStudents.Select(Mappers.Mappers.ToBulkStudent).ToList();
+                    var total = new BulkImportResult();
+                    foreach (var batch in Chunk(rows, AppSettings.StudentBatchSize))
+                    {
+                        _tabStudents.SetStatus($"Uploading… ({total.Imported + total.Updated + total.Failed}/{rows.Count})");
+                        var r = await Api.BulkImportStudentsAsync(batch);
+                        Accumulate(total, r);
+                    }
+                    _tabStudents.SetStatus(
+                        $"Done. Inserted {total.Imported}, updated {total.Updated}, failed {total.Failed}.");
+                    ShowResult("Export Students", total);
+                }catch(Exception ex)
+                {
+                    MessageBox.Show(ex.Message + (ex.StackTrace != null ? ex.StackTrace : ""));
                 }
-                _tabStudents.SetStatus(
-                    $"Done. Inserted {total.Imported}, updated {total.Updated}, failed {total.Failed}.");
-                ShowResult("Export Students", total);
             };
         }
 

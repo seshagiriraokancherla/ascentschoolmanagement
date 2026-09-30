@@ -163,12 +163,12 @@ namespace AscentMigration.Migrators
                                     (exam_type_id, class_id, exam_total_marks, exam_min_marks,
                                      subject_min_marks, sub_max_marks, exam_remarks, academic_year_id,
                                      subject_id, exam_status, created_by, created_date, school_id,
-                                     exam_category, exam_date, grade_type_id)
+                                     exam_category, exam_date, exam_time, grade_type_id)
                                 VALUES
                                     (@ExamTypeId, @ClassId, @ExamTotalMarks, @ExamMinMarks,
                                      @SubjectMinMarks, @SubMaxMarks, @ExamRemarks, @AcademicYearId,
                                      @SubjectId, @ExamStatus, @CreatedBy, @CreatedDate, @SchoolId,
-                                     @ExamCategory, @ExamDate, @GradeTypeId)",
+                                     @ExamCategory, @ExamDate, @ExamTime, @GradeTypeId)",
                                 new
                                 {
                                     ExamTypeId      = examTypeId,
@@ -186,6 +186,12 @@ namespace AscentMigration.Migrators
                                     SchoolId        = Config.SchoolId,
                                     ExamCategory    = row.ExamCatgry?.Trim(),
                                     ExamDate        = row.ExamDatTim,
+                                    // ExamDatTim is a full DATETIME in legacy — carries a time-of-day
+                                    // the old migration discarded (only exam_date, a DATE column, was
+                                    // populated). 00:00:00 means no time was ever entered, not midnight.
+                                    ExamTime        = row.ExamDatTim.HasValue && row.ExamDatTim.Value.TimeOfDay != TimeSpan.Zero
+                                        ? row.ExamDatTim.Value.ToString("HH:mm")
+                                        : null,
                                     GradeTypeId     = gradeTypeId
                                 });
                         }

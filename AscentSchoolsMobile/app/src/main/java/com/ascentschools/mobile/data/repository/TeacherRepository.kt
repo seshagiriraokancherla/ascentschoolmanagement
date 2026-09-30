@@ -42,6 +42,18 @@ class TeacherRepository(private val api: ApiService) {
         if (!body.success) error(body.message ?: "Create failed")
     }
 
+    suspend fun getEvents(classId: Int?): Result<List<SchoolEventDto>> = runCatching {
+        api.getTeacherEvents(classId).bodyOrError().dataOrError()
+    }
+
+    suspend fun getExamTimetable(classId: Int): Result<List<ExamTimetableGroupDto>> = runCatching {
+        api.getTeacherExamTimetable(classId).bodyOrError().dataOrError()
+    }
+
+    suspend fun getBirthdays(classId: Int?): Result<List<BirthdayStudentDto>> = runCatching {
+        api.getTeacherBirthdays(classId).bodyOrError().dataOrError()
+    }
+
     // ── Marks ───────────────────────────────────────────────────────────────────
 
     suspend fun getExamTypes(): Result<List<TeacherExamTypeDto>> = runCatching {
@@ -67,6 +79,20 @@ class TeacherRepository(private val api: ApiService) {
 
     suspend fun getThreads(): Result<List<MessageThreadDto>> = runCatching {
         api.getTeacherThreads().bodyOrError().dataOrError()
+    }
+
+    // ── Start a new conversation ────────────────────────────────────────────
+
+    suspend fun getMessagingClasses(): Result<List<MessagingClassDto>> = runCatching {
+        api.getMessagingClasses().bodyOrError().dataOrError()
+    }
+
+    suspend fun getMessagingStudents(classId: Int): Result<List<MessagingStudentDto>> = runCatching {
+        api.getMessagingStudents(classId).bodyOrError().dataOrError()
+    }
+
+    suspend fun openConversation(studentUniqueId: Int): Result<Int> = runCatching {
+        api.openConversation(OpenConversationRequest(studentUniqueId)).bodyOrError().dataOrError().threadId
     }
 
     suspend fun getThread(threadId: Int): Result<MessageThreadDetailDto> = runCatching {

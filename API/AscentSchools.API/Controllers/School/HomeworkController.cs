@@ -71,6 +71,13 @@ namespace AscentSchools.API.Controllers.School
                         Tenant.TenantDbName, Tenant.GroupId, Tenant.SchoolId,
                         request.ClassId, sectionId,
                         "New Homework", "Today's homework has been posted.", "homework", 0);
+
+                // SMS to parents — gated by the school's "Homework SMS" setting; silent
+                // no-op if disabled or no matching template is configured yet.
+                new HomeworkSmsNotifier().NotifyClass(
+                    Tenant.TenantDbName, Tenant.SchoolId, request.ClassId.Value, result.Sections,
+                    request.AssignedDate, request.Items,
+                    Tenant.FullName ?? Tenant.UserId.ToString());
             }
 
             var scope = result.Sections.Count == 1 && !result.Sections[0].HasValue

@@ -118,15 +118,23 @@ namespace AscentMigration.Migrators
                         continue;
                     }
 
-                    // academic_year_id by AcdYear string; fallback to default
-                    int academicYearId = defaultYearId;
+                    // academic_year_id by AcdYear string.
+                    // Blank AcdYear still falls back to the default/latest year. But when
+                    // AcdYear HAS a value and it just isn't found in the dest academic_years,
+                    // insert NULL instead of guessing with the fallback — attaching the
+                    // period to the wrong (latest) year would be worse than leaving it
+                    // unassigned for manual review.
+                    int? academicYearId = defaultYearId;
                     var acdYear = row.AcdYear?.Trim();
                     if (!string.IsNullOrWhiteSpace(acdYear))
                     {
                         if (yearMap.TryGetValue(acdYear, out var mappedId))
                             academicYearId = mappedId;
                         else
-                            Log($"Warning: academic_year '{acdYear}' not found for period '{label}' — using fallback academic_year_id={defaultYearId}");
+                        {
+                            academicYearId = null;
+                            Log($"Warning: academic_year '{acdYear}' not found for period '{label}' — inserting with academic_year_id = NULL");
+                        }
                     }
 
                     if (mode == MigrationMode.Skip && existingKeys.Contains(CompositeKey(label, academicYearId)))

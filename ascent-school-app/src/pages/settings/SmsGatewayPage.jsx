@@ -200,9 +200,10 @@ export default function SmsGatewayPage() {
         <Paragraph type="secondary">
           Each template must match a DLT-approved message registered with your provider. Use placeholders{' '}
           <Text code>{'{name}'}</Text>, <Text code>{'{class}'}</Text>, <Text code>{'{admissionNo}'}</Text>,{' '}
-          <Text code>{'{date}'}</Text> (Absent), <Text code>{'{amount}'}</Text> (Fee Due) where the
+          <Text code>{'{date}'}</Text> (Absent / Homework), <Text code>{'{amount}'}</Text> (Fee Due) where the
           system fills values. Keys used by the SMS Center: <Text code>ABSENT</Text>, <Text code>FEE_DUE</Text>,{' '}
-          <Text code>CUSTOM</Text> (Custom uses the message typed at send time).
+          <Text code>CUSTOM</Text> (Custom uses the message typed at send time). <Text code>HOMEWORK</Text> is
+          used automatically when Daily Homework is saved, if enabled in Settings → School Settings.
         </Paragraph>
         <Table
           rowKey="templateKey"

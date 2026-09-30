@@ -557,6 +557,20 @@ CREATE TABLE bus_fee_structures (
 );
 GO
 
+-- Prevents duplicate rows for the same route+year+term (or +period), which
+-- previously let the Bus Fee Structure grid show the same term/period twice.
+-- Two filtered indexes because term_id/fee_period_id are mutually exclusive
+-- per row and SQL Server treats NULLs as distinct (see decision #58).
+CREATE UNIQUE INDEX UQ_bus_fee_structures_term
+    ON bus_fee_structures (school_id, route_id, academic_year_id, term_id)
+    WHERE term_id IS NOT NULL;
+GO
+
+CREATE UNIQUE INDEX UQ_bus_fee_structures_period
+    ON bus_fee_structures (school_id, route_id, academic_year_id, fee_period_id)
+    WHERE fee_period_id IS NOT NULL;
+GO
+
 
 -- ============================================================
 -- 21. hostels
@@ -1407,7 +1421,7 @@ CREATE TABLE exam_master (
     subject_min_marks INT          NULL,
     sub_max_marks     INT          NULL,
     activity_max_marks DECIMAL(6,2) NULL,       -- max for the optional activity component; set = this subject-exam has activity marks
-    exam_remarks      VARCHAR(300) NULL,
+    exam_remarks      NVARCHAR(1000) NULL,      -- Unicode (NVARCHAR) — staff paste local-language (Telugu/Hindi) syllabus text here; a plain VARCHAR column silently corrupts non-ASCII characters to '?' on save
     academic_year_id  INT          NULL,        -- FK → academic_years
     subject_id        INT          NULL,        -- FK → subjects
     exam_status       VARCHAR(10)  NOT NULL DEFAULT 'Active',
@@ -1416,7 +1430,9 @@ CREATE TABLE exam_master (
     school_id         INT          NOT NULL,
     exam_category     VARCHAR(200) NULL,
     exam_date         DATE         NULL,
-    grade_type_id     INT          NULL,        -- FK → grade_types
+    exam_time         VARCHAR(5)   NULL,         -- "HH:mm" 24-hour, e.g. "10:00" — wall-clock start time, no timezone concerns
+    grade_type_id     INT          NULL,        -- FK → grade_types (SUBJECT grade)
+    marks_grade_master_id INT      NULL,        -- FK → marks_grade_master (TOTAL grade scale; added after table 54)
     CONSTRAINT PK_exam_master            PRIMARY KEY (id),
     CONSTRAINT FK_exam_master_exam_type  FOREIGN KEY (exam_type_id)     REFERENCES exam_types(exam_type_id),
     CONSTRAINT FK_exam_master_class      FOREIGN KEY (class_id)         REFERENCES classes(class_id),
@@ -1617,4 +1633,59 @@ CREATE TABLE class_subjects (
     CONSTRAINT UQ_class_subjects      UNIQUE (school_id, academic_year_id, class_id, subject_id)
 );
 CREATE INDEX IX_class_subjects_lookup ON class_subjects (school_id, academic_year_id, class_id, status);
+GO
+
+-- ============================================================
+-- 54. marks_grade_master                         (legacy: SAS_MarksGradeMaster)
+--     A reusable named grading SCALE for a student's TOTAL marks, e.g. 'Out of 300'.
+--     School-wide: NOT tied to a class, section or academic year — each exam row
+--     picks one (exam_master.marks_grade_master_id), the same way it picks a
+--     grade_type for the per-SUBJECT grade. The bands live in table 55.
+--     Legacy mapping (SAS_MarksGradeMaster held one band per row): MrksGrad→grade,
+--     MrksGradPoint→grade_point, MinMrks/MaxMrks→min/max_marks, Descrpt→description,
+--     TraStatus→status, BranchID→school_id; ClasID/AcdYear are NOT carried over.
+-- ============================================================
+CREATE TABLE marks_grade_master (
+    id          INT           NOT NULL IDENTITY(1,1),
+    scale_name  VARCHAR(100)  NOT NULL,      -- e.g. 'Out of 300'
+    description VARCHAR(200)  NULL,
+    status      VARCHAR(10)   NOT NULL DEFAULT 'Active',
+    school_id   INT           NOT NULL,
+    created_by  VARCHAR(100)  NULL,
+    created_at  DATETIME      NOT NULL DEFAULT CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'India Standard Time' AS DATETIME),  -- IST (server runs US Eastern)
+    CONSTRAINT PK_marks_grade_master PRIMARY KEY (id),
+    CONSTRAINT UQ_marks_grade_master UNIQUE (school_id, scale_name)
+);
+GO
+
+-- exam_master.marks_grade_master_id → marks_grade_master (added here because
+-- exam_master (table 46) is created before this table, so the FK can't be inline).
+ALTER TABLE exam_master ADD CONSTRAINT FK_exam_master_grade_scale
+    FOREIGN KEY (marks_grade_master_id) REFERENCES marks_grade_master(id);
+GO
+
+-- ============================================================
+-- 55. marks_grade_master_bands
+--     The bands of a scale. min_marks / max_marks are RAW marks (not %), so a
+--     scale only fits exams of that total — hence one scale per total
+--     ('Out of 300', 'Out of 600'), picked per exam.
+--     One row per grade within a scale (UQ on scale_id + grade).
+-- ============================================================
+CREATE TABLE marks_grade_master_bands (
+    id          INT           NOT NULL IDENTITY(1,1),
+    scale_id    INT           NOT NULL,
+    min_marks   DECIMAL(8,2)  NOT NULL,
+    max_marks   DECIMAL(8,2)  NOT NULL,
+    grade       VARCHAR(10)   NOT NULL,
+    grade_point VARCHAR(10)   NULL,          -- text, e.g. A / B (legacy MrksGradPoint is varchar)
+    description VARCHAR(100)  NULL,
+    school_id   INT           NOT NULL,
+    created_by  VARCHAR(100)  NULL,
+    created_at  DATETIME      NOT NULL DEFAULT CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'India Standard Time' AS DATETIME),  -- IST
+    CONSTRAINT PK_mgm_bands       PRIMARY KEY (id),
+    CONSTRAINT FK_mgm_bands_scale FOREIGN KEY (scale_id) REFERENCES marks_grade_master(id),
+    CONSTRAINT UQ_mgm_bands_grade UNIQUE (scale_id, grade),
+    CONSTRAINT CK_mgm_bands_range CHECK (min_marks >= 0 AND min_marks <= max_marks)
+);
+CREATE INDEX IX_mgm_bands_scale ON marks_grade_master_bands (scale_id);
 GO

@@ -183,6 +183,7 @@
     <Compile Include="Controllers\Control\ModulesController.cs" />
     <Compile Include="Controllers\Control\SchoolGroupsController.cs" />
     <Compile Include="Controllers\Control\SubscriptionsController.cs" />
+    <Compile Include="Controllers\Control\ControlSupportTicketsController.cs" />
     <Compile Include="Controllers\Mobile\MobileTeacherAuthController.cs" />
     <Compile Include="Controllers\Mobile\MobileTeacherController.cs" />
     <Compile Include="Controllers\School\BaseSchoolController.cs" />
@@ -195,6 +196,7 @@
     <Compile Include="Controllers\School\FeeController.cs" />
     <Compile Include="Controllers\School\FeeConcessionController.cs" />
     <Compile Include="Controllers\School\SchoolSettingsController.cs" />
+    <Compile Include="Controllers\School\SupportTicketsController.cs" />
     <Compile Include="Controllers\School\HostelController.cs" />
     <Compile Include="Controllers\School\PublicController.cs" />
     <Compile Include="Controllers\School\RolesController.cs" />
@@ -211,10 +213,12 @@
     <Compile Include="Controllers\School\DashboardController.cs" />
     <Compile Include="Controllers\School\TransportController.cs" />
     <Compile Include="Controllers\School\MarksController.cs" />
+    <Compile Include="Controllers\School\MarksCardController.cs" />
     <Compile Include="Controllers\School\HomeworkController.cs" />
     <Compile Include="Controllers\School\AnnouncementsController.cs" />
     <Compile Include="Controllers\School\CalendarController.cs" />
     <Compile Include="Controllers\School\ClassSubjectsController.cs" />
+    <Compile Include="Controllers\School\MarksGradeMasterController.cs" />
     <Compile Include="Controllers\School\ClassTeachersController.cs" />
     <Compile Include="Controllers\School\ExamMasterController.cs" />
     <Compile Include="Controllers\School\GradeTypesController.cs" />
@@ -236,6 +240,7 @@
     <Compile Include="Helpers\R2Service.cs" />
     <Compile Include="Helpers\FcmPushService.cs" />
     <Compile Include="Helpers\PushNotifier.cs" />
+    <Compile Include="Helpers\HomeworkSmsNotifier.cs" />
     <Compile Include="Controllers\School\UploadsController.cs" />
     <Compile Include="Middleware\ControlContext.cs" />
     <Compile Include="Middleware\MobileContext.cs" />

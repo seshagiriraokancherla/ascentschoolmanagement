@@ -136,6 +136,59 @@ namespace AscentSchools.Data.Repositories.Mobile
             }
         }
 
+        // ── Exam timetable ───────────────────────────────────────────────
+        // Read-only per-subject schedule for a class, sourced from exam_master.exam_date
+        // (the same field Master Data → Exam Master already captures — no new table).
+        // Only rows with a date set are returned; a subject staff haven't scheduled yet
+        // simply doesn't appear (no placeholder "TBA" rows).
+
+        public IEnumerable<ExamTimetableGroupDto> GetExamTimetable(
+            string tenantDbName, int schoolId, int classId, int academicYearId)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+            {
+                var rows = conn.Query<ExamTimetableRow>(
+                    @"SELECT
+                        et.exam_type_id   ExamTypeId,
+                        et.exam_type_name ExamTypeName,
+                        et.display_order  DisplayOrder,
+                        sub.subject_name  SubjectName,
+                        CONVERT(VARCHAR(10), em.exam_date, 120) ExamDate,
+                        em.exam_time      ExamTime,
+                        em.exam_remarks   ExamRemarks
+                      FROM exam_master em
+                      JOIN exam_types et  ON et.exam_type_id = em.exam_type_id
+                      JOIN subjects   sub ON sub.subject_id  = em.subject_id
+                      WHERE em.class_id         = @classId
+                        AND em.academic_year_id = @academicYearId
+                        AND em.school_id         = @schoolId
+                        AND em.exam_status       = 'Active'
+                        AND em.exam_date IS NOT NULL
+                      ORDER BY em.exam_date, sub.subject_name",
+                    new { classId, academicYearId, schoolId }).ToList();
+
+                // Group by exam type, ordering groups by their earliest exam date (a real
+                // timetable's natural order) rather than exam_types.display_order, which
+                // doesn't necessarily track chronology when several exam types are active
+                // at once (e.g. a make-up exam type alongside the main term exams).
+                return rows
+                    .GroupBy(r => new { r.ExamTypeId, r.ExamTypeName })
+                    .OrderBy(g => g.Min(r => r.ExamDate))
+                    .Select(g => new ExamTimetableGroupDto
+                    {
+                        ExamTypeId   = g.Key.ExamTypeId,
+                        ExamTypeName = g.Key.ExamTypeName,
+                        Subjects     = g.Select(r => new ExamTimetableSubjectDto
+                        {
+                            SubjectName = r.SubjectName,
+                            ExamDate    = r.ExamDate,
+                            ExamTime    = r.ExamTime,
+                            ExamRemarks = r.ExamRemarks
+                        }).ToList()
+                    }).ToList();
+            }
+        }
+
         // ── Homework ──────────────────────────────────────────────────────
 
         public IEnumerable<HomeworkDto> GetHomework(string tenantDbName, int classId, int? sectionId, int schoolId, int count = 20)
@@ -223,6 +276,42 @@ namespace AscentSchools.Data.Repositories.Mobile
             }
         }
 
+        // ── Birthdays ──────────────────────────────────────────────────────
+        // month/day/includeFeb29 are computed by the caller from TimeHelper.IstToday()
+        // (this project doesn't reference AscentSchools.API, so IST "today" can't be
+        // computed here — must be passed in). includeFeb29 covers the once-every-4-years
+        // gap: on Feb 28 of a non-leap year, a student born Feb 29 is included too.
+        public IEnumerable<BirthdayStudentDto> GetBirthdaysToday(
+            string tenantDbName, int schoolId, int? classId, int month, int day, bool includeFeb29)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+            {
+                return conn.Query<BirthdayStudentDto>(
+                    @"SELECT s.student_id                   StudentId,
+                             s.admission_no                 AdmissionNo,
+                             s.student_name                 StudentName,
+                             ISNULL(c.class_name,   '')      ClassName,
+                             ISNULL(sec.section_name,'')     SectionName,
+                             CONVERT(VARCHAR(10), s.date_of_birth, 120) DateOfBirth
+                      FROM   students s
+                      LEFT JOIN classes  c   ON c.class_id    = s.class_id
+                      LEFT JOIN sections sec ON sec.section_id = s.section_id
+                      WHERE  s.school_id = @schoolId
+                        AND  s.status IN ('Active', 'Y')
+                        AND  s.date_of_birth IS NOT NULL
+                        AND  s.academic_year_id = (SELECT TOP 1 academic_year_id FROM academic_years
+                                                    WHERE school_id = @schoolId AND status = 'Active'
+                                                    ORDER BY academic_year_id DESC)
+                        AND  (@classId IS NULL OR s.class_id = @classId)
+                        AND  (
+                                (MONTH(s.date_of_birth) = @month AND DAY(s.date_of_birth) = @day)
+                             OR (@includeFeb29 = 1 AND MONTH(s.date_of_birth) = 2 AND DAY(s.date_of_birth) = 29)
+                             )
+                      ORDER BY c.sequence_no, sec.section_name, s.student_name",
+                    new { schoolId, classId, month, day, includeFeb29 }).ToList();
+            }
+        }
+
         // ── Announcements ─────────────────────────────────────────────────
 
         public IEnumerable<AnnouncementDto> GetAnnouncements(string tenantDbName, int schoolId, int? classId, int? sectionId = null, int count = 30)
@@ -278,6 +367,17 @@ namespace AscentSchools.Data.Repositories.Mobile
             public decimal MarksObtained    { get; set; }
             public decimal MaxMarks         { get; set; }
             public bool    IsAbsent         { get; set; }
+        }
+
+        private class ExamTimetableRow
+        {
+            public int    ExamTypeId   { get; set; }
+            public string ExamTypeName { get; set; }
+            public int?   DisplayOrder { get; set; }
+            public string SubjectName  { get; set; }
+            public string ExamDate     { get; set; }
+            public string ExamTime     { get; set; }
+            public string ExamRemarks  { get; set; }
         }
 
         private class HomeworkRow

@@ -195,6 +195,7 @@ CREATE TABLE school_settings (
     institution_head_name           VARCHAR(20)     NULL,
     fee_message_to_teacher          VARCHAR(5)      NULL,   -- Y / N
     student_concession_enabled      VARCHAR(25)     NULL,   -- Enable / Disable
+    homework_sms_enabled            BIT             NOT NULL DEFAULT 0,   -- send SMS to parents when Daily Homework is saved
     created_by                      VARCHAR(25)     NULL,
     created_at                      DATETIME        NOT NULL DEFAULT GETDATE(),
     machine_id                      VARCHAR(20)     NULL,
@@ -382,6 +383,7 @@ CREATE TABLE parent_children (
     link_id         INT             NOT NULL IDENTITY(1,1),
     parent_id       INT             NOT NULL,
     student_id      BIGINT          NOT NULL,
+    student_unique_id INT           NULL,       -- stable cross-year id (students.student_unique_id); matches links across promotions even if admission_no changes
     group_id        INT             NOT NULL,
     db_name         VARCHAR(100)    NOT NULL,
     school_id       INT             NOT NULL,
@@ -482,4 +484,45 @@ CREATE UNIQUE INDEX UQ_device_push_tokens_token ON device_push_tokens (fcm_token
 GO
 -- Fast lookup when fanning out to a parent's devices
 CREATE INDEX IX_device_push_tokens_parent ON device_push_tokens (parent_id) WHERE parent_id IS NOT NULL;
+GO
+
+-- ============================================================
+-- 18. support_tickets
+--     School staff raise an Issue/Change ticket from the school app;
+--     the Ascent control app manages status across every group. Lives
+--     here (not a tenant table) so the internal team sees everything
+--     in one place regardless of which tenant DB it came from.
+--     raised_by_user_id has NO FK — tenant users.user_id is a
+--     different DB per group; name/username are snapshots so a
+--     ticket stays meaningful even if that staff member later leaves.
+-- ============================================================
+CREATE TABLE support_tickets (
+    ticket_id                    INT             NOT NULL IDENTITY(1,1),
+    group_id                     INT             NOT NULL,
+    school_id                    INT             NULL,
+    db_name                      VARCHAR(100)    NOT NULL,
+    raised_by_user_id            INT             NOT NULL,
+    raised_by_name               VARCHAR(100)    NOT NULL,
+    raised_by_username           VARCHAR(50)     NULL,
+    ticket_type                  VARCHAR(20)     NOT NULL DEFAULT 'Issue',    -- Issue | Change
+    priority                     VARCHAR(10)     NOT NULL DEFAULT 'Medium',  -- Low | Medium | High | Critical
+    subject                      VARCHAR(200)    NOT NULL,
+    description                  VARCHAR(MAX)    NOT NULL,
+    module                       VARCHAR(50)     NULL,                       -- free text — Fees, Attendance, Reports...
+    status                       VARCHAR(20)     NOT NULL DEFAULT 'Open',    -- Open | InProgress | Done | Cancelled
+    assigned_to_control_user_id  INT             NULL,
+    resolution_notes             VARCHAR(MAX)    NULL,
+    -- IST default (server runs US Eastern) — keep server-stamped dates on the Indian day.
+    created_at                   DATETIME        NOT NULL DEFAULT (CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'India Standard Time' AS DATETIME)),
+    updated_at                   DATETIME        NULL,
+    resolved_at                  DATETIME        NULL,
+    CONSTRAINT PK_support_tickets           PRIMARY KEY (ticket_id),
+    CONSTRAINT FK_support_tickets_group     FOREIGN KEY (group_id)  REFERENCES school_groups(group_id),
+    CONSTRAINT FK_support_tickets_school    FOREIGN KEY (school_id) REFERENCES schools(school_id),
+    CONSTRAINT FK_support_tickets_assigned  FOREIGN KEY (assigned_to_control_user_id) REFERENCES control_users(user_id)
+);
+GO
+CREATE INDEX IX_support_tickets_group  ON support_tickets (group_id, status);
+GO
+CREATE INDEX IX_support_tickets_status ON support_tickets (status, created_at DESC);
 GO

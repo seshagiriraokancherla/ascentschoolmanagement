@@ -27,17 +27,19 @@ namespace AscentSchools.Data.Repositories.School
                              em.class_id ClassId, c.class_name ClassName,
                              em.subject_id SubjectId, sub.subject_name SubjectName,
                              em.academic_year_id AcademicYearId,
-                             em.exam_category ExamCategory, em.exam_date ExamDate,
+                             em.exam_category ExamCategory, em.exam_date ExamDate, em.exam_time ExamTime,
                              em.exam_total_marks ExamTotalMarks, em.exam_min_marks ExamMinMarks,
                              em.sub_max_marks SubMaxMarks, em.subject_min_marks SubjectMinMarks,
                              em.activity_max_marks ActivityMaxMarks, em.exam_remarks ExamRemarks,
                              em.grade_type_id GradeTypeId, g.grade_name GradeName,
+                             em.marks_grade_master_id MarksGradeMasterId, mgm.scale_name MarksGradeScaleName,
                              em.exam_status ExamStatus
                       FROM exam_master em
                       LEFT JOIN exam_types  et  ON et.exam_type_id  = em.exam_type_id
                       LEFT JOIN classes     c   ON c.class_id       = em.class_id
                       LEFT JOIN subjects    sub ON sub.subject_id   = em.subject_id
                       LEFT JOIN grade_types g   ON g.id             = em.grade_type_id
+                      LEFT JOIN marks_grade_master mgm ON mgm.id    = em.marks_grade_master_id
                       WHERE em.school_id = @schoolId
                         AND em.academic_year_id = @academicYearId
                         AND (@examTypeId IS NULL OR em.exam_type_id = @examTypeId)
@@ -64,20 +66,20 @@ namespace AscentSchools.Data.Repositories.School
                                            AND subject_id = @subjectId)
                           INSERT INTO exam_master
                               (exam_name, exam_type_id, class_id, subject_id, academic_year_id,
-                               exam_category, exam_date, exam_total_marks, exam_min_marks,
+                               exam_category, exam_date, exam_time, exam_total_marks, exam_min_marks,
                                sub_max_marks, subject_min_marks, activity_max_marks, exam_remarks,
-                               grade_type_id, exam_status, school_id, created_by)
+                               grade_type_id, marks_grade_master_id, exam_status, school_id, created_by)
                           VALUES
                               (@ExamName, @ExamTypeId, @ClassId, @subjectId, @AcademicYearId,
-                               @ExamCategory, @ExamDate, @ExamTotalMarks, @ExamMinMarks,
+                               @ExamCategory, @ExamDate, @ExamTime, @ExamTotalMarks, @ExamMinMarks,
                                @SubMaxMarks, @SubjectMinMarks, @ActivityMaxMarks, @ExamRemarks,
-                               @GradeTypeId, @ExamStatus, @schoolId, @createdBy);",
+                               @GradeTypeId, @MarksGradeMasterId, @ExamStatus, @schoolId, @createdBy);",
                         new
                         {
                             req.AcademicYearId, req.ExamTypeId, req.ClassId, subjectId, schoolId,
-                            req.ExamName, req.ExamCategory, req.ExamDate,
+                            req.ExamName, req.ExamCategory, req.ExamDate, req.ExamTime,
                             req.ExamTotalMarks, req.ExamMinMarks, req.SubMaxMarks, req.SubjectMinMarks,
-                            req.ActivityMaxMarks, req.ExamRemarks, req.GradeTypeId,
+                            req.ActivityMaxMarks, req.ExamRemarks, req.GradeTypeId, req.MarksGradeMasterId,
                             ExamStatus = string.IsNullOrWhiteSpace(req.ExamStatus) ? "Active" : req.ExamStatus,
                             createdBy,
                         });
@@ -92,18 +94,20 @@ namespace AscentSchools.Data.Repositories.School
                     @"UPDATE exam_master SET
                           exam_name = @ExamName, exam_type_id = @ExamTypeId, class_id = @ClassId,
                           subject_id = @SubjectId, academic_year_id = @AcademicYearId,
-                          exam_category = @ExamCategory, exam_date = @ExamDate,
+                          exam_category = @ExamCategory, exam_date = @ExamDate, exam_time = @ExamTime,
                           exam_total_marks = @ExamTotalMarks, exam_min_marks = @ExamMinMarks,
                           sub_max_marks = @SubMaxMarks, subject_min_marks = @SubjectMinMarks,
                           activity_max_marks = @ActivityMaxMarks,
                           exam_remarks = @ExamRemarks, grade_type_id = @GradeTypeId,
+                          marks_grade_master_id = @MarksGradeMasterId,
                           exam_status = @ExamStatus
                       WHERE id = @id AND school_id = @schoolId",
                     new
                     {
                         req.ExamName, req.ExamTypeId, req.ClassId, req.SubjectId, req.AcademicYearId,
-                        req.ExamCategory, req.ExamDate, req.ExamTotalMarks, req.ExamMinMarks,
-                        req.SubMaxMarks, req.SubjectMinMarks, req.ActivityMaxMarks, req.ExamRemarks, req.GradeTypeId,
+                        req.ExamCategory, req.ExamDate, req.ExamTime, req.ExamTotalMarks, req.ExamMinMarks,
+                        req.SubMaxMarks, req.SubjectMinMarks, req.ActivityMaxMarks, req.ExamRemarks,
+                        req.GradeTypeId, req.MarksGradeMasterId,
                         ExamStatus = string.IsNullOrWhiteSpace(req.ExamStatus) ? "Active" : req.ExamStatus,
                         id, schoolId,
                     });
@@ -177,6 +181,15 @@ namespace AscentSchools.Data.Repositories.School
                     if (!string.IsNullOrWhiteSpace(g.Name) && !gradeMap.ContainsKey(g.Name.Trim()))
                         gradeMap[g.Name.Trim()] = g.Id;
 
+                // Grading scales by name (optional — grades the TOTAL on the marks card).
+                var scaleMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                foreach (var s in conn.Query<NameId>(
+                    @"SELECT id Id, scale_name Name FROM marks_grade_master
+                      WHERE school_id = @schoolId AND ISNULL(status,'Active') = 'Active'",
+                    new { schoolId }))
+                    if (!string.IsNullOrWhiteSpace(s.Name) && !scaleMap.ContainsKey(s.Name.Trim()))
+                        scaleMap[s.Name.Trim()] = s.Id;
+
                 int rowNum = 1;   // header is row 1
                 foreach (var r in list)
                 {
@@ -199,9 +212,23 @@ namespace AscentSchools.Data.Repositories.School
                     if (!string.IsNullOrWhiteSpace(r.GradeType) && gradeMap.TryGetValue(r.GradeType.Trim(), out var gid))
                         gradeTypeId = gid;
 
+                    int? scaleId = null;
+                    if (!string.IsNullOrWhiteSpace(r.MarksGradeMaster))
+                    {
+                        if (!scaleMap.TryGetValue(r.MarksGradeMaster.Trim(), out var sid))
+                        { Fail($"Marks grade master '{r.MarksGradeMaster}' not found."); continue; }
+                        scaleId = sid;
+                    }
+
                     DateTime? examDate = null;
                     if (!string.IsNullOrWhiteSpace(r.ExamDate) && DateTime.TryParse(r.ExamDate.Trim(), out var d))
                         examDate = d;
+
+                    // Lenient — accepts "10:00", "9:5" gets normalized to "09:05", etc. Bad
+                    // values are silently dropped (non-fatal) rather than failing the row.
+                    string examTime = null;
+                    if (!string.IsNullOrWhiteSpace(r.ExamTime) && DateTime.TryParse(r.ExamTime.Trim(), out var t))
+                        examTime = t.ToString("HH:mm");
 
                     // Skip if this (year, exam type, class, subject) exam already exists.
                     var exists = conn.ExecuteScalar<int>(
@@ -216,23 +243,23 @@ namespace AscentSchools.Data.Repositories.School
                         conn.Execute(
                             @"INSERT INTO exam_master
                                 (exam_name, exam_type_id, class_id, subject_id, academic_year_id,
-                                 exam_category, exam_date, exam_total_marks, exam_min_marks,
+                                 exam_category, exam_date, exam_time, exam_total_marks, exam_min_marks,
                                  sub_max_marks, subject_min_marks, activity_max_marks, exam_remarks,
-                                 grade_type_id, exam_status, school_id, created_by)
+                                 grade_type_id, marks_grade_master_id, exam_status, school_id, created_by)
                               VALUES
                                 (@ExamName, @examTypeId, @classId, @subjectId, @yearId,
-                                 @Category, @examDate, @TotalMarks, @ExamMinMarks,
+                                 @Category, @examDate, @examTime, @TotalMarks, @ExamMinMarks,
                                  @SubjectMax, @SubjectMin, @ActivityMax, @Remarks,
-                                 @gradeTypeId, @Status, @schoolId, @createdBy)",
+                                 @gradeTypeId, @scaleId, @Status, @schoolId, @createdBy)",
                             new
                             {
                                 ExamName = string.IsNullOrWhiteSpace(r.ExamName) ? null : r.ExamName.Trim(),
                                 examTypeId, classId, subjectId, yearId,
                                 Category = string.IsNullOrWhiteSpace(r.Category) ? null : r.Category.Trim(),
-                                examDate,
+                                examDate, examTime,
                                 r.TotalMarks, r.ExamMinMarks, r.SubjectMax, r.SubjectMin, r.ActivityMax,
                                 Remarks = string.IsNullOrWhiteSpace(r.Remarks) ? null : r.Remarks.Trim(),
-                                gradeTypeId,
+                                gradeTypeId, scaleId,
                                 Status = string.IsNullOrWhiteSpace(r.Status) ? "Active" : r.Status.Trim(),
                                 schoolId, createdBy,
                             });

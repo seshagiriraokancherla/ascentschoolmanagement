@@ -136,7 +136,26 @@
       "PowerShell($msbuild = \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\18\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\"; & $msbuild \"API\\\\AscentSchools.sln\" /p:Configuration=Release /v:minimal /nologo | Select-Object -Last 25)",
       "PowerShell($msbuild = \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\18\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\"; & $msbuild \"AscentSyncTool\\\\AscentSyncTool.csproj\" /p:Configuration=Debug /v:minimal /nologo /restore | Select-Object -Last 25)",
       "PowerShell($msbuild = \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\18\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\"; & $msbuild \"AscentSyncTool\\\\AscentSyncTool.csproj\" /p:Configuration=Debug /v:minimal /nologo | Select-Object -Last 10)",
-      "PowerShell(Remove-Item *)"
+      "PowerShell(Remove-Item *)",
+      "Bash(gh repo *)",
+      "Bash(npx eslint *)",
+      "PowerShell(.\\\\deploy\\\\deploy-school.ps1 -School demo)",
+      "Bash(curl -s -H \"Cache-Control: no-cache\" https://demo.edu-care.in/index.html)",
+      "PowerShell(.\\\\deploy\\\\deploy-school.ps1 -School all)",
+      "Bash(curl -s -m 20 -H 'Cache-Control: no-cache' https://holyspirit-jm.edu-care.in/index.html)",
+      "Bash(command -v gradle)",
+      "Bash(\"C:/Program Files/Android/Android Studio/jbr/bin/java\" -version)",
+      "PowerShell(.\\\\deploy\\\\deploy-parent.ps1 -School stmaryym)",
+      "Bash(echo *)",
+      "Bash(node pdftext.js \"C:/Users/seshagiri/Downloads/feecollectiondetails_recptwise.pdf\")",
+      "Bash(node pdfsmoke.mjs)",
+      "Bash(npx esbuild *)",
+      "Bash(node pdfsmoke.cjs)",
+      "PowerShell(& \"C:\\\\Users\\\\seshagiri\\\\Source\\\\ascentschoolmanagement\\\\deploy\\\\deploy-api.ps1\")",
+      "PowerShell(& \"C:\\\\Users\\\\seshagiri\\\\Source\\\\ascentschoolmanagement\\\\deploy\\\\deploy-school.ps1\" -School demo)",
+      "PowerShell(& \"C:\\\\Users\\\\seshagiri\\\\Source\\\\ascentschoolmanagement\\\\deploy\\\\deploy-school.ps1\" -School all)",
+      "PowerShell(& \"C:\\\\Users\\\\seshagiri\\\\Source\\\\ascentschoolmanagement\\\\deploy\\\\deploy-school.ps1\" -School stannsbng; Write-Host \"=== PARENT ===\"; & \"C:\\\\Users\\\\seshagiri\\\\Source\\\\ascentschoolmanagement\\\\deploy\\\\deploy-parent.ps1\" -School stannsbng)",
+      "Bash(curl -s -m 25 -D - \"https://stannsicsebng.edu-care.in/assets/index-DEjjJHWF.js\")"
     ]
   }
 }

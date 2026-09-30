@@ -31,9 +31,10 @@ import java.time.format.DateTimeFormatter
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TeacherMessagesScreen(
-    viewModel : TeacherViewModel,
-    onOpen    : (threadId: Int) -> Unit,
-    onBack    : () -> Unit
+    viewModel    : TeacherViewModel,
+    onOpen       : (threadId: Int) -> Unit,
+    onNewMessage : () -> Unit,
+    onBack       : () -> Unit
 ) {
     val threads   by viewModel.threads.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
@@ -67,6 +68,13 @@ fun TeacherMessagesScreen(
                     }
                 }
             )
+        },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(onClick = onNewMessage) {
+                Icon(Icons.Default.Add, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("New Message")
+            }
         }
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {

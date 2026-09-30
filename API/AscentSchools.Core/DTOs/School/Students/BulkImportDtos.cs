@@ -88,6 +88,12 @@ namespace AscentSchools.Core.DTOs.School.Students
         public string   FirstLanguage        { get; set; }
         public string   ThirdLanguage        { get; set; }
         public string   UdiseNo              { get; set; }
+
+        // Transport — matched BY NAME server-side (same convention as ClassName/SectionName/
+        // FeeCategory above); the sync tool resolves the legacy route/bus ID to its name
+        // before sending, since it has no knowledge of the new DB's numeric ids.
+        public string   RouteName            { get; set; }  // → bus_route_id (bus_routes.route_name)
+        public string   BusName              { get; set; }  // → bus_id (buses.bus_name)
     }
 
     public class BulkStudentImportRequest

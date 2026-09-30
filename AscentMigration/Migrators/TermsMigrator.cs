@@ -87,15 +87,24 @@ namespace AscentMigration.Migrators
                         continue;
                     }
 
-                    // Resolve academic_year_id by AcdYear string; fallback to default
-                    int academicYearId = defaultYearId;
+                    // Resolve academic_year_id by AcdYear string.
+                    // Blank AcdYear (no value at all) still falls back to the default/latest
+                    // year. But when AcdYear HAS a value and it just isn't found in the
+                    // dest academic_years (e.g. it doesn't match any migrated year), we no
+                    // longer guess with the fallback — insert NULL instead, since silently
+                    // attaching the term to the wrong (latest) year is worse than leaving it
+                    // unassigned for manual review.
+                    int? academicYearId = defaultYearId;
                     var acdYear = row.AcdYear?.Trim();
                     if (!string.IsNullOrWhiteSpace(acdYear))
                     {
                         if (yearMap.TryGetValue(acdYear, out var mappedId))
                             academicYearId = mappedId;
                         else
-                            Log($"Warning: academic_year '{acdYear}' not found for term '{termName}' — using fallback academic_year_id={defaultYearId}");
+                        {
+                            academicYearId = null;
+                            Log($"Warning: academic_year '{acdYear}' not found for term '{termName}' — inserting with academic_year_id = NULL");
+                        }
                     }
 
                     if (mode == MigrationMode.Skip && existingKeys.Contains(CompositeKey(termName, academicYearId)))

@@ -16,10 +16,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.SubcomposeAsyncImage
+import com.ascentschools.mobile.data.api.RetrofitClient
 import com.ascentschools.mobile.data.api.StudentProfileDto
 
 @Composable
@@ -49,18 +52,29 @@ private fun ProfileContent(p: StudentProfileDto) {
     ) {
         Spacer(Modifier.height(16.dp))
 
-        // Avatar placeholder
+        // Student photo (students.photo_path — an R2 URL since Phase 84), falling back
+        // to the person icon when there is no photo or it fails to load.
+        val photoUrl = p.photoPath?.takeIf { it.isNotBlank() }?.let { RetrofitClient.resolveMedia(it) }
+
         Surface(
             shape  = CircleShape,
             color  = MaterialTheme.colorScheme.primaryContainer,
-            modifier = Modifier.size(80.dp)
+            modifier = Modifier.size(96.dp)
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    Icons.Default.Person,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    tint     = MaterialTheme.colorScheme.onPrimaryContainer
+            if (photoUrl == null) {
+                AvatarPlaceholder()
+            } else {
+                SubcomposeAsyncImage(
+                    model              = photoUrl,
+                    contentDescription = "Student photo",
+                    contentScale       = ContentScale.Crop,
+                    modifier           = Modifier.fillMaxSize().clip(CircleShape),
+                    loading = {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                        }
+                    },
+                    error = { AvatarPlaceholder() }
                 )
             }
         }
@@ -105,6 +119,18 @@ private fun ProfileContent(p: StudentProfileDto) {
         DeleteAccountButton()
 
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun AvatarPlaceholder() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Icon(
+            Icons.Default.Person,
+            contentDescription = null,
+            modifier = Modifier.size(48.dp),
+            tint     = MaterialTheme.colorScheme.onPrimaryContainer
+        )
     }
 }
 

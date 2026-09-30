@@ -57,7 +57,7 @@ export default function TransportStudentsReport() {
 
   const reportTitle = () => {
     const yr    = academicYears.find(y => y.academicYearId === yearId)?.academicYear || ''
-    const route = routes.find(r => r.busRouteId === busRouteId)?.routeName
+    const route = routes.find(r => r.routeId === busRouteId)?.routeName
     return `Transport Students — ${route ? route + ' — ' : ''}${yr}`
   }
 
@@ -113,7 +113,7 @@ export default function TransportStudentsReport() {
             placeholder="All Routes"
             value={busRouteId}
             onChange={v => { setBusRouteId(v); setRows([]); setLoaded(false) }}
-            options={routes.map(r => ({ label: r.routeName, value: r.busRouteId }))}
+            options={routes.map(r => ({ label: r.routeName, value: r.routeId }))}
             allowClear
           />
         </Col>

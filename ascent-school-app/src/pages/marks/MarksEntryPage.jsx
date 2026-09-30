@@ -3,10 +3,75 @@ import {
   Card, Select, InputNumber, Button, Table, Checkbox,
   Space, Typography, Spin, App as AntApp, Row, Col, Tag,
 } from 'antd'
-import { SaveOutlined, SearchOutlined } from '@ant-design/icons'
+import { SaveOutlined, SearchOutlined, FilePdfOutlined, FileExcelOutlined } from '@ant-design/icons'
 import api, { apiError } from '../../api/axiosInstance'
+import { useBrandingStore } from '../../store/brandingStore'
+import { exportPdf, exportCsv } from '../reports/reportUtils'
 
 const { Title, Text } = Typography
+
+// 45.50 → "45.5", 45 → "45"
+const num = v => String(Math.round(Number(v) * 100) / 100)
+
+/**
+ * Build the export table from a SAVED marks grid (server response, not the on-screen edits).
+ * Subjects with an activity component get two columns (Act, Marks); others get one (Marks).
+ * Total = Σ(marks + activity) over all subjects, out of Σ(max + activity max) — absent and
+ * not-entered subjects count 0 but still carry their max.
+ */
+function buildMarksExport(grid) {
+  const subjects = grid.subjects
+  const grandMax = subjects.reduce(
+    (s, sub) => s + Number(sub.maxMarks || 0) + (sub.hasActivity ? Number(sub.activityMaxMarks || 0) : 0), 0)
+
+  const csvColumns = ['S.No', 'Adm No', 'Student Name']
+  subjects.forEach(sub => {
+    if (sub.hasActivity) csvColumns.push(`${sub.subjectName} Act (/${num(sub.activityMaxMarks)})`)
+    csvColumns.push(`${sub.subjectName} Marks (/${num(sub.maxMarks)})`)
+  })
+  csvColumns.push(`Total (/${num(grandMax)})`, '%')
+
+  const rows = grid.rows.map((row, i) => {
+    const bySubject = Object.fromEntries(row.marks.map(c => [c.subjectId, c]))
+    let total = 0
+    let anySaved = false
+    const cells = []
+    subjects.forEach(sub => {
+      const c = bySubject[sub.subjectId] || {}
+      const saved = c.isAbsent || c.marksObtained != null || c.activityMarks != null
+      if (saved) anySaved = true
+      if (c.isAbsent) {
+        if (sub.hasActivity) cells.push('AB')
+        cells.push('AB')
+        return
+      }
+      if (sub.hasActivity) cells.push(c.activityMarks != null ? num(c.activityMarks) : '-')
+      cells.push(c.marksObtained != null ? num(c.marksObtained) : '-')
+      total += Number(c.marksObtained || 0) + (sub.hasActivity ? Number(c.activityMarks || 0) : 0)
+    })
+    const pct = anySaved && grandMax > 0 ? ((total / grandMax) * 100).toFixed(2) : '-'
+    return [i + 1, row.admissionNo || '', row.studentName || '', ...cells,
+            anySaved ? num(total) : '-', pct]
+  })
+
+  // Two-row PDF header: subject name spans its Act/Marks sub-columns.
+  const center = { halign: 'center', valign: 'middle' }
+  const top = [
+    { content: 'S.No',         rowSpan: 2, styles: center },
+    { content: 'Adm No',       rowSpan: 2, styles: center },
+    { content: 'Student Name', rowSpan: 2, styles: { valign: 'middle' } },
+  ]
+  const sub2 = []
+  subjects.forEach(sub => {
+    top.push({ content: sub.subjectName, colSpan: sub.hasActivity ? 2 : 1, styles: center })
+    if (sub.hasActivity) sub2.push({ content: `Act /${num(sub.activityMaxMarks)}`, styles: center })
+    sub2.push({ content: `Marks /${num(sub.maxMarks)}`, styles: center })
+  })
+  top.push({ content: `Total\n/${num(grandMax)}`, rowSpan: 2, styles: center },
+           { content: '%',                        rowSpan: 2, styles: center })
+
+  return { csvColumns, pdfHead: [top, sub2], rows, markColCount: sub2.length }
+}
 
 export default function MarksEntryPage() {
   const { message } = AntApp.useApp()
@@ -26,6 +91,10 @@ export default function MarksEntryPage() {
   const [marks,   setMarks]   = useState({})
   const [loading, setLoading] = useState(false)
   const [saving,  setSaving]  = useState(false)
+  const [dirty,   setDirty]   = useState(false)   // edits on screen not yet saved
+  const [exporting, setExporting] = useState(null) // 'pdf' | 'csv' | null
+
+  const schoolName = useBrandingStore(s => s.branding.displayName)
 
   useEffect(() => {
     api.get('/school/master/academic-years?activeOnly=true').then(r => {
@@ -75,6 +144,7 @@ export default function MarksEntryPage() {
         })
       })
       setMarks(initial)
+      setDirty(false)
     } catch (e) {
       message.error(apiError(e, 'Failed to load marks grid.'))
     } finally {
@@ -85,6 +155,63 @@ export default function MarksEntryPage() {
   const patchCell = (studentId, subjectId, patch) => {
     const key = `${studentId}_${subjectId}`
     setMarks(prev => ({ ...prev, [key]: { ...prev[key], ...patch } }))
+    setDirty(true)
+  }
+
+  // Exports only SAVED marks: re-fetches the grid from the server rather than reading the
+  // on-screen edits (the loaded `grid` is also stale after a Save All).
+  const handleExport = async (kind) => {
+    if (dirty) message.warning('You have unsaved changes — they are not included. Click Save All first to include them.')
+    setExporting(kind)
+    try {
+      const r = await api.get(
+        `/school/marks?classId=${selectedClass}&sectionId=${selectedSection}&examTypeId=${selectedExamType}&academicYearId=${selectedYear}`
+      )
+      const saved = r.data.data
+      if (!saved?.rows?.length || !saved?.subjects?.length) {
+        message.info('Nothing to export.')
+        return
+      }
+      const { csvColumns, pdfHead, rows, markColCount } = buildMarksExport(saved)
+
+      const yearLabel    = academicYears.find(y => y.academicYearId === selectedYear)?.academicYear || ''
+      const examLabel    = examTypes.find(e => e.examTypeId === selectedExamType)?.examTypeName || ''
+      const classLabel   = classes.find(c => c.classId === selectedClass)?.className || ''
+      const sectionLabel = sections.find(s => s.sectionId === selectedSection)?.sectionName || ''
+      const baseName = `marks_${examLabel}_${classLabel}_${sectionLabel}_${yearLabel}`
+        .replace(/[^A-Za-z0-9_-]+/g, '_')
+
+      if (kind === 'csv') {
+        exportCsv({ columns: csvColumns, rows, fileName: `${baseName}.csv` })
+        return
+      }
+
+      // Shrink the font as the number of mark columns grows so the sheet fits A4 landscape.
+      const fontSize = markColCount <= 10 ? 8 : markColCount <= 16 ? 7 : 6
+      const colStyles = { 0: { halign: 'center', cellWidth: 9 }, 1: { cellWidth: 18 } }
+      for (let c = 3; c < 3 + markColCount + 2; c++) colStyles[c] = { halign: 'center' }
+      colStyles[3 + markColCount]     = { halign: 'center', fontStyle: 'bold' }  // Total
+      colStyles[3 + markColCount + 1] = { halign: 'center', fontStyle: 'bold' }  // %
+
+      exportPdf({
+        schoolName: schoolName || 'School',
+        title:  `Marks Statement — ${examLabel} (${yearLabel}) · Class ${classLabel} - ${sectionLabel}`,
+        head:   pdfHead,
+        rows,
+        fileName: `${baseName}.pdf`,
+        tableOptions: {
+          margin: { left: 8, right: 8 },
+          styles: { fontSize, cellPadding: 1.5, lineWidth: 0.1, lineColor: [200, 200, 200] },
+          headStyles: { fillColor: [22, 119, 255], textColor: 255, fontStyle: 'bold',
+                        lineWidth: 0.1, lineColor: [255, 255, 255] },
+          columnStyles: colStyles,
+        },
+      })
+    } catch (e) {
+      message.error(apiError(e, 'Failed to export marks.'))
+    } finally {
+      setExporting(null)
+    }
   }
 
   const handleAbsent = (studentId, subjectId, checked) => {
@@ -131,6 +258,7 @@ export default function MarksEntryPage() {
         entries,
       })
       message.success('Marks saved successfully.')
+      setDirty(false)
     } catch (e) {
       message.error(e.message || 'Failed to save marks.')
     } finally {
@@ -274,9 +402,21 @@ export default function MarksEntryPage() {
         <Card
           title={`${grid.rows.length} students · ${grid.subjects.length} subjects`}
           extra={
-            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleSave}>
-              Save All
-            </Button>
+            <Space wrap>
+              <Button icon={<FilePdfOutlined />} loading={exporting === 'pdf'}
+                      disabled={grid.rows.length === 0 || exporting !== null}
+                      onClick={() => handleExport('pdf')}>
+                Export PDF
+              </Button>
+              <Button icon={<FileExcelOutlined />} loading={exporting === 'csv'}
+                      disabled={grid.rows.length === 0 || exporting !== null}
+                      onClick={() => handleExport('csv')}>
+                Export CSV
+              </Button>
+              <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleSave}>
+                Save All
+              </Button>
+            </Space>
           }
         >
           <Table

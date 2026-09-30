@@ -225,5 +225,16 @@ namespace AscentSchools.API.Controllers.School
                 Tenant.TenantDbName, Tenant.SchoolId,
                 dateFrom, dateTo, minDays, classId, sectionId));
         }
+
+        // GET school/reports/mobile-app-adoption?academicYearId=&classId=&sectionId=
+        [HttpGet, Route("mobile-app-adoption")]
+        public HttpResponseMessage GetMobileAppAdoption(
+            [FromUri] int? academicYearId = null,
+            [FromUri] int? classId        = null,
+            [FromUri] int? sectionId      = null)
+        {
+            return Ok(_repo.GetMobileAppAdoption(
+                Tenant.TenantDbName, Tenant.GroupId, Tenant.SchoolId, academicYearId, classId, sectionId));
+        }
     }
 }

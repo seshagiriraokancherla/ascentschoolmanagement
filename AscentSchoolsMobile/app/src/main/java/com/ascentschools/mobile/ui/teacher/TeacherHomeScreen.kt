@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.filled.Cake
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Chat
@@ -13,6 +14,8 @@ import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -38,6 +41,9 @@ fun TeacherHomeScreen(
     onHomework     : (classId: Int, sectionId: Int?) -> Unit,
     onAnnouncements: (classId: Int) -> Unit,
     onMessages     : () -> Unit,
+    onEvents       : (classId: Int?) -> Unit,
+    onExamTimetable: (classId: Int) -> Unit,
+    onBirthdays    : () -> Unit,
     onLogout       : () -> Unit
 ) {
     val classes  by viewModel.classes.collectAsState()
@@ -226,7 +232,32 @@ fun TeacherHomeScreen(
                         modifier  = Modifier.weight(1f),
                         onClick   = onMessages
                     )
-                    Spacer(Modifier.weight(1f))
+                    IconTile(
+                        label     = "Events",
+                        icon      = Icons.Default.PhotoLibrary,
+                        gradient  = Color(0xFFB45309) to Color(0xFFF59E0B),
+                        enabled   = true,
+                        modifier  = Modifier.weight(1f),
+                        onClick   = { onEvents(cls?.classId) }
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    IconTile(
+                        label     = "Exam Timetable",
+                        icon      = Icons.Default.Schedule,
+                        gradient  = Color(0xFF334155) to Color(0xFF64748B),
+                        enabled   = cls != null,
+                        modifier  = Modifier.weight(1f),
+                        onClick   = { onExamTimetable(cls!!.classId) }
+                    )
+                    IconTile(
+                        label     = "Birthdays",
+                        icon      = Icons.Default.Cake,
+                        gradient  = Color(0xFFDB2777) to Color(0xFFEC4899),
+                        enabled   = true,
+                        modifier  = Modifier.weight(1f),
+                        onClick   = onBirthdays
+                    )
                 }
                 if (cls == null) {
                     Text(
@@ -266,15 +297,36 @@ fun TeacherHomeScreen(
                         enabled  = true,
                         onClick  = { onAnnouncements(cls.classId) }
                     )
+                    ActionCard(
+                        title    = "Exam Timetable",
+                        subtitle = cls.className,
+                        icon     = Icons.Default.Schedule,
+                        enabled  = true,
+                        onClick  = { onExamTimetable(cls.classId) }
+                    )
                 }
-                // Messages spans every class this teacher is assigned to, so it needs
-                // no class picker and stays available before one is selected.
+                // Messages and Events need no class picker, so they stay available
+                // before one is selected.
                 ActionCard(
                     title    = "Messages",
                     subtitle = "Parents of your classes",
                     icon     = Icons.Default.Chat,
                     enabled  = true,
                     onClick  = onMessages
+                )
+                ActionCard(
+                    title    = "Events",
+                    subtitle = "School events gallery",
+                    icon     = Icons.Default.PhotoLibrary,
+                    enabled  = true,
+                    onClick  = { onEvents(cls?.classId) }
+                )
+                ActionCard(
+                    title    = "Birthdays",
+                    subtitle = "Students with a birthday today",
+                    icon     = Icons.Default.Cake,
+                    enabled  = true,
+                    onClick  = onBirthdays
                 )
             }
         }

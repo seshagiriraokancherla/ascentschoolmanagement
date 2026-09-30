@@ -39,7 +39,7 @@ const EXAMPLE_ROWS = [
 const COLUMNS_META = [
   { key: 'AdmissionNo',   required: true,  note: 'Unique per school' },
   { key: 'StudentName',   required: true,  note: '' },
-  { key: 'Gender',        required: false, note: 'Male / Female / Other' },
+  { key: 'Gender',        required: false, note: 'Male / Female' },
   { key: 'DateOfBirth',   required: false, note: 'dd/MM/yyyy' },
   { key: 'AcademicYear',  required: false, note: 'Must match master data, e.g. 2024-25' },
   { key: 'ClassName',     required: false, note: 'Must match master data, e.g. Class 6' },

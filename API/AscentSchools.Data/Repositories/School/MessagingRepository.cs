@@ -99,18 +99,107 @@ namespace AscentSchools.Data.Repositories.School
                     new { schoolId, studentUniqueId, parentId });
         }
 
+        // ── Teacher-initiated messaging (any staff, any student) ────────────────
+        // Deliberately NOT scoped by class_teacher_assignments — any staff member who
+        // can log into the mobile teacher app can start a conversation with any
+        // currently-enrolled student's parent. class_teacher_assignments still drives
+        // the ordinary shared-class inbox below; a thread a teacher personally starts
+        // is additionally surfaced to them via the UNION in GetThreadsForTeacher/
+        // TeacherCanAccessThread so they can keep finding and using it afterwards,
+        // without opening every other teacher's conversations to them too.
+
+        public IEnumerable<MessagingClassDto> GetAllClassesForMessaging(string tenantDbName, int schoolId)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.Query<MessagingClassDto>(
+                    @"SELECT class_id ClassId, class_name ClassName
+                      FROM classes
+                      WHERE school_id = @schoolId AND status = 'Active'
+                      ORDER BY class_name",
+                    new { schoolId });
+        }
+
+        public IEnumerable<MessagingStudentDto> GetStudentsInClassForMessaging(
+            string tenantDbName, int schoolId, int classId)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.Query<MessagingStudentDto>(
+                    $@"SELECT s.student_unique_id StudentUniqueId, s.student_name StudentName,
+                              s.admission_no AdmissionNo, sec.section_name SectionName
+                       FROM students s
+                       LEFT JOIN sections sec ON sec.section_id = s.section_id
+                       WHERE s.school_id = @schoolId AND s.class_id = @classId
+                         AND s.status IN ('Active', 'Y')
+                         AND s.academic_year_id = {CurrentYear}
+                       ORDER BY sec.section_name, s.student_name",
+                    new { schoolId, classId });
+        }
+
+        /// <summary>
+        /// Resolves which registered parent app account to message for a student.
+        /// parent_children lives in the MASTER db and is keyed on the year-specific
+        /// student_id, which is refreshed on every parent login (Phase 18) — so this
+        /// matches on the CURRENT student_id first, falling back to admission_no for a
+        /// link that's gone stale because that parent hasn't opened the app since a
+        /// promotion. Null = no parent has ever registered for this student.
+        /// </summary>
+        public int? GetParentIdForStudent(string tenantDbName, int schoolId, int groupId, int studentUniqueId)
+        {
+            long?  currentStudentId;
+            string admissionNo;
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+            {
+                var row = conn.QueryFirstOrDefault<StudentLookupRow>(
+                    @"SELECT TOP 1 student_id StudentId, admission_no AdmissionNo
+                      FROM students
+                      WHERE student_unique_id = @studentUniqueId AND school_id = @schoolId
+                      ORDER BY academic_year_id DESC",
+                    new { studentUniqueId, schoolId });
+                if (row == null) return null;
+                currentStudentId = row.StudentId;
+                admissionNo      = row.AdmissionNo;
+            }
+
+            using (var mconn = _db.GetMasterConnection())
+            {
+                var parentId = mconn.QueryFirstOrDefault<int?>(
+                    @"SELECT TOP 1 parent_id FROM parent_children
+                      WHERE student_id = @currentStudentId AND group_id = @groupId AND is_active = 1
+                      ORDER BY linked_at DESC",
+                    new { currentStudentId, groupId });
+                if (parentId != null) return parentId;
+
+                if (string.IsNullOrWhiteSpace(admissionNo)) return null;
+                return mconn.QueryFirstOrDefault<int?>(
+                    @"SELECT TOP 1 parent_id FROM parent_children
+                      WHERE admission_no = @admissionNo AND group_id = @groupId AND is_active = 1
+                      ORDER BY linked_at DESC",
+                    new { admissionNo, groupId });
+            }
+        }
+
+        private class StudentLookupRow
+        {
+            public long   StudentId   { get; set; }
+            public string AdmissionNo { get; set; }
+        }
+
         // ── Teacher side ──────────────────────────────────────────────────
 
         /// <summary>
-        /// Threads for children in the classes this teacher is assigned to.
-        /// DISTINCT because a teacher may hold both a class-wide and a
-        /// section-specific assignment that both match the same student.
+        /// Threads for children in the classes this teacher is assigned to, PLUS any
+        /// thread this teacher has personally sent a message in — the latter covers
+        /// a thread they opened via the "message any student" flow for a student
+        /// outside their assignments, so they can keep finding it afterwards without
+        /// that thread being visible to every other teacher in the school.
+        /// EXISTS (not a JOIN) so a thread never fans out into duplicate rows even
+        /// when a teacher holds both a class-wide and a section-specific assignment.
         /// </summary>
         public IEnumerable<MessageThreadDto> GetThreadsForTeacher(string tenantDbName, int schoolId, int userId)
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 return conn.Query<MessageThreadDto>(
-                    $@"SELECT DISTINCT
+                    $@"SELECT
                               t.thread_id ThreadId, t.student_unique_id StudentUniqueId,
                               t.parent_id ParentId, t.status Status,
                               t.blocked_by_type BlockedByType, t.blocked_at BlockedAt,
@@ -128,20 +217,33 @@ namespace AscentSchools.Data.Repositories.School
                             ON s.student_unique_id = t.student_unique_id
                            AND s.school_id = t.school_id
                            AND s.academic_year_id = {CurrentYear}
-                       JOIN class_teacher_assignments a
-                            ON a.class_id = s.class_id
-                           AND a.school_id = s.school_id
-                           AND a.academic_year_id = s.academic_year_id
-                           AND (a.section_id IS NULL OR a.section_id = s.section_id)
                        JOIN classes c        ON c.class_id   = s.class_id
                        LEFT JOIN sections sec ON sec.section_id = s.section_id
-                       WHERE t.school_id = @schoolId AND a.user_id = @userId
+                       WHERE t.school_id = @schoolId
                          AND t.last_message_at IS NOT NULL
+                         AND (
+                               EXISTS (SELECT 1 FROM class_teacher_assignments a
+                                       WHERE a.class_id = s.class_id AND a.school_id = s.school_id
+                                         AND a.academic_year_id = s.academic_year_id
+                                         AND (a.section_id IS NULL OR a.section_id = s.section_id)
+                                         AND a.user_id = @userId)
+                            OR EXISTS (SELECT 1 FROM messages m2
+                                       WHERE m2.thread_id = t.thread_id
+                                         AND m2.sender_type = 'teacher' AND m2.sender_id = @userId)
+                             )
                        ORDER BY t.last_message_at DESC",
                     new { schoolId, userId });
         }
 
-        /// <summary>Guards every teacher thread operation — is this thread in their classes?</summary>
+        /// <summary>
+        /// Guards every teacher thread operation — is this thread in their classes, OR
+        /// did they personally start/reply to it (the "message any student" flow), OR
+        /// is it a brand-new thread with no messages at all yet (so a teacher who just
+        /// called OpenConversation for an out-of-class student can view/reply to it
+        /// before their first message exists — there's nothing to leak in an empty
+        /// thread, and the self-sent-message condition above takes over the moment
+        /// they actually send something).
+        /// </summary>
         public bool TeacherCanAccessThread(string tenantDbName, int schoolId, int userId, int threadId)
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
@@ -152,12 +254,18 @@ namespace AscentSchools.Data.Repositories.School
                             ON s.student_unique_id = t.student_unique_id
                            AND s.school_id = t.school_id
                            AND s.academic_year_id = {CurrentYear}
-                       JOIN class_teacher_assignments a
-                            ON a.class_id = s.class_id
-                           AND a.school_id = s.school_id
-                           AND a.academic_year_id = s.academic_year_id
-                           AND (a.section_id IS NULL OR a.section_id = s.section_id)
-                       WHERE t.thread_id = @threadId AND t.school_id = @schoolId AND a.user_id = @userId",
+                       WHERE t.thread_id = @threadId AND t.school_id = @schoolId
+                         AND (
+                               EXISTS (SELECT 1 FROM class_teacher_assignments a
+                                       WHERE a.class_id = s.class_id AND a.school_id = s.school_id
+                                         AND a.academic_year_id = s.academic_year_id
+                                         AND (a.section_id IS NULL OR a.section_id = s.section_id)
+                                         AND a.user_id = @userId)
+                            OR EXISTS (SELECT 1 FROM messages m2
+                                       WHERE m2.thread_id = t.thread_id
+                                         AND m2.sender_type = 'teacher' AND m2.sender_id = @userId)
+                            OR NOT EXISTS (SELECT 1 FROM messages m3 WHERE m3.thread_id = t.thread_id)
+                             )",
                     new { threadId, schoolId, userId }) > 0;
         }
 

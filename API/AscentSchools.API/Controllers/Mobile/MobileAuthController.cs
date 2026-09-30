@@ -423,9 +423,9 @@ namespace AscentSchools.API.Controllers.Mobile
             {
                 var existing = _parentAuth.GetChildLinkByAdmissionNo(parentId, student.AdmissionNo, tenant.GroupId);
                 if (existing != null)
-                    _parentAuth.UpdateChildLink(existing.LinkId, student.StudentId, student.StudentName, student.ClassName);
+                    _parentAuth.UpdateChildLink(existing.LinkId, student.StudentId, student.StudentUniqueId, student.StudentName, student.ClassName);
                 else
-                    _parentAuth.CreateChildLink(parentId, student.StudentId, tenant.GroupId,
+                    _parentAuth.CreateChildLink(parentId, student.StudentId, student.StudentUniqueId, tenant.GroupId,
                         tenant.DbName, schoolId, student.StudentName, student.ClassName, student.AdmissionNo);
             }
 
@@ -549,7 +549,7 @@ namespace AscentSchools.API.Controllers.Mobile
             if (_parentAuth.ChildLinkExists(mobile.ParentId, student.StudentId, tenant.GroupId))
                 return Fail(HttpStatusCode.Conflict, "This child is already linked to your account.");
 
-            _parentAuth.CreateChildLink(mobile.ParentId, student.StudentId, tenant.GroupId,
+            _parentAuth.CreateChildLink(mobile.ParentId, student.StudentId, student.StudentUniqueId, tenant.GroupId,
                 tenant.DbName, schoolId, student.StudentName, student.ClassName, student.AdmissionNo);
 
             return Request.CreateResponse(HttpStatusCode.Created, ApiResponse.Ok("Child linked successfully."));

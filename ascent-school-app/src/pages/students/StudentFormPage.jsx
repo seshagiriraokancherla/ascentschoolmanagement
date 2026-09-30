@@ -10,12 +10,11 @@ import { useNavigate, useParams } from 'react-router-dom'
 import dayjs from 'dayjs'
 import api, { apiError } from '../../api/axiosInstance'
 import { uploadToR2, MAX_IMAGE_BYTES, IMAGE_TYPES } from '../../api/r2Upload'
-import { useAuthStore } from '../../store/authStore'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:62845'
 
 const STATUS_OPTIONS       = [{ value: 'Active', label: 'Active' }, { value: 'Inactive', label: 'Inactive' }, { value: 'TC', label: 'TC Issued' }]
-const GENDER_OPTIONS       = [{ value: 'Male', label: 'Male' }, { value: 'Female', label: 'Female' }, { value: 'Other', label: 'Other' }]
+const GENDER_OPTIONS       = [{ value: 'Male', label: 'Male' }, { value: 'Female', label: 'Female' }]
 const BLOOD_GROUP_OPTIONS  = ['A+','A-','B+','B-','AB+','AB-','O+','O-'].map((v) => ({ value: v, label: v }))
 const JOIN_TYPE_OPTIONS    = [{ value: 'New', label: 'New Admission' }, { value: 'Transfer', label: 'Transfer' }]
 const GUARDIAN_OPTIONS     = [{ value: 'Parents', label: 'Parents' }, { value: 'Guardian', label: 'Guardian' }]
@@ -55,6 +54,7 @@ export default function StudentFormPage() {
   const [busRoutes,      setBusRoutes]      = useState([])
   const [buses,          setBuses]          = useState([])
   const [hostels,        setHostels]        = useState([])
+  const [subjects,       setSubjects]       = useState([])   // 1st/2nd/3rd language dropdowns
 
   // Load lookups
   useEffect(() => {
@@ -74,10 +74,30 @@ export default function StudentFormPage() {
     }).catch(() => {})
 
     // Bus routes and buses are needed only for transport tab
-    api.get('/school/master/bus-routes').then((r) => setBusRoutes(r.data?.data || [])).catch(() => {})
-    api.get('/school/master/buses').then((r) => setBuses(r.data?.data || [])).catch(() => {})
+    api.get('/school/transport/routes').then((r) => setBusRoutes(r.data?.data || [])).catch(() => {})
+    api.get('/school/transport/buses').then((r) => setBuses(r.data?.data || [])).catch(() => {})
     api.get('/school/hostel').then((r) => setHostels(r.data?.data || [])).catch(() => {})
+    api.get('/school/master/subjects').then((r) => setSubjects(r.data?.data || [])).catch(() => {})
   }, [])
+
+  // Language dropdowns list the school's subjects by NAME (the columns are text, so
+  // nothing about how they're stored changes). Subjects repeat per academic year —
+  // de-duplicate by name and drop Inactive ones ('Y' is the legacy Active value).
+  const subjectNames = [...new Set(
+    subjects
+      .filter((s) => !s.status || s.status === 'Active' || s.status === 'Y')
+      .map((s) => (s.subjectName || '').trim())
+      .filter(Boolean),
+  )].sort((a, b) => a.localeCompare(b))
+
+  // Keep a saved value that is no longer (or never was) a subject, so editing a
+  // student can't silently blank it.
+  const languageOptions = (current) => {
+    const names = current && !subjectNames.some((n) => n.toLowerCase() === String(current).toLowerCase())
+      ? [...subjectNames, current]
+      : subjectNames
+    return names.map((n) => ({ value: n, label: n }))
+  }
 
   // Load student if editing
   useEffect(() => {
@@ -301,8 +321,16 @@ export default function StudentFormPage() {
   const classOptions    = classes.map((c)        => ({ value: c.classId,        label: c.className }))
   const sectionOptions  = sections.map((s)       => ({ value: s.sectionId,      label: s.sectionName }))
   const catOptions      = feeCategories.map((c)  => ({ value: c.feeCategoryId,  label: c.categoryName }))
-  const routeOptions    = busRoutes.map((r)       => ({ value: r.routeId,        label: r.routeName }))
-  const busOptions      = buses.map((b)           => ({ value: b.busId,          label: b.busName || `Bus ${b.busId}` }))
+  // Active only (status Active / legacy 'Y' / null — same convention as languageOptions
+  // above), but always keep the student's currently assigned route/bus even if it has
+  // since been made Inactive, so opening an existing assignment doesn't silently blank it.
+  const isActiveStatus = (v) => !v || v === 'Active' || v === 'Y'
+  const routeOptions = busRoutes
+    .filter((r) => isActiveStatus(r.status) || r.routeId === student?.busRouteId)
+    .map((r) => ({ value: r.routeId, label: r.routeName }))
+  const busOptions = buses
+    .filter((b) => isActiveStatus(b.status) || b.busId === student?.busId)
+    .map((b) => ({ value: b.busId, label: b.busName || `Bus ${b.busId}` }))
 
   // ── Tab contents ────────────────────────────────────────────────────────
 
@@ -661,17 +689,29 @@ export default function StudentFormPage() {
       </Col>
       <Col xs={24} md={8}>
         <Form.Item name="firstLanguage" label="1st Language">
-          <Input />
+          <Select
+            options={languageOptions(student?.firstLanguage)}
+            placeholder="Select subject"
+            showSearch optionFilterProp="label" allowClear
+          />
         </Form.Item>
       </Col>
       <Col xs={24} md={8}>
         <Form.Item name="secondLanguage" label="2nd Language">
-          <Input />
+          <Select
+            options={languageOptions(student?.secondLanguage)}
+            placeholder="Select subject"
+            showSearch optionFilterProp="label" allowClear
+          />
         </Form.Item>
       </Col>
       <Col xs={24} md={8}>
         <Form.Item name="thirdLanguage" label="3rd Language">
-          <Input />
+          <Select
+            options={languageOptions(student?.thirdLanguage)}
+            placeholder="Select subject"
+            showSearch optionFilterProp="label" allowClear
+          />
         </Form.Item>
       </Col>
       <Col xs={24} md={8}>

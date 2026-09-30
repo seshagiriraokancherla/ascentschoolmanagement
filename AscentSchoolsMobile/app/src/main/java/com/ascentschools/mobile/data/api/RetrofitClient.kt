@@ -104,6 +104,12 @@ object RetrofitClient {
      *  Stripping "api/" here made every branding logo URL 404. */
     val mediaBaseUrl: String = BASE_URL
 
+    /** Absolute URL for a media path: R2 uploads are already absolute (Phase 84),
+     *  legacy rows hold a server-relative /Uploads/... path. */
+    fun resolveMedia(path: String): String =
+        if (path.startsWith("http", ignoreCase = true)) path
+        else mediaBaseUrl + path.trimStart('/')
+
     private var _tokenStore: TokenStore? = null
     private var _cookieJar: PersistentCookieJar? = null
 

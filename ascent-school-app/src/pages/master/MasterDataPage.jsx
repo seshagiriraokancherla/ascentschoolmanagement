@@ -12,6 +12,7 @@ import PaymentModesTab   from './PaymentModesTab'
 import FeePeriodsTab     from './FeePeriodsTab'
 import ExamTypesTab      from './ExamTypesTab'
 import GradeTypesTab     from './GradeTypesTab'
+import MarksGradeMasterTab from './MarksGradeMasterTab'
 import ExamMasterTab     from './ExamMasterTab'
 import ClassTeachersTab  from './ClassTeachersTab'
 
@@ -28,7 +29,8 @@ const items = [
   { key: 'subjects',        label: 'Subjects',        children: <SubjectsTab /> },
   { key: 'class-subjects',  label: 'Class Subjects',  children: <ClassSubjectsTab /> },
   { key: 'exam-types',      label: 'Exam Types',      children: <ExamTypesTab /> },
-  { key: 'grade-types',     label: 'Grade Types',     children: <GradeTypesTab /> },
+  { key: 'grade-types',     label: 'Subjects Grade Master', children: <GradeTypesTab /> },
+  { key: 'marks-grades',    label: 'Total Grade Master',  children: <MarksGradeMasterTab /> },
   { key: 'exam-master',     label: 'Exam Master',     children: <ExamMasterTab /> },
   { key: 'payment-modes',   label: 'Payment Modes',   children: <PaymentModesTab /> },
 ]

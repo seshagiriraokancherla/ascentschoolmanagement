@@ -25,6 +25,12 @@ class StudentRepository(private val api: ApiService) {
         body.data ?: emptyList()
     }
 
+    suspend fun getExamTimetable(academicYearId: Int): Result<List<ExamTimetableGroupDto>> = runCatching {
+        val body = api.getExamTimetable(academicYearId).bodyOrError()
+        if (!body.success) error(body.message ?: "Failed to load exam timetable")
+        body.data ?: emptyList()
+    }
+
     suspend fun getHomework(): Result<List<HomeworkDto>> = runCatching {
         val body = api.getHomework().bodyOrError()
         if (!body.success) error(body.message ?: "Failed to load homework")

@@ -48,6 +48,26 @@ namespace AscentSchools.Core.DTOs.School.Settings
         public string Key       { get; set; }   // object key
     }
 
+    /// <summary>
+    /// The authenticated branch's identity block from ascent_master.schools — used for
+    /// report/letterhead headers (name, address, contact). Branch-specific, so it cannot
+    /// come from GET /branding, which resolves group-wide before login.
+    /// </summary>
+    public class SchoolProfileDto
+    {
+        public string SchoolName    { get; set; }
+        public string SchoolCaption { get; set; }
+        public string Address       { get; set; }
+        public string City          { get; set; }
+        public string District      { get; set; }
+        public string State         { get; set; }
+        public string PinCode       { get; set; }
+        public string Mobile        { get; set; }
+        public string Landline      { get; set; }
+        public string Email         { get; set; }
+        public string Website       { get; set; }
+    }
+
     public class SchoolSettingsDto
     {
         // Admission
@@ -76,6 +96,9 @@ namespace AscentSchools.Core.DTOs.School.Settings
         public string InstitutionHeadName       { get; set; }
         public string InstitutionHeadSignature  { get; set; }
         public string OtherSubjectsType         { get; set; }
+
+        // Notifications
+        public bool HomeworkSmsEnabled { get; set; }  // send SMS to parents when Daily Homework is saved
     }
 
     public class UpdateSchoolSettingsRequest
@@ -106,5 +129,8 @@ namespace AscentSchools.Core.DTOs.School.Settings
         public string InstitutionHeadName       { get; set; }
         public string InstitutionHeadSignature  { get; set; }
         public string OtherSubjectsType         { get; set; }
+
+        // Notifications
+        public bool HomeworkSmsEnabled { get; set; }
     }
 }

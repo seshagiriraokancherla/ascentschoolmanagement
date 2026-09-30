@@ -230,26 +230,29 @@ namespace AscentSchools.Data.Repositories.Mobile
                     new { parentId, admissionNo, groupId });
         }
 
-        /// <summary>Refreshes student_id and display fields on an existing child link (called after promotion or first class assignment).</summary>
-        public void UpdateChildLink(int linkId, long studentId, string studentName, string className)
+        /// <summary>Refreshes student_id and display fields on an existing child link (called after promotion or first class assignment).
+        /// Also (re)writes student_unique_id — the stable cross-year identifier used to accurately match this link to a
+        /// student even if admission_no changes on promotion (some schools renumber); backfills any pre-existing link
+        /// that predates the student_unique_id column, and self-heals a link whose student_unique_id was NULL.</summary>
+        public void UpdateChildLink(int linkId, long studentId, int? studentUniqueId, string studentName, string className)
         {
             using (var conn = _db.GetMasterConnection())
                 conn.Execute(
-                    "UPDATE parent_children SET student_id = @studentId, student_name = @studentName, class_name = @className WHERE link_id = @linkId",
-                    new { linkId, studentId, studentName, className });
+                    "UPDATE parent_children SET student_id = @studentId, student_unique_id = @studentUniqueId, student_name = @studentName, class_name = @className WHERE link_id = @linkId",
+                    new { linkId, studentId, studentUniqueId, studentName, className });
         }
 
-        public void CreateChildLink(int parentId, long studentId, int groupId, string dbName,
+        public void CreateChildLink(int parentId, long studentId, int? studentUniqueId, int groupId, string dbName,
                                      int schoolId, string studentName, string className, string admissionNo)
         {
             using (var conn = _db.GetMasterConnection())
                 conn.Execute(
                     @"INSERT INTO parent_children
-                        (parent_id, student_id, group_id, db_name, school_id,
+                        (parent_id, student_id, student_unique_id, group_id, db_name, school_id,
                          student_name, class_name, admission_no, is_active)
-                      VALUES (@parentId, @studentId, @groupId, @dbName, @schoolId,
+                      VALUES (@parentId, @studentId, @studentUniqueId, @groupId, @dbName, @schoolId,
                               @studentName, @className, @admissionNo, 1)",
-                    new { parentId, studentId, groupId, dbName, schoolId, studentName, className, admissionNo });
+                    new { parentId, studentId, studentUniqueId, groupId, dbName, schoolId, studentName, className, admissionNo });
         }
 
         // ── Refresh tokens (master DB) ─────────────────────────────────────

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
-  Table, Button, Modal, Form, Select, Input, InputNumber, DatePicker,
+  Table, Button, Modal, Form, Select, Input, InputNumber, DatePicker, TimePicker,
   Tag, Popconfirm, Alert, Row, Col, Upload, Space, Typography, message as antMessage,
 } from 'antd'
 import {
@@ -9,7 +9,7 @@ import {
 } from '@ant-design/icons'
 import Papa from 'papaparse'
 import dayjs from 'dayjs'
-import api from '../../api/axiosInstance'
+import api, { apiError } from '../../api/axiosInstance'
 
 const { Text } = Typography
 
@@ -19,12 +19,13 @@ const STATUS_OPTIONS = [
 ]
 
 const IMPORT_HEADERS = [
-  'AcademicYear', 'ExamType', 'Class', 'Subject', 'ExamName', 'Category', 'ExamDate',
-  'TotalMarks', 'ExamMinMarks', 'SubjectMax', 'SubjectMin', 'ActivityMax', 'GradeType', 'Remarks', 'Status',
+  'AcademicYear', 'ExamType', 'Class', 'Subject', 'ExamName', 'Category', 'ExamDate', 'ExamTime',
+  'TotalMarks', 'ExamMinMarks', 'SubjectMax', 'SubjectMin', 'ActivityMax', 'GradeType',
+  'MarksGradeMaster', 'Remarks', 'Status',
 ]
 const IMPORT_EXAMPLE = [
-  ['2026-27', 'FA-1', '1 Class', 'Mathematics', 'First Formative', 'Theory', '2026-08-10', '20', '7', '20', '7', '', '', '', 'Active'],
-  ['2026-27', 'FA-1', '1 Class', 'English',     'First Formative', 'Theory', '2026-08-11', '20', '7', '20', '7', '', '', '', 'Active'],
+  ['2026-27', 'FA-1', '1 Class', 'Mathematics', 'First Formative', 'Theory', '2026-08-10', '10:00', '20', '7', '20', '7', '', '', 'Out of 300', '', 'Active'],
+  ['2026-27', 'FA-1', '1 Class', 'English',     'First Formative', 'Theory', '2026-08-11', '10:00', '20', '7', '20', '7', '', '', 'Out of 300', '', 'Active'],
 ]
 
 function downloadCsv(filename, rows) {
@@ -62,11 +63,18 @@ export default function ExamMasterTab() {
   const [importing,    setImporting]    = useState(false)
   const [importResult, setImportResult] = useState(null)
 
+  // Grading scales (Total Grade Master) — each exam row picks one for the TOTAL grade
+  const [scales, setScales] = useState([])
+
   const classOptions     = classes.map((c)   => ({ value: c.classId, label: c.className }))
   const examTypeOptions  = examTypes.map((e)  => ({ value: e.examTypeId, label: e.examTypeName }))
   const gradeTypeOptions = gradeTypes.map((g) => ({
     value: g.id,
     label: g.grade ? `${g.gradeName} (${g.grade})` : g.gradeName,
+  }))
+  const scaleOptions = scales.map((s) => ({
+    value: s.id,
+    label: s.bandCount ? s.scaleName : `${s.scaleName} (no bands)`,
   }))
 
   useEffect(() => {
@@ -83,6 +91,7 @@ export default function ExamMasterTab() {
        .catch(() => {})
     api.get('/school/master/classes').then((r) => setClasses(r.data?.data || [])).catch(() => {})
     api.get('/school/grade-types').then((r) => setGradeTypes(r.data?.data || [])).catch(() => {})
+    api.get('/school/marks-grades').then((r) => setScales(r.data?.data || [])).catch(() => {})
   }, [])
 
   async function loadExamTypes(yId) {
@@ -114,11 +123,18 @@ export default function ExamMasterTab() {
   function onExamTypeChange(val) { setExamTypeId(val); load(yearId, val, classId) }
   function onClassChange(val)    { setClassId(val);    load(yearId, examTypeId, val) }
 
-  // Subjects mapped to the class — no academic-year filter (exam setup).
-  async function loadModalSubjects(cId) {
-    if (!cId) { setModalSubjects([]); return }
-    const { data } = await api.get(`/school/class-subjects/for-class?classId=${cId}`)
-    setModalSubjects(data.data || [])
+  // Subjects mapped to the class FOR THE SELECTED YEAR. The exam is created against
+  // yearId and the marks grid reads the year-scoped mapping, so offering a subject
+  // outside it would create an exam row that grid can never show.
+  // `keep` is the row being edited: its own subject stays selectable even if it has
+  // since been dropped from the mapping, so opening and saving can't blank the field.
+  async function loadModalSubjects(cId, keep) {
+    if (!cId || !yearId) { setModalSubjects([]); return }
+    const { data } = await api.get(`/school/class-subjects?academicYearId=${yearId}&classId=${cId}`)
+    let list = (data.data || []).map((s) => ({ subjectId: s.subjectId, subjectName: s.subjectName }))
+    if (keep?.subjectId && !list.some((s) => s.subjectId === keep.subjectId))
+      list = [...list, { subjectId: keep.subjectId, subjectName: keep.subjectName || `Subject #${keep.subjectId}` }]
+    setModalSubjects(list)
   }
 
   async function openCreate() {
@@ -135,7 +151,7 @@ export default function ExamMasterTab() {
 
   async function openEdit(record) {
     setEditing(record)
-    await loadModalSubjects(record.classId)
+    await loadModalSubjects(record.classId, record)
     form.setFieldsValue({
       examTypeId:      record.examTypeId,
       classId:         record.classId,
@@ -143,12 +159,14 @@ export default function ExamMasterTab() {
       examName:        record.examName,
       examCategory:    record.examCategory,
       examDate:        record.examDate ? dayjs(record.examDate) : null,
+      examTime:        record.examTime ? dayjs(record.examTime, 'HH:mm') : null,
       examTotalMarks:  record.examTotalMarks,
       examMinMarks:    record.examMinMarks,
       subMaxMarks:     record.subMaxMarks,
       subjectMinMarks: record.subjectMinMarks,
       activityMaxMarks: record.activityMaxMarks,
       gradeTypeId:     record.gradeTypeId,
+      marksGradeMasterId: record.marksGradeMasterId,
       examRemarks:     record.examRemarks,
       status:          record.examStatus || 'Active',
     })
@@ -168,12 +186,14 @@ export default function ExamMasterTab() {
         examName:        v.examName || null,
         examCategory:    v.examCategory || null,
         examDate:        v.examDate ? v.examDate.format('YYYY-MM-DD') : null,
+        examTime:        v.examTime ? v.examTime.format('HH:mm') : null,
         examTotalMarks:  v.examTotalMarks ?? null,
         examMinMarks:    v.examMinMarks ?? null,
         subMaxMarks:     v.subMaxMarks ?? null,
         subjectMinMarks: v.subjectMinMarks ?? null,
         activityMaxMarks: v.activityMaxMarks ?? null,
         gradeTypeId:     v.gradeTypeId ?? null,
+        marksGradeMasterId: v.marksGradeMasterId ?? null,
         examRemarks:     v.examRemarks || null,
         examStatus:      v.status,
       }
@@ -228,12 +248,14 @@ export default function ExamMasterTab() {
           examName:     (r.ExamName ?? '').trim(),
           category:     (r.Category ?? '').trim(),
           examDate:     (r.ExamDate ?? '').trim(),
+          examTime:     (r.ExamTime ?? '').trim(),
           totalMarks:   numOrNull(r.TotalMarks),
           examMinMarks: numOrNull(r.ExamMinMarks),
           subjectMax:   numOrNull(r.SubjectMax),
           subjectMin:   numOrNull(r.SubjectMin),
           activityMax:  numOrNull(r.ActivityMax),
           gradeType:    (r.GradeType ?? '').trim(),
+          marksGradeMaster: (r.MarksGradeMaster ?? '').trim(),
           remarks:      (r.Remarks ?? '').trim(),
           status:       (r.Status ?? '').trim() || 'Active',
         })).filter(r => r.academicYear || r.examType || r.class || r.subject)
@@ -254,7 +276,7 @@ export default function ExamMasterTab() {
       setImportResult(data.data)
       load(yearId, examTypeId, classId)
     } catch (e) {
-      antMessage.error(e.message || 'Import failed.')
+      antMessage.error(apiError(e, 'Import failed.'))
     } finally {
       setImporting(false)
     }
@@ -273,10 +295,13 @@ export default function ExamMasterTab() {
     { title: 'Subject',   dataIndex: 'subjectName', key: 'subjectName' },
     { title: 'Date', dataIndex: 'examDate', key: 'examDate',
       render: (v) => (v ? dayjs(v).format('DD-MM-YYYY') : '—') },
+    { title: 'Time', dataIndex: 'examTime', key: 'examTime', width: 80,
+      render: (v) => (v ? dayjs(v, 'HH:mm').format('h:mm A') : '—') },
     { title: 'Total', dataIndex: 'examTotalMarks', key: 'examTotalMarks', width: 70, render: (v) => v ?? '—' },
     { title: 'Sub Max', dataIndex: 'subMaxMarks', key: 'subMaxMarks', width: 80, render: (v) => v ?? '—' },
     { title: 'Act Max', dataIndex: 'activityMaxMarks', key: 'activityMaxMarks', width: 80, render: (v) => v ?? '—' },
     { title: 'Grade', dataIndex: 'gradeName', key: 'gradeName', render: (v) => v || '—' },
+    { title: 'Total Scale', dataIndex: 'marksGradeScaleName', key: 'marksGradeScaleName', render: (v) => v || '—' },
     { title: 'Status', dataIndex: 'examStatus', key: 'examStatus',
       render: (v) => <Tag color={v === 'Active' ? 'green' : 'default'}>{v}</Tag> },
     {
@@ -300,7 +325,7 @@ export default function ExamMasterTab() {
         showIcon
         style={{ marginBottom: 16 }}
         message="Define exams per class and subject."
-        description="Pick an academic year, exam type and class, then add the exam for one or more of that class's subjects. Subjects come from the Class Subjects mapping."
+        description="Pick an academic year, exam type and class, then add the exam for one or more of that class's subjects. Subjects come from the Class Subjects mapping for the selected year."
       />
 
       <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -313,6 +338,7 @@ export default function ExamMasterTab() {
         <Button type="primary" icon={<PlusOutlined />} disabled={!yearId} onClick={openCreate}>Add Exam</Button>
         <Button icon={<ImportOutlined />} onClick={openImport}>Bulk Import</Button>
       </div>
+
 
       <Table
         rowKey="id"
@@ -362,7 +388,7 @@ export default function ExamMasterTab() {
               extra="One exam row is created for each selected subject.">
               <Select
                 mode="multiple"
-                placeholder={modalSubjects.length ? 'Select subjects' : 'No subjects mapped to this class'}
+                placeholder={modalSubjects.length ? 'Select subjects' : 'No subjects mapped to this class for the selected year'}
                 options={modalSubjects.map((s) => ({ value: s.subjectId, label: s.subjectName }))}
                 showSearch optionFilterProp="label"
               />
@@ -370,7 +396,7 @@ export default function ExamMasterTab() {
           )}
 
           <Row gutter={16}>
-            <Col span={12}>
+            <Col span={10}>
               <Form.Item name="examName" label="Exam Name">
                 <Input placeholder="e.g. First Formative Assessment" maxLength={200} />
               </Form.Item>
@@ -380,9 +406,14 @@ export default function ExamMasterTab() {
                 <Input placeholder="e.g. Theory" maxLength={200} />
               </Form.Item>
             </Col>
-            <Col span={6}>
+            <Col span={5}>
               <Form.Item name="examDate" label="Exam Date">
                 <DatePicker style={{ width: '100%' }} format="DD-MM-YYYY" />
+              </Form.Item>
+            </Col>
+            <Col span={3}>
+              <Form.Item name="examTime" label="Time">
+                <TimePicker style={{ width: '100%' }} format="HH:mm" minuteStep={5} />
               </Form.Item>
             </Col>
           </Row>
@@ -412,8 +443,15 @@ export default function ExamMasterTab() {
 
           <Row gutter={16}>
             <Col span={8}>
-              <Form.Item name="gradeTypeId" label="Grade Type">
-                <Select options={gradeTypeOptions} placeholder="Select grade type" allowClear showSearch
+              <Form.Item name="gradeTypeId" label="Subject Grade Master" extra="Grades each SUBJECT's marks.">
+                <Select options={gradeTypeOptions} placeholder="Select subject grade master" allowClear showSearch
+                  optionFilterProp="label" />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="marksGradeMasterId" label="Total Grade Master"
+                extra="Grades the student's TOTAL on the marks card.">
+                <Select options={scaleOptions} placeholder="Select grading scale" allowClear showSearch
                   optionFilterProp="label" />
               </Form.Item>
             </Col>
@@ -423,6 +461,9 @@ export default function ExamMasterTab() {
                 <InputNumber min={0} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
+          </Row>
+
+          <Row gutter={16}>
             <Col span={8}>
               <Form.Item name="status" label="Status">
                 <Select options={STATUS_OPTIONS} />
@@ -430,8 +471,8 @@ export default function ExamMasterTab() {
             </Col>
           </Row>
 
-          <Form.Item name="examRemarks" label="Remarks">
-            <Input.TextArea rows={2} maxLength={300} />
+          <Form.Item name="examRemarks" label="Remarks" extra="Supports local-language text (Telugu, Hindi, etc.).">
+            <Input.TextArea rows={4} maxLength={1000} showCount />
           </Form.Item>
         </Form>
       </Modal>
@@ -458,8 +499,10 @@ export default function ExamMasterTab() {
             <div>
               One row per subject. <b>AcademicYear, ExamType, Class, Subject</b> are matched by name and
               required (the exam type must exist for that year, subjects/classes must exist).
-              <b> GradeType</b> is optional (blank = none). A row whose year+exam type+class+subject already
-              exists is <b>skipped</b>. Marks/date are optional. Columns: {IMPORT_HEADERS.join(', ')}.
+              <b> GradeType</b> (subject grade) and <b>MarksGradeMaster</b> (total grade scale) are optional
+              (blank = none) and matched by name. A row whose year+exam type+class+subject already
+              exists is <b>skipped</b>. Marks/date/time are optional (ExamTime as "HH:mm", e.g. 10:00).
+              Columns: {IMPORT_HEADERS.join(', ')}.
             </div>
           }
         />
@@ -487,6 +530,7 @@ export default function ExamMasterTab() {
               { title: 'Subject', dataIndex: 'subject' },
               { title: 'Exam Name', dataIndex: 'examName' },
               { title: 'Date', dataIndex: 'examDate', width: 100 },
+              { title: 'Time', dataIndex: 'examTime', width: 70 },
               { title: 'Sub Max', dataIndex: 'subjectMax', width: 70 },
               { title: 'Act Max', dataIndex: 'activityMax', width: 70 },
             ]}

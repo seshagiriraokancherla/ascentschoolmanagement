@@ -2,6 +2,7 @@ using AscentSchools.Core.DTOs.School.Transport;
 using AscentSchools.Data.ConnectionFactory;
 using Dapper;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 
 namespace AscentSchools.Data.Repositories.School
@@ -106,31 +107,44 @@ namespace AscentSchools.Data.Repositories.School
                 IEnumerable<BusFeeTermDto> rows;
                 if (payType == "Monthly")
                 {
-                    // One row per fee period; LEFT JOIN carries the saved amount if any.
+                    // One row per fee period. OUTER APPLY (not a plain LEFT JOIN) deliberately
+                    // picks at most ONE matching bus_fee_structures row (the latest, by id) —
+                    // a plain join would return one result row per MATCHING bfs row, so if
+                    // stray/duplicate bfs rows exist for the same period+route+year (e.g. from
+                    // a pre-fix save race), the period would appear multiple times in the grid.
                     rows = conn.Query<BusFeeTermDto>(
                         @"SELECT fp.fee_period_id FeePeriodId, fp.period_label PeriodLabel,
                                  fp.sequence_no SequenceNo, bfs.amount Amount
                           FROM fee_periods fp
-                          LEFT JOIN bus_fee_structures bfs
-                                 ON bfs.fee_period_id    = fp.fee_period_id
-                                AND bfs.route_id         = @routeId
-                                AND bfs.academic_year_id = @academicYearId
-                                AND bfs.school_id        = @schoolId
+                          OUTER APPLY (
+                              SELECT TOP 1 b.amount
+                              FROM bus_fee_structures b
+                              WHERE b.fee_period_id    = fp.fee_period_id
+                                AND b.route_id         = @routeId
+                                AND b.academic_year_id = @academicYearId
+                                AND b.school_id        = @schoolId
+                              ORDER BY b.bus_fee_structure_id DESC
+                          ) bfs
                           WHERE fp.academic_year_id = @academicYearId AND fp.school_id = @schoolId
                           ORDER BY ISNULL(fp.sequence_no, 9999), fp.period_label",
                         new { routeId, academicYearId, schoolId });
                 }
                 else
                 {
+                    // Same OUTER APPLY reasoning as above, keyed on term_id instead.
                     rows = conn.Query<BusFeeTermDto>(
                         @"SELECT t.term_id TermId, t.term_name TermName, t.order_no OrderNo,
                                  bfs.amount Amount
                           FROM terms t
-                          LEFT JOIN bus_fee_structures bfs
-                                 ON bfs.term_id          = t.term_id
-                                AND bfs.route_id         = @routeId
-                                AND bfs.academic_year_id = @academicYearId
-                                AND bfs.school_id        = @schoolId
+                          OUTER APPLY (
+                              SELECT TOP 1 b.amount
+                              FROM bus_fee_structures b
+                              WHERE b.term_id          = t.term_id
+                                AND b.route_id         = @routeId
+                                AND b.academic_year_id = @academicYearId
+                                AND b.school_id        = @schoolId
+                              ORDER BY b.bus_fee_structure_id DESC
+                          ) bfs
                           WHERE t.academic_year_id = @academicYearId AND t.school_id = @schoolId
                           ORDER BY ISNULL(t.order_no, 9999), t.term_id",
                         new { routeId, academicYearId, schoolId });
@@ -152,22 +166,38 @@ namespace AscentSchools.Data.Repositories.School
             var payType = string.IsNullOrWhiteSpace(req.PaymentType) ? "Term" : req.PaymentType.Trim();
             if (payType != "Monthly") payType = "Term";
 
+            // Dedupe by (termId, feePeriodId) — keep the last occurrence. Without this, a
+            // caller sending the same term/period twice (e.g. a stale grid built from an
+            // already-duplicated load) would insert two rows for it below.
+            var items = (req.Items ?? new List<BusFeeTermEntry>())
+                .Where(i => i.Amount > 0)
+                .GroupBy(i => (i.TermId ?? 0, i.FeePeriodId ?? 0))
+                .Select(g => g.Last())
+                .ToList();
+
             using (var conn = _db.GetTenantConnection(tenantDbName))
             {
-                // Delete existing entries for this route + academic year, then re-insert
-                conn.Execute(
-                    "DELETE FROM bus_fee_structures WHERE route_id = @routeId AND academic_year_id = @academicYearId AND school_id = @schoolId",
-                    new { req.RouteId, req.AcademicYearId, schoolId });
-
-                foreach (var item in req.Items)
+                if (conn.State != ConnectionState.Open) conn.Open();
+                using (var tx = conn.BeginTransaction())
                 {
-                    if (item.Amount > 0)
+                    // Delete + re-insert in ONE transaction so a concurrent save (e.g. a
+                    // double-click) can't interleave its own delete/insert into this window
+                    // and leave duplicate rows for the same route+term/period+year.
+                    conn.Execute(
+                        "DELETE FROM bus_fee_structures WHERE route_id = @routeId AND academic_year_id = @academicYearId AND school_id = @schoolId",
+                        new { req.RouteId, req.AcademicYearId, schoolId }, tx);
+
+                    foreach (var item in items)
+                    {
                         conn.Execute(
                             @"INSERT INTO bus_fee_structures
                                 (route_id, term_id, fee_period_id, payment_type, amount, academic_year_id, school_id, status, created_by)
                               VALUES
                                 (@routeId, @termId, @feePeriodId, @payType, @amount, @academicYearId, @schoolId, 'Active', @createdBy)",
-                            new { req.RouteId, item.TermId, item.FeePeriodId, payType, item.Amount, req.AcademicYearId, schoolId, createdBy });
+                            new { req.RouteId, item.TermId, item.FeePeriodId, payType, item.Amount, req.AcademicYearId, schoolId, createdBy }, tx);
+                    }
+
+                    tx.Commit();
                 }
             }
         }

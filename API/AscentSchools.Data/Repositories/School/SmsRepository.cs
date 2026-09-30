@@ -3,6 +3,7 @@ using AscentSchools.Data.ConnectionFactory;
 using Dapper;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace AscentSchools.Data.Repositories.School
 {
@@ -43,6 +44,58 @@ namespace AscentSchools.Data.Repositories.School
                       ORDER BY c.class_name, sec.section_name, s.student_name",
                     new { schoolId, date, classId, sectionId });
         }
+
+        /// <summary>
+        /// Active, current-year students of a class (+ optional section) with a father_mobile —
+        /// used by the Daily Homework "notify parents" SMS. sectionId null = whole class.
+        /// </summary>
+        public IEnumerable<SmsRecipientDto> GetHomeworkRecipients(
+            string tenantDbName, int schoolId, int classId, int? sectionId)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.Query<SmsRecipientDto>(
+                    @"SELECT s.student_id                                       StudentId,
+                             s.student_name                                     StudentName,
+                             s.admission_no                                     AdmissionNo,
+                             ISNULL(c.class_name,   '')                        ClassName,
+                             ISNULL(sec.section_name,'')                       SectionName,
+                             s.father_mobile                                    FatherMobile
+                      FROM   students s
+                      LEFT JOIN classes  c   ON c.class_id    = s.class_id
+                      LEFT JOIN sections sec ON sec.section_id = s.section_id
+                      WHERE  s.school_id      = @schoolId
+                        AND  s.class_id       = @classId
+                        AND  (@sectionId IS NULL OR s.section_id = @sectionId)
+                        AND  s.status         IN ('Active','Y')
+                        AND  s.father_mobile  IS NOT NULL
+                        AND  s.father_mobile  <> ''
+                        AND  s.academic_year_id = (SELECT TOP 1 academic_year_id FROM academic_years
+                                                    WHERE school_id = @schoolId AND status = 'Active'
+                                                    ORDER BY academic_year_id DESC)
+                      ORDER BY sec.section_name, s.student_name",
+                    new { schoolId, classId, sectionId });
+        }
+
+        /// <summary>subject_id → short_name, for the Daily Homework SMS's per-subject slot matching.</summary>
+        public Dictionary<int, string> GetSubjectShortNames(string tenantDbName, IEnumerable<int> subjectIds)
+        {
+            var ids = subjectIds?.Distinct().ToList() ?? new List<int>();
+            var map = new Dictionary<int, string>();
+            if (ids.Count == 0) return map;
+
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+            {
+                var rows = conn.Query<SubjectShortNameRow>(
+                    "SELECT subject_id SubjectId, short_name ShortName FROM subjects WHERE subject_id IN @ids",
+                    new { ids });
+                foreach (var row in rows)
+                    if (!map.ContainsKey(row.SubjectId))
+                        map[row.SubjectId] = row.ShortName;
+            }
+            return map;
+        }
+
+        private class SubjectShortNameRow { public int SubjectId { get; set; } public string ShortName { get; set; } }
 
         /// <summary>Returns active students with fee outstanding > 0 for the given academic year.</summary>
         public IEnumerable<SmsRecipientDto> GetFeeDueRecipients(

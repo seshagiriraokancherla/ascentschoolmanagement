@@ -4,7 +4,7 @@ import {
   Row, Col, Typography, Divider, App as AntApp, Tag,
 } from 'antd'
 import { FilePdfOutlined } from '@ant-design/icons'
-import { useBrandingStore } from '../../store/brandingStore'
+import { useBrandingStore, API_BASE } from '../../store/brandingStore'
 import { generateHallTickets } from './reportUtils'
 import api, { apiError } from '../../api/axiosInstance'
 import dayjs from 'dayjs'
@@ -29,7 +29,9 @@ export default function ExamHallTicketReport() {
   const [schedule,       setSchedule]       = useState([])
   const [loaded,         setLoaded]         = useState(false)
   const [loading,        setLoading]        = useState(false)
+  const [generating,     setGenerating]     = useState(false)
   const [ticketsPerPage, setTicketsPerPage] = useState(2)
+  const [signatureUrl,   setSignatureUrl]   = useState(null)
 
   useEffect(() => {
     api.get('/school/master/academic-years?activeOnly=true').then(r => {
@@ -39,6 +41,10 @@ export default function ExamHallTicketReport() {
       if (current) onYearChange(current.academicYearId)
     })
     api.get('/school/master/classes').then(r => setClasses(r.data?.data || []))
+    // Best-effort — a school that hasn't uploaded a signature yet (School Settings
+    // → Reports & Institution) just gets today's blank signature line, unchanged.
+    api.get('/school/settings').then(r => setSignatureUrl(r.data?.data?.institutionHeadSignature || null))
+      .catch(() => {})
   }, [])
 
   const onYearChange = async (val) => {
@@ -72,24 +78,41 @@ export default function ExamHallTicketReport() {
     setLoading(true)
     setLoaded(false)
     try {
-      const [sRes, subRes] = await Promise.all([
+      const [sRes, subRes, emRes] = await Promise.all([
         api.get(`/school/students?academicYearId=${yearId}&classId=${classId}&sectionId=${sectionId}&status=Active`),
         api.get('/school/master/subjects'),
+        // Pulls the same per-subject exam date + time + max marks staff already entered
+        // in Master Data → Exam Master, instead of the clerk retyping it here by hand.
+        api.get(`/school/exam-master?academicYearId=${yearId}&examTypeId=${examTypeId}&classId=${classId}`),
       ])
       const studentList = sRes.data?.data  || []
       const subjectList = subRes.data?.data || []
+      const examMasterBySubject = {}
+      ;(emRes.data?.data || []).forEach(em => {
+        if (em.subjectId != null) examMasterBySubject[em.subjectId] = em
+      })
 
       setStudents(studentList)
-      setSchedule(subjectList.map(s => ({
-        subjectId:   s.subjectId,
-        subjectName: s.subjectName,
-        included:    true,
-        examDate:    '',
-        time:        '',
-        maxMarks:    '',
-      })))
+      setSchedule(subjectList.map(s => {
+        const em = examMasterBySubject[s.subjectId]
+        return {
+          subjectId:   s.subjectId,
+          subjectName: s.subjectName,
+          // Pre-checked + pre-filled only when this class actually has this subject
+          // scheduled for the chosen exam — otherwise left unchecked, same as before.
+          included:    !!em,
+          examDate:    em?.examDate ? dayjs(em.examDate).format('DD/MM/YYYY') : '',
+          // Pre-filled as a single start time — the field stays free text so staff can
+          // extend it into a range (e.g. "10:00 AM – 12:00 PM") if they want one printed.
+          time:        em?.examTime ? dayjs(em.examTime, 'HH:mm').format('h:mm A') : '',
+          maxMarks:    em?.subMaxMarks != null ? String(em.subMaxMarks) : '',
+        }
+      }))
       setLoaded(true)
       if (!studentList.length) message.warning('No active students found for this selection.')
+      else if (!Object.keys(examMasterBySubject).length) {
+        message.info('No exam schedule found in Exam Master for this class/exam — fill in dates manually below, or set them up in Master Data → Exam Master first.')
+      }
     } catch (e) { message.error(apiError(e, 'Failed to load data.')) }
     finally { setLoading(false) }
   }
@@ -97,7 +120,7 @@ export default function ExamHallTicketReport() {
   const updateSchedule = (subjectId, field, value) =>
     setSchedule(prev => prev.map(s => s.subjectId === subjectId ? { ...s, [field]: value } : s))
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     const included = schedule.filter(s => s.included)
     if (!students.length)   { message.warning('No students loaded.'); return }
     if (!included.length)   { message.warning('Select at least one subject.'); return }
@@ -107,21 +130,27 @@ export default function ExamHallTicketReport() {
     const cls     = classes.find(c => c.classId === classId)
     const sec     = sections.find(s => s.sectionId === sectionId)
 
-    generateHallTickets({
-      schoolName,
-      className:      cls?.className    || '',
-      sectionName:    sec?.sectionName  || '',
-      academicYear:   year?.academicYear || '',
-      examName:       exam?.examTypeName || exam?.name || '',
-      schedule:       included,
-      ticketsPerPage,
-      students:       students.map(s => ({
-        studentName: s.studentName,
-        admissionNo: s.admissionNo,
-        dateOfBirth: s.dateOfBirth ? dayjs(s.dateOfBirth).format('DD MMM YYYY') : '—',
-        gender:      s.gender || '—',
-      })),
-    })
+    setGenerating(true)
+    try {
+      await generateHallTickets({
+        schoolName,
+        className:      cls?.className    || '',
+        sectionName:    sec?.sectionName  || '',
+        academicYear:   year?.academicYear || '',
+        examName:       exam?.examTypeName || exam?.name || '',
+        schedule:       included,
+        ticketsPerPage,
+        signatureUrl:   signatureUrl?.startsWith('/') ? `${API_BASE}${signatureUrl}` : signatureUrl,
+        students:       students.map(s => ({
+          studentName: s.studentName,
+          admissionNo: s.admissionNo,
+          dateOfBirth: s.dateOfBirth ? dayjs(s.dateOfBirth).format('DD MMM YYYY') : '—',
+          gender:      s.gender || '—',
+        })),
+      })
+    } finally {
+      setGenerating(false)
+    }
   }
 
   const scheduleColumns = [
@@ -257,7 +286,7 @@ export default function ExamHallTicketReport() {
             <Text type="secondary" style={{ fontSize: 12 }}>
               {students.length} student{students.length !== 1 ? 's' : ''} loaded
               &nbsp;·&nbsp;
-              Fill in the exam schedule below, then generate
+              Review the exam schedule below (pre-filled from Exam Master where set), then generate
             </Text>
           </Divider>
 
@@ -288,6 +317,7 @@ export default function ExamHallTicketReport() {
                 size="large"
                 icon={<FilePdfOutlined />}
                 onClick={handleGenerate}
+                loading={generating}
                 disabled={!students.length || !includedCount}
               >
                 Generate PDF ({students.length} tickets, {pageCount} page{pageCount !== 1 ? 's' : ''})

@@ -166,7 +166,7 @@ namespace AscentSchools.Data.Repositories.School
                       FROM students s
                       LEFT JOIN classes    c   ON c.class_id    = s.class_id
                       LEFT JOIN sections   sec ON sec.section_id = s.section_id
-                      LEFT JOIN bus_routes br  ON br.bus_route_id = s.bus_route_id
+                      LEFT JOIN bus_routes br  ON br.route_id     = s.bus_route_id
                       LEFT JOIN buses      b   ON b.bus_id       = s.bus_id
                       WHERE s.school_id        = @schoolId
                         AND s.academic_year_id = @academicYearId
@@ -1004,6 +1004,93 @@ namespace AscentSchools.Data.Repositories.School
                       ORDER BY COUNT(*) DESC, c.class_name, sec.section_name, s.student_name",
                     new { schoolId, dateFrom, dateTo, minDays, classId, sectionId });
         }
+
+        // ── Mobile App Adoption ───────────────────────────────────────────
+        // Tenant roster + master-DB parent_children (link exists = parent has completed
+        // OTP login at least once) merged in C#, since parent_children lives in ascent_master
+        // while students lives per-tenant. Matches primarily by student_unique_id (stable
+        // across promotions); falls back to admission_no for links that predate that column
+        // or haven't been refreshed by a re-login yet — see [[parent-children-student-unique-id]].
+        public IEnumerable<MobileAppAdoptionRowDto> GetMobileAppAdoption(
+            string tenantDbName, int groupId, int schoolId, int? academicYearId, int? classId, int? sectionId)
+        {
+            List<AdoptionRosterRow> roster;
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                roster = conn.Query<AdoptionRosterRow>(
+                    @"SELECT s.student_id                 StudentId,
+                             s.student_unique_id           StudentUniqueId,
+                             s.admission_no                AdmissionNo,
+                             s.student_name                StudentName,
+                             ISNULL(c.class_name,   '')     ClassName,
+                             ISNULL(sec.section_name,'')    SectionName
+                      FROM   students s
+                      LEFT JOIN classes  c   ON c.class_id    = s.class_id
+                      LEFT JOIN sections sec ON sec.section_id = s.section_id
+                      WHERE  s.school_id = @schoolId
+                        AND  s.status IN ('Active', 'Y')
+                        AND  (@academicYearId IS NULL OR s.academic_year_id = @academicYearId)
+                        AND  (@classId        IS NULL OR s.class_id         = @classId)
+                        AND  (@sectionId      IS NULL OR s.section_id       = @sectionId)
+                      ORDER BY c.sequence_no, sec.section_name, s.student_name",
+                    new { schoolId, academicYearId, classId, sectionId }).AsList();
+
+            List<AdoptionLinkRow> links;
+            Dictionary<int, DateTime> lastActiveByParent;
+            using (var conn = _db.GetMasterConnection())
+            {
+                links = conn.Query<AdoptionLinkRow>(
+                    @"SELECT parent_id ParentId, student_unique_id StudentUniqueId, admission_no AdmissionNo, linked_at LinkedAt
+                      FROM   parent_children
+                      WHERE  group_id = @groupId AND school_id = @schoolId AND is_active = 1",
+                    new { groupId, schoolId }).AsList();
+
+                lastActiveByParent = conn.Query<AdoptionPushRow>(
+                    @"SELECT parent_id ParentId, MAX(updated_at) LastActive
+                      FROM   device_push_tokens
+                      WHERE  group_id = @groupId AND school_id = @schoolId AND parent_id IS NOT NULL
+                      GROUP BY parent_id",
+                    new { groupId, schoolId })
+                    .Where(r => r.LastActive.HasValue)
+                    .ToDictionary(r => r.ParentId, r => r.LastActive.Value);
+            }
+
+            var byUniqueId  = links.Where(l => l.StudentUniqueId.HasValue)
+                                    .GroupBy(l => l.StudentUniqueId.Value)
+                                    .ToDictionary(g => g.Key, g => g.OrderByDescending(l => l.LinkedAt).First());
+            var byAdmission = links.Where(l => !string.IsNullOrWhiteSpace(l.AdmissionNo))
+                                    .GroupBy(l => l.AdmissionNo.Trim(), StringComparer.OrdinalIgnoreCase)
+                                    .ToDictionary(g => g.Key, g => g.OrderByDescending(l => l.LinkedAt).First(), StringComparer.OrdinalIgnoreCase);
+
+            var result = new List<MobileAppAdoptionRowDto>();
+            foreach (var s in roster)
+            {
+                AdoptionLinkRow match = null;
+                if (s.StudentUniqueId.HasValue && byUniqueId.TryGetValue(s.StudentUniqueId.Value, out var m1))
+                    match = m1;
+                else if (!string.IsNullOrWhiteSpace(s.AdmissionNo) && byAdmission.TryGetValue(s.AdmissionNo.Trim(), out var m2))
+                    match = m2;
+
+                DateTime? lastActive = null;
+                if (match != null && lastActiveByParent.TryGetValue(match.ParentId, out var la)) lastActive = la;
+
+                result.Add(new MobileAppAdoptionRowDto
+                {
+                    StudentId    = s.StudentId,
+                    AdmissionNo  = s.AdmissionNo,
+                    StudentName  = s.StudentName,
+                    ClassName    = s.ClassName,
+                    SectionName  = s.SectionName,
+                    HasApp       = match != null,
+                    LinkedAt     = match?.LinkedAt,
+                    LastActiveAt = lastActive
+                });
+            }
+            return result;
+        }
+
+        private class AdoptionRosterRow { public long StudentId { get; set; } public int? StudentUniqueId { get; set; } public string AdmissionNo { get; set; } public string StudentName { get; set; } public string ClassName { get; set; } public string SectionName { get; set; } }
+        private class AdoptionLinkRow   { public int ParentId { get; set; } public int? StudentUniqueId { get; set; } public string AdmissionNo { get; set; } public DateTime LinkedAt { get; set; } }
+        private class AdoptionPushRow   { public int ParentId { get; set; } public DateTime? LastActive { get; set; } }
 
         private class TopperMarkRowWithExam  { public long StudentId { get; set; } public int SubjectId { get; set; } public int ExamTypeId { get; set; } public decimal MarksObtained { get; set; } public decimal MaxMarks { get; set; } public bool IsAbsent { get; set; } public decimal? ActivityMarks { get; set; } public decimal? ActivityMaxMarks { get; set; } }
         private class TopperStudentMeta  { public long StudentId { get; set; } public string AdmissionNo { get; set; } public string StudentName { get; set; } public string ClassName { get; set; } public string SectionName { get; set; } public int ClassId { get; set; } public int SectionId { get; set; } }

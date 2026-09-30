@@ -37,9 +37,7 @@ class AuthRepository(
         }
     }
 
-    private fun resolveMedia(path: String): String =
-        if (path.startsWith("http", ignoreCase = true)) path
-        else RetrofitClient.mediaBaseUrl + path.trimStart('/')
+    private fun resolveMedia(path: String): String = RetrofitClient.resolveMedia(path)
 
     // ── Teacher login ─────────────────────────────────────────────────────────
 

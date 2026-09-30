@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Card, Select, DatePicker, Button, Input, Typography, App as AntApp,
   Row, Col, Space, Spin, Empty, Alert,
@@ -22,7 +22,10 @@ export default function DailyHomeworkPage() {
   const [date,       setDate]       = useState(dayjs())
   const [classes,    setClasses]    = useState([])
   const [sections,   setSections]   = useState([])
-  const [subjects,   setSubjects]   = useState([])
+  const [subjects,   setSubjects]   = useState([])   // shown: the class's mapped subjects
+  const [allSubjects, setAllSubjects] = useState([]) // fallback: every active subject
+  const [usingAll,   setUsingAll]   = useState(false)
+  const [subjLoading, setSubjLoading] = useState(false)
   const [classId,    setClassId]    = useState(null)
   const [sectionIds, setSectionIds] = useState([ALL_SECTIONS])
   const [texts,      setTexts]      = useState({})   // { [subjectId]: description }
@@ -30,12 +33,44 @@ export default function DailyHomeworkPage() {
   const [loading,    setLoading]    = useState(false)
   const [saving,     setSaving]     = useState(false)
 
-  // Lookups on mount
+  // Lookups on mount. The school-wide subject list is loaded as a FALLBACK only —
+  // what we render comes from the class's class_subjects mapping (loadSubjects).
   useEffect(() => {
     api.get('/school/master/classes').then(r => setClasses(r.data?.data || []))
     api.get('/school/master/subjects').then(r =>
-      setSubjects((r.data?.data || []).filter(isActive)))
+      setAllSubjects((r.data?.data || []).filter(isActive)))
   }, [])
+
+  // Guards against out-of-order responses when classes are clicked quickly.
+  const subjReq = useRef(0)
+
+  // Subjects for the selected class, from class_subjects (same source as the marks
+  // grid). A class with no mapping yet falls back to every active subject so schools
+  // that haven't done the mapping keep working — flagged in the UI so it's visible.
+  const loadSubjects = async (cid) => {
+    const req = ++subjReq.current
+    if (!cid) { setSubjects([]); setUsingAll(false); return }
+
+    setSubjLoading(true)
+    try {
+      const r = await api.get(`/school/class-subjects/for-class?classId=${cid}`)
+      if (req !== subjReq.current) return          // a newer class won the race
+      // for-class returns the mapping regardless of the subject's own status, so drop
+      // any that are no longer active at school level (allSubjects holds only active
+      // ones; skip the filter until it has loaded so nothing vanishes on a race).
+      const mapped = allSubjects.length
+        ? (r.data?.data || []).filter(m => allSubjects.some(a => a.subjectId === m.subjectId))
+        : (r.data?.data || [])
+      setSubjects(mapped.length ? mapped : allSubjects)
+      setUsingAll(mapped.length === 0)
+    } catch {
+      if (req !== subjReq.current) return
+      setSubjects(allSubjects)
+      setUsingAll(true)
+    } finally {
+      if (req === subjReq.current) setSubjLoading(false)
+    }
+  }
 
   const loadSections = async (cid) => {
     if (!cid) { setSections([]); return }
@@ -91,6 +126,7 @@ export default function DailyHomeworkPage() {
     setTexts({})
     setMixed(false)
     loadSections(val)
+    loadSubjects(val)
     loadExisting(val, [ALL_SECTIONS], date)
   }
 
@@ -144,6 +180,14 @@ export default function DailyHomeworkPage() {
 
   const ready = classId && date
 
+  // Homework already saved for subjects that are NOT in this class's mapping has no
+  // box to show it in — and a batch save cancels the day's rows for the selected
+  // sections without re-inserting it, so it would disappear silently. Name them.
+  const shownIds = new Set(subjects.map(s => s.subjectId))
+  const orphans = Object.keys(texts)
+    .filter(id => (texts[id] || '').trim() && !shownIds.has(Number(id)))
+    .map(id => allSubjects.find(s => s.subjectId === Number(id))?.subjectName || `Subject #${id}`)
+
   return (
     <div>
       <Title level={4} style={{ marginBottom: 16 }}>Daily Homework</Title>
@@ -183,6 +227,26 @@ export default function DailyHomeworkPage() {
         </Space>
       </Card>
 
+      {ready && usingAll && subjects.length > 0 && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="This class has no subjects mapped — showing all subjects"
+          description="Map its subjects in Master Data → Class Subjects to show only what this class studies."
+        />
+      )}
+
+      {ready && orphans.length > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="This date has homework for subjects not mapped to this class"
+          description={`${orphans.join(', ')} — not shown below, and saving will clear it. Map the subject in Master Data → Class Subjects to keep it.`}
+        />
+      )}
+
       {mixed && (
         <Alert
           type="warning"
@@ -209,8 +273,10 @@ export default function DailyHomeworkPage() {
       >
         {!ready ? (
           <Empty description="Select date and class to enter homework" />
+        ) : subjLoading ? (
+          <Spin spinning><div style={{ height: 80 }} /></Spin>
         ) : subjects.length === 0 ? (
-          <Empty description="No active subjects found. Add subjects in Master Data." />
+          <Empty description="No active subjects found. Add subjects in Master Data, then map them to this class under Class Subjects." />
         ) : (
           <Spin spinning={loading}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

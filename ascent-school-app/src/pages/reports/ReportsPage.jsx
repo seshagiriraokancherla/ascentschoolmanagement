@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Layout, Menu, Typography, Card } from 'antd'
-import { BarChartOutlined, TeamOutlined, FieldNumberOutlined, StopOutlined, TableOutlined, CarOutlined, FileDoneOutlined, CalendarOutlined, ScheduleOutlined, BookOutlined, IdcardOutlined, TrophyOutlined, CloseCircleOutlined, ReadOutlined, BankOutlined, AlertOutlined, PauseCircleOutlined } from '@ant-design/icons'
+import { BarChartOutlined, TeamOutlined, FieldNumberOutlined, StopOutlined, TableOutlined, CarOutlined, FileDoneOutlined, CalendarOutlined, ScheduleOutlined, BookOutlined, IdcardOutlined, TrophyOutlined, CloseCircleOutlined, ReadOutlined, BankOutlined, AlertOutlined, PauseCircleOutlined, SolutionOutlined, MobileOutlined } from '@ant-design/icons'
 import ClassStudentsReport          from './ClassStudentsReport'
 import TotalStrengthReport          from './TotalStrengthReport'
 import AbsentsReport                from './AbsentsReport'
@@ -15,11 +15,13 @@ import ExamToppersReport            from './ExamToppersReport'
 import ClassToppersReport           from './ClassToppersReport'
 import FailedStudentsReport         from './FailedStudentsReport'
 import AcademicYearToppersReport    from './AcademicYearToppersReport'
+import MarksCardReport              from './MarksCardReport'
 import HomeworkStatementReport      from './HomeworkStatementReport'
 import SubjectHomeworkReport        from './SubjectHomeworkReport'
 import StaffSalaryStatementReport   from './StaffSalaryStatementReport'
 import RegularAbsenteesReport       from './RegularAbsenteesReport'
 import DetainedStudentsReport       from './DetainedStudentsReport'
+import MobileAppAdoptionReport      from './MobileAppAdoptionReport'
 
 const { Sider, Content } = Layout
 const { Text } = Typography
@@ -96,6 +98,13 @@ const REPORTS = [
     description: 'Generate per-student hall tickets with exam schedule — PDF only',
   },
   {
+    key:         'marks-card',
+    label:       'Marks Card',
+    icon:        <SolutionOutlined />,
+    component:   <MarksCardReport />,
+    description: 'Per-student progress report for an exam — marks, grades and rank in the section',
+  },
+  {
     key:         'exam-toppers',
     label:       'Exam wise Toppers',
     icon:        <TrophyOutlined />,
@@ -157,6 +166,13 @@ const REPORTS = [
     icon:        <BankOutlined />,
     component:   <StaffSalaryStatementReport />,
     description: 'Month-wise salary statement for all staff with earnings and deductions breakdown',
+  },
+  {
+    key:         'mobile-app-adoption',
+    label:       'Mobile App Adoption',
+    icon:        <MobileOutlined />,
+    component:   <MobileAppAdoptionReport />,
+    description: 'Which students have a parent registered on the mobile app, and which don’t',
   },
   // Add more reports here
 ]

@@ -529,16 +529,24 @@ namespace AscentSchools.Data.Repositories.School
                 var classes  = conn.Query<BulkLookup>("SELECT class_id AS Id, class_name AS Name FROM classes WHERE school_id = @schoolId", new { schoolId });
                 var sections = conn.Query<BulkSectionLookup>("SELECT section_id AS SectionId, class_id AS ClassId, section_name AS SectionName FROM sections WHERE school_id = @schoolId", new { schoolId });
                 var cats     = conn.Query<BulkLookup>("SELECT fee_category_id AS Id, category_name AS Name FROM fee_categories WHERE school_id = @schoolId", new { schoolId });
+                // Routes/buses: Active row wins on a duplicate name (same convention the
+                // migration tool uses for the same lookup).
+                var routes   = conn.Query<BulkStatusLookup>("SELECT route_id AS Id, route_name AS Name, status AS Status FROM bus_routes WHERE school_id = @schoolId", new { schoolId });
+                var buses    = conn.Query<BulkStatusLookup>("SELECT bus_id AS Id, bus_name AS Name, status AS Status FROM buses WHERE school_id = @schoolId", new { schoolId });
 
                 var yearMap    = new System.Collections.Generic.Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
                 var classMap   = new System.Collections.Generic.Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
                 var sectionMap = new System.Collections.Generic.Dictionary<string, int>(); // key: "classId|sectionName"
                 var catMap     = new System.Collections.Generic.Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
+                var routeMap   = new System.Collections.Generic.Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
+                var busMap     = new System.Collections.Generic.Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
 
                 foreach (var y in years)   yearMap[y.Name]  = y.Id;
                 foreach (var c in classes)  classMap[c.Name] = c.Id;
                 foreach (var s in sections) sectionMap[$"{s.ClassId}|{s.SectionName.ToLower()}"] = s.SectionId;
                 foreach (var c in cats)     catMap[c.Name]   = c.Id;
+                AddActiveWins(routeMap, routes);
+                AddActiveWins(busMap, buses);
 
                 // Track admission numbers seen in this batch (duplicate detection within the file)
                 var seenInBatch = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
@@ -605,6 +613,16 @@ namespace AscentSchools.Data.Repositories.School
                     if (isSync && feeCategoryId == null)
                         feeCategoryId = generalFeeCategoryId;
 
+                    // Transport — matched by name; a name that doesn't match anything is left
+                    // NULL rather than failing the row (same lenient posture as the optional
+                    // date fields below — a bad route/bus name shouldn't block the whole import).
+                    int? busRouteId = null;
+                    if (!string.IsNullOrWhiteSpace(row.RouteName) && routeMap.TryGetValue(row.RouteName.Trim(), out var rid))
+                        busRouteId = rid;
+                    int? busId = null;
+                    if (!string.IsNullOrWhiteSpace(row.BusName) && busMap.TryGetValue(row.BusName.Trim(), out var bid))
+                        busId = bid;
+
                     // Extended optional dates (lenient — unparseable → NULL, row not failed)
                     System.DateTime? doj     = TryParseDate(row.DateOfJoining);
                     System.DateTime? admDate = TryParseDate(row.AdmissionDate);
@@ -623,6 +641,22 @@ namespace AscentSchools.Data.Repositories.School
                     }
 
                     var status = string.IsNullOrWhiteSpace(row.Status) ? "Active" : row.Status.Trim();
+
+                    // ── Field lengths ─────────────────────────────
+                    // Legacy VB6 columns are wider than several of ours (nationality,
+                    // transport_type, blood_group ... are VARCHAR(10)). Check up front so the
+                    // operator gets "Nationality too long (13 chars, max 10)" naming the field,
+                    // rather than SQL Server's "String or binary data would be truncated",
+                    // which only names the offending column on SQL Server 2019+.
+                    var tooLong = FindOverlongField(row, status);
+                    if (tooLong != null)
+                    { AddError(result, row, row.AdmissionNo, tooLong); continue; }
+
+                    // Every DB write below is per-row guarded: one bad row must not abort the
+                    // whole batch. An unhandled exception here reaches the caller as an opaque
+                    // 500 "An error has occurred." and takes every good row in the batch with it.
+                    try
+                    {
 
                     // ── Upsert: update existing row for this student + academic year ──
                     // Match on the STABLE student_unique_id + academic_year when the caller
@@ -684,6 +718,8 @@ namespace AscentSchools.Data.Repositories.School
                                     dob_proof_submitted    = @dobProofSubmitted,
                                     caste_cert_submitted   = @casteCertSubmitted,
                                     transport_type         = @transportType,
+                                    bus_route_id           = @busRouteId,
+                                    bus_id                 = @busId,
                                     admission_date         = @admDate,
                                     student_type           = @studentType,
                                     blood_group            = @bloodGroup,
@@ -724,6 +760,8 @@ namespace AscentSchools.Data.Repositories.School
                                     dobProofSubmitted    = row.DobProofSubmitted,
                                     casteCertSubmitted   = row.CasteCertSubmitted,
                                     transportType        = row.TransportType,
+                                    busRouteId,
+                                    busId,
                                     admDate,
                                     studentType          = row.StudentType,
                                     bloodGroup           = row.BloodGroup,
@@ -752,7 +790,8 @@ namespace AscentSchools.Data.Repositories.School
                              join_type, father_occupation, father_employment_type, mother_occupation,
                              date_of_joining, nationality, door_no, address_area, address_city, address_state,
                              permanent_address, email, annual_income, family_children_count,
-                             dob_proof_submitted, caste_cert_submitted, transport_type, admission_date,
+                             dob_proof_submitted, caste_cert_submitted, transport_type, bus_route_id, bus_id,
+                             admission_date,
                              student_type, blood_group, join_term, first_language, third_language, udise_no,
                              created_by)
                         VALUES
@@ -772,7 +811,8 @@ namespace AscentSchools.Data.Repositories.School
                              @joinType, @fatherOccupation, @fatherEmploymentType, @motherOccupation,
                              @doj, @nationality, @doorNo, @addressArea, @addressCity, @addressState,
                              @permanentAddress, @email, @annualIncome, @familyChildrenCount,
-                             @dobProofSubmitted, @casteCertSubmitted, @transportType, @admDate,
+                             @dobProofSubmitted, @casteCertSubmitted, @transportType, @busRouteId, @busId,
+                             @admDate,
                              @studentType, @bloodGroup, @joinTerm, @firstLanguage, @thirdLanguage, @udiseNo,
                              @createdBy)",
                         new {
@@ -814,6 +854,8 @@ namespace AscentSchools.Data.Repositories.School
                             dobProofSubmitted    = row.DobProofSubmitted,
                             casteCertSubmitted   = row.CasteCertSubmitted,
                             transportType        = row.TransportType,
+                            busRouteId,
+                            busId,
                             admDate,
                             studentType          = row.StudentType,
                             bloodGroup           = row.BloodGroup,
@@ -826,6 +868,15 @@ namespace AscentSchools.Data.Repositories.School
                         });
 
                     result.Imported++;
+                    }
+                    catch (System.Exception ex)
+                    {
+                        // Report the row and carry on. The innermost message carries the real
+                        // SQL reason (truncation, FK violation, numeric overflow ...).
+                        var reason = ex;
+                        while (reason.InnerException != null) reason = reason.InnerException;
+                        AddError(result, row, row.AdmissionNo, reason.Message);
+                    }
                 }
             }
 
@@ -888,6 +939,88 @@ namespace AscentSchools.Data.Repositories.School
             });
         }
 
+        // Destination column widths for the string fields a bulk row can write.
+        // Keep in sync with the students table in tenant_tables.sql.
+        private static readonly System.Tuple<string, int>[] StudentFieldWidths =
+        {
+            System.Tuple.Create("AdmissionNo", 20),       System.Tuple.Create("StudentName", 105),
+            System.Tuple.Create("Gender", 10),            System.Tuple.Create("RollNo", 10),
+            System.Tuple.Create("FatherName", 50),        System.Tuple.Create("MotherName", 50),
+            System.Tuple.Create("FatherMobile", 20),      System.Tuple.Create("MotherMobile", 20),
+            System.Tuple.Create("AadharNo", 25),          System.Tuple.Create("Caste", 25),
+            System.Tuple.Create("CasteCode", 10),         System.Tuple.Create("Religion", 20),
+            System.Tuple.Create("JoiningClass", 20),      System.Tuple.Create("MotherTongue", 25),
+            System.Tuple.Create("Status", 10),            System.Tuple.Create("JoinType", 10),
+            System.Tuple.Create("FatherOccupation", 50),  System.Tuple.Create("FatherEmploymentType", 50),
+            System.Tuple.Create("MotherOccupation", 50),  System.Tuple.Create("Nationality", 10),
+            System.Tuple.Create("DoorNo", 50),            System.Tuple.Create("AddressArea", 50),
+            System.Tuple.Create("AddressCity", 50),       System.Tuple.Create("AddressState", 50),
+            System.Tuple.Create("PermanentAddress", 150), System.Tuple.Create("Email", 50),
+            System.Tuple.Create("DobProofSubmitted", 10), System.Tuple.Create("CasteCertSubmitted", 10),
+            System.Tuple.Create("TransportType", 10),     System.Tuple.Create("StudentType", 15),
+            System.Tuple.Create("BloodGroup", 10),        System.Tuple.Create("JoinTerm", 20),
+            System.Tuple.Create("FirstLanguage", 25),     System.Tuple.Create("ThirdLanguage", 25),
+            System.Tuple.Create("UdiseNo", 35)
+        };
+
+        /// <summary>First field whose value exceeds its column width, described for the operator; null when all fit.</summary>
+        private static string FindOverlongField(StudentBulkRow row, string status)
+        {
+            foreach (var f in StudentFieldWidths)
+            {
+                var value = f.Item1 == "Status" ? status : GetStudentField(row, f.Item1);
+                if (string.IsNullOrWhiteSpace(value)) continue;
+
+                var trimmed = value.Trim();
+                if (trimmed.Length > f.Item2)
+                    return string.Format("{0} too long ({1} chars, max {2}): '{3}'",
+                        f.Item1, trimmed.Length, f.Item2, trimmed);
+            }
+            return null;
+        }
+
+        private static string GetStudentField(StudentBulkRow row, string name)
+        {
+            switch (name)
+            {
+                case "AdmissionNo":          return row.AdmissionNo;
+                case "StudentName":          return row.StudentName;
+                case "Gender":               return row.Gender;
+                case "RollNo":               return row.RollNo;
+                case "FatherName":           return row.FatherName;
+                case "MotherName":           return row.MotherName;
+                case "FatherMobile":         return row.FatherMobile;
+                case "MotherMobile":         return row.MotherMobile;
+                case "AadharNo":             return row.AadharNo;
+                case "Caste":                return row.Caste;
+                case "CasteCode":            return row.CasteCode;
+                case "Religion":             return row.Religion;
+                case "JoiningClass":         return row.JoiningClass;
+                case "MotherTongue":         return row.MotherTongue;
+                case "JoinType":             return row.JoinType;
+                case "FatherOccupation":     return row.FatherOccupation;
+                case "FatherEmploymentType": return row.FatherEmploymentType;
+                case "MotherOccupation":     return row.MotherOccupation;
+                case "Nationality":          return row.Nationality;
+                case "DoorNo":               return row.DoorNo;
+                case "AddressArea":          return row.AddressArea;
+                case "AddressCity":          return row.AddressCity;
+                case "AddressState":         return row.AddressState;
+                case "PermanentAddress":     return row.PermanentAddress;
+                case "Email":                return row.Email;
+                case "DobProofSubmitted":    return row.DobProofSubmitted;
+                case "CasteCertSubmitted":   return row.CasteCertSubmitted;
+                case "TransportType":        return row.TransportType;
+                case "StudentType":          return row.StudentType;
+                case "BloodGroup":           return row.BloodGroup;
+                case "JoinTerm":             return row.JoinTerm;
+                case "FirstLanguage":        return row.FirstLanguage;
+                case "ThirdLanguage":        return row.ThirdLanguage;
+                case "UdiseNo":              return row.UdiseNo;
+                default:                     return null;
+            }
+        }
+
         // Lenient date parse for optional extended date fields — NULL when blank/unparseable.
         private static System.DateTime? TryParseDate(string s)
         {
@@ -896,6 +1029,30 @@ namespace AscentSchools.Data.Repositories.School
             return System.DateTime.TryParseExact(s.Trim(), formats,
                 System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.None, out var d) ? d : (System.DateTime?)null;
+        }
+
+        // Builds a name → id map where an Active row wins over a non-Active one sharing the
+        // same name (same convention the migration tool uses for route/bus name lookups).
+        private static void AddActiveWins(System.Collections.Generic.Dictionary<string, int> map, System.Collections.Generic.IEnumerable<BulkStatusLookup> rows)
+        {
+            var mapStatus = new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
+            foreach (var r in rows)
+            {
+                var key = r.Name?.Trim() ?? "";
+                if (string.IsNullOrEmpty(key)) continue;
+                var status = r.Status?.Trim() ?? "";
+                if (!map.ContainsKey(key))
+                {
+                    map[key] = r.Id;
+                    mapStatus[key] = status;
+                }
+                else if (string.Equals(status, "Active", System.StringComparison.OrdinalIgnoreCase)
+                      && !string.Equals(mapStatus[key], "Active", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    map[key] = r.Id;
+                    mapStatus[key] = status;
+                }
+            }
         }
     }
 
@@ -910,5 +1067,12 @@ namespace AscentSchools.Data.Repositories.School
         public int    SectionId   { get; set; }
         public int    ClassId     { get; set; }
         public string SectionName { get; set; }
+    }
+
+    internal class BulkStatusLookup
+    {
+        public int    Id     { get; set; }
+        public string Name   { get; set; }
+        public string Status { get; set; }
     }
 }

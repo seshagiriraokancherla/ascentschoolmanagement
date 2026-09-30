@@ -69,6 +69,15 @@ interface ApiService {
     @POST("mobile/teacher/announcements")
     suspend fun createTeacherAnnouncement(@Body request: TeacherCreateAnnouncementRequest): Response<ApiResponse<Any>>
 
+    @GET("mobile/teacher/events")
+    suspend fun getTeacherEvents(@Query("classId") classId: Int?): Response<ApiResponse<List<SchoolEventDto>>>
+
+    @GET("mobile/teacher/birthdays")
+    suspend fun getTeacherBirthdays(@Query("classId") classId: Int?): Response<ApiResponse<List<BirthdayStudentDto>>>
+
+    @GET("mobile/teacher/exam-timetable")
+    suspend fun getTeacherExamTimetable(@Query("classId") classId: Int): Response<ApiResponse<List<ExamTimetableGroupDto>>>
+
     // ── Marks ──────────────────────────────────────────────────────────────────
 
     @GET("mobile/teacher/exam-types")
@@ -140,6 +149,11 @@ interface ApiService {
         @Query("academicYearId") academicYearId: Int
     ): Response<ApiResponse<List<MarksResultDto>>>
 
+    @GET("mobile/student/exam-timetable")
+    suspend fun getExamTimetable(
+        @Query("academicYearId") academicYearId: Int
+    ): Response<ApiResponse<List<ExamTimetableGroupDto>>>
+
     @GET("mobile/student/homework")
     suspend fun getHomework(): Response<ApiResponse<List<HomeworkDto>>>
 
@@ -202,6 +216,21 @@ interface ApiService {
 
     @GET("mobile/teacher/messages")
     suspend fun getTeacherThreads(): Response<ApiResponse<List<MessageThreadDto>>>
+
+    // ── Start a new conversation — any student, no class assignment required ───
+
+    @GET("mobile/teacher/messages/classes")
+    suspend fun getMessagingClasses(): Response<ApiResponse<List<MessagingClassDto>>>
+
+    @GET("mobile/teacher/messages/students")
+    suspend fun getMessagingStudents(
+        @Query("classId") classId: Int
+    ): Response<ApiResponse<List<MessagingStudentDto>>>
+
+    @POST("mobile/teacher/messages/open")
+    suspend fun openConversation(
+        @Body request: OpenConversationRequest
+    ): Response<ApiResponse<OpenConversationResponseDto>>
 
     @GET("mobile/teacher/messages/{threadId}")
     suspend fun getTeacherThread(
