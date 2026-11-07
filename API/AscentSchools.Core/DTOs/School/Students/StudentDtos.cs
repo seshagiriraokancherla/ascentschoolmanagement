@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace AscentSchools.Core.DTOs.School.Students
 {
@@ -233,5 +234,93 @@ namespace AscentSchools.Core.DTOs.School.Students
     public class ChangeSectionRequest
     {
         public int SectionId { get; set; }
+    }
+
+    // ── Student 360 (GET school/students/{id}/overview) ───────────────────
+    // Everything below is for ONE academic year of the student (the selected year),
+    // except Years, Receipts and Sms which span every year (linked by student_unique_id).
+    public class StudentOverviewDto
+    {
+        public long    StudentId        { get; set; }  // the selected year's student row
+        public int?    StudentUniqueId  { get; set; }
+        public int?    AcademicYearId   { get; set; }
+        public string  AcademicYear     { get; set; }
+        public bool    IsDetained       { get; set; }
+        public string  DetainedReason   { get; set; }
+        public string  BlockedReason    { get; set; }
+        public string  RouteName        { get; set; }
+        public string  BusName          { get; set; }
+        public bool    HasMobileApp     { get; set; }  // a parent_children link exists (master DB)
+        public System.DateTime? AppLinkedOn { get; set; }
+        public List<StudentEnrollmentDto>      Years          { get; set; }
+        public List<StudentAttendanceMonthDto> Attendance     { get; set; }
+        public List<StudentAbsenceDto>         RecentAbsences { get; set; }
+        public List<StudentExamSummaryDto>     Exams          { get; set; }
+        public List<StudentReceiptSummaryDto>  Receipts       { get; set; }
+        public List<StudentSmsDto>             Sms            { get; set; }
+    }
+
+    public class StudentEnrollmentDto
+    {
+        public long    StudentId      { get; set; }
+        public int?    AcademicYearId { get; set; }
+        public string  AcademicYear   { get; set; }
+        public string  ClassName      { get; set; }
+        public string  SectionName    { get; set; }
+        public string  RollNo         { get; set; }
+        public string  Status         { get; set; }
+        public bool    IsDetained     { get; set; }
+    }
+
+    public class StudentAttendanceMonthDto
+    {
+        public int     Year        { get; set; }
+        public int     Month       { get; set; }
+        public int     WorkingDays { get; set; }  // days marked for this student, Holiday excluded
+        public int     Present     { get; set; }
+        public int     Absent      { get; set; }
+        public int     Late        { get; set; }
+        public int     HalfDay     { get; set; }
+    }
+
+    public class StudentAbsenceDto
+    {
+        public System.DateTime AttendanceDate { get; set; }
+        public string  Status  { get; set; }
+        public string  Remarks { get; set; }
+    }
+
+    public class StudentExamSummaryDto
+    {
+        public int     ExamTypeId      { get; set; }
+        public string  ExamTypeName    { get; set; }
+        public decimal Total           { get; set; }  // marks + activity; grade-only subjects excluded
+        public decimal MaxTotal        { get; set; }
+        public int     SubjectCount    { get; set; }
+        public int     AbsentSubjects  { get; set; }
+        public int     Rank            { get; set; }  // competition rank within class + section
+        public int     RankOutOf       { get; set; }
+    }
+
+    public class StudentReceiptSummaryDto
+    {
+        public int     ReceiptId    { get; set; }
+        public string  ReceiptNo    { get; set; }
+        public System.DateTime PaymentDate { get; set; }
+        public decimal TotalAmount  { get; set; }
+        public string  PaymentMode  { get; set; }
+        public string  Status       { get; set; }
+        public string  AcademicYear { get; set; }
+        public string  CreatedBy    { get; set; }
+    }
+
+    public class StudentSmsDto
+    {
+        public System.DateTime SentAt { get; set; }
+        public string  SmsType  { get; set; }
+        public string  Mobile   { get; set; }
+        public string  Message  { get; set; }
+        public string  Status   { get; set; }
+        public string  SentBy   { get; set; }
     }
 }

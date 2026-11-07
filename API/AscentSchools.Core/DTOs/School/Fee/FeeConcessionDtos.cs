@@ -62,4 +62,27 @@ namespace AscentSchools.Core.DTOs.School.Fee
         public decimal Amount    { get; set; }
         public string  Remarks   { get; set; }
     }
+
+    // ── Legacy concession import (sync tool, SAS_ConcessionDet) ──────────────
+    // One row per legacy key (admission no + year + fee type/route + term), already
+    // summed by the sync tool. Amount = total of the ACTIVE legacy rows; 0 means every
+    // legacy row for that key was deleted → the new-app concession is cancelled.
+    public class LegacyConcessionRow
+    {
+        public int     RowNumber      { get; set; }
+        public string  AdmissionNo    { get; set; }
+        public string  AcademicYear   { get; set; }
+        public string  FeeTypeName    { get; set; }   // school fee head (blank for transport)
+        public string  RouteNames     { get; set; }   // transport: every legacy name of the route, '|' separated
+        public string  TermName       { get; set; }   // term name or month label (fee period)
+        public decimal Amount         { get; set; }
+        public string  ConcessionType { get; set; }
+        public string  LegacyNo       { get; set; }   // legacy TraID (CFR…) → receipt_no
+        public string  Remarks        { get; set; }
+    }
+
+    public class LegacyConcessionImportRequest
+    {
+        public List<LegacyConcessionRow> Rows { get; set; }
+    }
 }

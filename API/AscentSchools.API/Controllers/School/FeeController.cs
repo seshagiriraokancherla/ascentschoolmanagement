@@ -1,4 +1,6 @@
+using AscentSchools.API.Filters;
 using AscentSchools.API.Helpers;
+using AscentSchools.Core.Constants;
 using AscentSchools.Core.DTOs.School.Fee;
 using AscentSchools.Core.DTOs.School.Students;
 using AscentSchools.Data.ConnectionFactory;
@@ -142,6 +144,33 @@ namespace AscentSchools.API.Controllers.School
             return Ok<object>(null, "Receipt cancelled.");
         }
 
+        // PUT school/fees/receipts/{id}/payment-date — correct the date; every change is logged.
+        [HttpPut, Route("receipts/{id:int}/payment-date")]
+        [RequirePermission(PermissionCodes.StudentFee.Edit)]
+        public HttpResponseMessage UpdateReceiptDate(int id, [FromBody] UpdateReceiptDateRequest request)
+        {
+            if (request?.PaymentDate == null)
+                return BadRequest("New payment date is required.");
+            if (string.IsNullOrWhiteSpace(request.Reason))
+                return BadRequest("Reason is required.");
+            if (request.Reason.Trim().Length > 200)
+                return BadRequest("Reason must be 200 characters or fewer.");
+            if (request.PaymentDate.Value.Date > TimeHelper.IstToday())
+                return BadRequest("Payment date cannot be in the future.");
+
+            var error = _repo.UpdateReceiptDate(
+                Tenant.TenantDbName, Tenant.SchoolId, id, request.PaymentDate.Value,
+                request.Reason.Trim(), Tenant.UserId > 0 ? Tenant.UserId : (int?)null,
+                string.IsNullOrWhiteSpace(Tenant.FullName) ? "Unknown" : Tenant.FullName);
+            if (error != null) return BadRequest(error);
+            return Ok<object>(null, "Receipt date updated.");
+        }
+
+        // GET school/fees/receipts/{id}/date-changes — the receipt's date-change log, newest first.
+        [HttpGet, Route("receipts/{id:int}/date-changes")]
+        public HttpResponseMessage GetReceiptDateChanges(int id) =>
+            Ok(_repo.GetReceiptDateChanges(Tenant.TenantDbName, Tenant.SchoolId, id));
+
         // ── Payment Gateway Settings ──────────────────────────────────────
 
         // GET school/fees/gateway-config  (frontend: get keyId to open checkout)
@@ -168,6 +197,11 @@ namespace AscentSchools.API.Controllers.School
                 return BadRequest("Request body is required.");
             if (string.IsNullOrWhiteSpace(request.GatewayName))
                 return BadRequest("Gateway name is required.");
+            var supported = GatewayServiceFactory.SupportedGateways.ToList();
+            var canonical = supported.FirstOrDefault(g => string.Equals(g, request.GatewayName.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (canonical == null)
+                return BadRequest($"Unsupported gateway '{request.GatewayName}'. Supported: {string.Join(", ", supported)}.");
+            request.GatewayName = canonical;
             if (string.IsNullOrWhiteSpace(request.KeyId))
                 return BadRequest("Key ID is required.");
 
@@ -188,11 +222,9 @@ namespace AscentSchools.API.Controllers.School
                 return BadRequest("At least one fee item is required.");
 
             // Resolve active gateway for this school
-            var config = _gatewayRepo.GetActiveConfig(Tenant.TenantDbName, Tenant.SchoolId);
-            if (config == null)
-                return BadRequest("No active payment gateway configured. Go to Settings → Payment Gateway to set up Razorpay.");
-
-            var keySecret = _gatewayRepo.GetKeySecret(Tenant.TenantDbName, Tenant.SchoolId);
+            var creds = _gatewayRepo.GetCredentials(Tenant.TenantDbName, Tenant.SchoolId);
+            if (creds == null)
+                return BadRequest("No active payment gateway configured. Go to Settings → Payment Gateway to set it up.");
 
             // Compute total (amount − concession per line)
             decimal total = 0;
@@ -202,16 +234,24 @@ namespace AscentSchools.API.Controllers.School
             if (total <= 0)
                 return BadRequest("Total amount must be greater than zero.");
 
-            // Notes embedded in the Razorpay order for webhook identification
+            // Notes embedded in the gateway order for webhook identification
             var notes = new Dictionary<string, string>
             {
                 { "group_id",  Tenant.GroupId.ToString() },
                 { "school_id", Tenant.SchoolId.ToString() },
             };
 
-            var receiptRef  = $"SCH{Tenant.SchoolId}-{DateTime.UtcNow:yyyyMMddHHmmss}";
-            var gateway     = GatewayServiceFactory.Get(config.GatewayName);
-            var orderResult = gateway.CreateExternalOrder(config.KeyId, keySecret, total, receiptRef, notes);
+            var gateway     = GatewayServiceFactory.Get(creds.GatewayName);
+            var orderResult = gateway.CreateExternalOrder(creds, new GatewayOrderContext
+            {
+                Amount      = total,
+                ReceiptRef  = GatewayOrderRefs.NewReceiptRef("SCH", Tenant.SchoolId),
+                ProductInfo = GatewayOrderRefs.ProductInfo(request.FeeTypeCategory),
+                Notes       = notes,
+                Customer    = GatewayCustomer.From(
+                                  _gatewayRepo.GetPaymentCustomer(Tenant.TenantDbName, Tenant.SchoolId, request.StudentId)),
+                ReturnUrl   = GatewayOrderRefs.EasebuzzReturnUrl(Request),
+            });
 
             if (!orderResult.Success)
                 return ServerError($"Could not create payment order: {orderResult.Error}");
@@ -221,7 +261,7 @@ namespace AscentSchools.API.Controllers.School
 
             var gatewayOrderId = _gatewayRepo.CreateOrder(
                 Tenant.TenantDbName, Tenant.SchoolId,
-                config.GatewayName, orderResult.ExternalOrderId,
+                creds.GatewayName, orderResult.ExternalOrderId,
                 total, request.StudentId, request.AcademicYearId,
                 request.PaymentModeId, payloadJson, Tenant.FullName);
 
@@ -229,10 +269,13 @@ namespace AscentSchools.API.Controllers.School
             {
                 GatewayOrderId  = gatewayOrderId,
                 ExternalOrderId = orderResult.ExternalOrderId,
-                KeyId           = config.KeyId,
+                KeyId           = creds.KeyId,
                 AmountInPaise   = (long)(total * 100),
+                Amount          = total,
                 Currency        = "INR",
-                GatewayName     = config.GatewayName,
+                GatewayName     = creds.GatewayName,
+                AccessKey       = orderResult.ClientToken,
+                Environment     = creds.Environment ?? "prod",
             }, "Payment order created.");
         }
 
@@ -242,9 +285,8 @@ namespace AscentSchools.API.Controllers.School
         [HttpPost, Route("payment-orders/{gatewayOrderId:int}/verify")]
         public HttpResponseMessage VerifyPayment(int gatewayOrderId, [FromBody] VerifyPaymentRequest request)
         {
-            if (request == null || string.IsNullOrWhiteSpace(request.PaymentId)
-                                || string.IsNullOrWhiteSpace(request.Signature))
-                return BadRequest("PaymentId and Signature are required.");
+            if (request == null)
+                return BadRequest("Request body is required.");
 
             var order = _gatewayRepo.GetOrder(Tenant.TenantDbName, gatewayOrderId, Tenant.SchoolId);
             if (order == null)
@@ -261,18 +303,29 @@ namespace AscentSchools.API.Controllers.School
             if (order.Status == "Failed")
                 return BadRequest("This payment order was marked as failed.");
 
-            // Verify HMAC signature — prevents fraudulent payment claims
-            var keySecret = _gatewayRepo.GetKeySecret(Tenant.TenantDbName, Tenant.SchoolId);
-            var gateway   = GatewayServiceFactory.Get(order.GatewayName);
+            // Verify with the gateway — prevents fraudulent payment claims
+            var creds = _gatewayRepo.GetCredentials(Tenant.TenantDbName, Tenant.SchoolId);
+            if (creds == null) return BadRequest("No active payment gateway configured.");
 
-            if (!gateway.VerifyPaymentSignature(order.ExternalOrderId, request.PaymentId, request.Signature, keySecret))
+            if (!SameGateway(order, creds))
+                return BadRequest(GatewayChangedMessage(order));
+
+            var gateway = GatewayServiceFactory.Get(order.GatewayName);
+            var check   = gateway.VerifyPayment(creds, order.ExternalOrderId, order.Amount,
+                                                request.PaymentId, request.Signature, request.GatewayResponse);
+            if (!check.Verified)
             {
-                _gatewayRepo.MarkOrderFailed(Tenant.TenantDbName, gatewayOrderId);
-                return BadRequest("Payment signature verification failed. The order has been marked as failed. Please try again.");
+                if (check.Definitive)
+                {
+                    _gatewayRepo.MarkOrderFailed(Tenant.TenantDbName, gatewayOrderId);
+                    return BadRequest($"{check.Error} The order has been marked as failed. Please try again.");
+                }
+                // Not confirmed yet — order stays Pending (webhook / Pending Online Payments can finish it).
+                return BadRequest(check.Error);
             }
 
             var receiptId = ReconcileOrderToReceipt(
-                Tenant.TenantDbName, Tenant.SchoolId, order, request.PaymentId, "");
+                Tenant.TenantDbName, Tenant.SchoolId, order, check.PaymentId, "");
 
             var receipt = _repo.GetReceiptById(Tenant.TenantDbName, Tenant.SchoolId, receiptId);
             return Created(receipt, "Payment verified. Receipt generated.");
@@ -286,23 +339,9 @@ namespace AscentSchools.API.Controllers.School
         private int ReconcileOrderToReceipt(
             string dbName, int schoolId, GatewayOrderRecord order, string paymentId, string viaLabel)
         {
-            var originalRequest = JsonConvert.DeserializeObject<CreatePaymentOrderRequest>(order.PayloadJson);
-
-            var collectRequest = new CollectFeeRequest
-            {
-                StudentId        = order.StudentId,
-                StudentUniqueId  = originalRequest?.StudentUniqueId,
-                FeeTypeCategory  = originalRequest?.FeeTypeCategory,
-                AcademicYearId   = order.AcademicYearId,
-                PaymentModeId    = order.PaymentModeId,
-                PaymentDate      = originalRequest?.PaymentDate ?? TimeHelper.IstToday(),
-                Remarks          = $"Online ({order.GatewayName}){viaLabel}. Ref: {paymentId}",
-                Items            = originalRequest?.Items ?? new List<CollectFeeItem>(),
-            };
-
-            var receiptId = _repo.CollectFee(dbName, schoolId, order.CreatedBy, collectRequest);
-            _gatewayRepo.MarkOrderPaid(dbName, order.GatewayOrderId, paymentId, receiptId);
-            return receiptId;
+            return GatewayReceiptHelper.CreateReceiptForOrder(
+                _repo, _gatewayRepo, dbName, schoolId, order, paymentId,
+                order.CreatedBy, $"Online ({order.GatewayName}){viaLabel}. Ref: {paymentId}");
         }
 
         // ── Reconciliation: list pending orders, check live status, reconcile ──
@@ -350,12 +389,14 @@ namespace AscentSchools.API.Controllers.School
             var order = _gatewayRepo.GetOrder(Tenant.TenantDbName, gatewayOrderId, Tenant.SchoolId);
             if (order == null) return NotFound("Payment order not found.");
 
-            var config = _gatewayRepo.GetActiveConfig(Tenant.TenantDbName, Tenant.SchoolId);
-            if (config == null) return BadRequest("No active payment gateway configured.");
+            var creds = _gatewayRepo.GetCredentials(Tenant.TenantDbName, Tenant.SchoolId);
+            if (creds == null) return BadRequest("No active payment gateway configured.");
 
-            var keySecret = _gatewayRepo.GetKeySecret(Tenant.TenantDbName, Tenant.SchoolId);
-            var gateway   = GatewayServiceFactory.Get(order.GatewayName);
-            var status    = gateway.FetchOrderPayment(config.KeyId, keySecret, order.ExternalOrderId);
+            if (!SameGateway(order, creds))
+                return BadRequest(GatewayChangedMessage(order));
+
+            var gateway = GatewayServiceFactory.Get(order.GatewayName);
+            var status  = gateway.FetchOrderPayment(creds, order.ExternalOrderId);
 
             if (!status.Success)
                 return ServerError($"Could not fetch payment status from gateway: {status.Error}");
@@ -376,13 +417,22 @@ namespace AscentSchools.API.Controllers.School
             });
         }
 
+        // Only the ACTIVE gateway's keys are stored, so an order created on a different gateway
+        // (the school switched since) can't be checked with them.
+        private static bool SameGateway(GatewayOrderRecord order, GatewayCredentials creds) =>
+            string.Equals(order.GatewayName, creds.GatewayName, StringComparison.OrdinalIgnoreCase);
+
+        private static string GatewayChangedMessage(GatewayOrderRecord order) =>
+            $"This order was made on {order.GatewayName}, but the school's active gateway is now different. " +
+            $"Check this payment in the {order.GatewayName} dashboard.";
+
         // Decides whether an order can be reconciled and the human-readable reason.
         // Shared by the single-order status check and the bulk scan so both agree.
         private (bool reconcilable, string note) EvaluateStatus(
             decimal orderAmount, string orderDbStatus, OrderPaymentStatus status)
         {
             var amountMatches = Math.Abs(status.AmountInRupees - orderAmount) <= 0.01m;
-            var captured      = status.Found && status.Status == "captured";
+            var captured      = status.Found && status.Captured;
             var reconcilable  = captured && amountMatches && orderDbStatus != "Paid";
 
             string note;
@@ -402,19 +452,21 @@ namespace AscentSchools.API.Controllers.School
         public HttpResponseMessage ScanPendingPaymentOrders(
             DateTime? createdAfter = null, DateTime? createdBefore = null, bool onlyReconcilable = true)
         {
-            var config = _gatewayRepo.GetActiveConfig(Tenant.TenantDbName, Tenant.SchoolId);
-            if (config == null) return BadRequest("No active payment gateway configured.");
+            var creds = _gatewayRepo.GetCredentials(Tenant.TenantDbName, Tenant.SchoolId);
+            if (creds == null) return BadRequest("No active payment gateway configured.");
 
-            var keySecret = _gatewayRepo.GetKeySecret(Tenant.TenantDbName, Tenant.SchoolId);
-            var orders    = _gatewayRepo.GetPendingOrders(
+            var orders = _gatewayRepo.GetPendingOrders(
                 Tenant.TenantDbName, Tenant.SchoolId, createdAfter, createdBefore);
 
             var result = new List<ScannedPaymentOrderDto>();
             foreach (var o in orders)
             {
-                var gateway = GatewayServiceFactory.Get(
-                    string.IsNullOrWhiteSpace(o.GatewayName) ? config.GatewayName : o.GatewayName);
-                var status  = gateway.FetchOrderPayment(config.KeyId, keySecret, o.ExternalOrderId);
+                var gwName = string.IsNullOrWhiteSpace(o.GatewayName) ? creds.GatewayName : o.GatewayName;
+                // Only the active gateway's keys are stored — skip orders made on a previous gateway.
+                if (!string.Equals(gwName, creds.GatewayName, StringComparison.OrdinalIgnoreCase)) continue;
+
+                var gateway = GatewayServiceFactory.Get(gwName);
+                var status  = gateway.FetchOrderPayment(creds, o.ExternalOrderId);
                 if (!status.Success) continue;   // skip rows we couldn't reach; admin can re-scan / check individually
 
                 var (reconcilable, note) = EvaluateStatus(o.Amount, "Pending", status);
@@ -464,17 +516,19 @@ namespace AscentSchools.API.Controllers.School
                 return Ok(existing, "Payment already reconciled.");
             }
 
-            var config = _gatewayRepo.GetActiveConfig(Tenant.TenantDbName, Tenant.SchoolId);
-            if (config == null) return BadRequest("No active payment gateway configured.");
+            var creds = _gatewayRepo.GetCredentials(Tenant.TenantDbName, Tenant.SchoolId);
+            if (creds == null) return BadRequest("No active payment gateway configured.");
 
-            var keySecret = _gatewayRepo.GetKeySecret(Tenant.TenantDbName, Tenant.SchoolId);
-            var gateway   = GatewayServiceFactory.Get(order.GatewayName);
-            var status    = gateway.FetchOrderPayment(config.KeyId, keySecret, order.ExternalOrderId);
+            if (!SameGateway(order, creds))
+                return BadRequest(GatewayChangedMessage(order));
+
+            var gateway = GatewayServiceFactory.Get(order.GatewayName);
+            var status  = gateway.FetchOrderPayment(creds, order.ExternalOrderId);
 
             if (!status.Success)
                 return ServerError($"Could not fetch payment status from gateway: {status.Error}");
 
-            if (!status.Found || status.Status != "captured")
+            if (!status.Found || !status.Captured)
                 return BadRequest($"No captured payment found for this order (gateway status: {status.Status ?? "none"}). The order remains pending.");
 
             if (Math.Abs(status.AmountInRupees - order.Amount) > 0.01m)
@@ -549,6 +603,85 @@ namespace AscentSchools.API.Controllers.School
             }
 
             return Request.CreateResponse(HttpStatusCode.OK);
+        }
+
+        // ── Easebuzz: webhook + return URL (Easebuzz server / browser → our server) ──
+        // Both receive the same form-urlencoded transaction data. It is treated ONLY as a trigger:
+        // the tenant comes from udf1 (group_id) / udf2 (school_id), and the status + amount are
+        // re-read from Easebuzz's Transaction API with the school's own Salt before any receipt
+        // is created — so a forged post cannot create a receipt.
+        // Configure in Easebuzz Dashboard → Webhooks (Transaction Webhook):
+        //       https://{your-domain}/api/school/fees/payment-webhook/easebuzz
+
+        [HttpPost, Route("payment-webhook/easebuzz"), AllowAnonymous]
+        public HttpResponseMessage EasebuzzWebhook()
+        {
+            try { ProcessEasebuzzNotification(" via webhook"); }
+            catch { /* always 200 — otherwise Easebuzz keeps retrying; admin can reconcile */ }
+            return Request.CreateResponse(HttpStatusCode.OK);
+        }
+
+        // surl / furl — Easebuzz requires them even with the iframe / SDK checkout. Shows a
+        // simple page if a browser ever lands here (hosted-page redirect fallback).
+        [HttpPost, HttpGet, Route("payment-return/easebuzz"), AllowAnonymous]
+        public HttpResponseMessage EasebuzzReturn()
+        {
+            string outcome;
+            try { outcome = Request.Method == HttpMethod.Post ? ProcessEasebuzzNotification(" via return") : null; }
+            catch { outcome = null; }
+
+            var text = outcome == "paid"
+                ? "Payment received. The receipt has been generated — you can close this window."
+                : outcome == "failed"
+                    ? "The payment was not completed. You can close this window and try again."
+                    : "Thank you. You can close this window — if money was deducted, the receipt will be generated automatically.";
+
+            var html = "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width\">"
+                     + "<title>Payment</title></head><body style=\"font-family:sans-serif;text-align:center;padding:48px 16px\">"
+                     + $"<p>{System.Net.WebUtility.HtmlEncode(text)}</p></body></html>";
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(html, System.Text.Encoding.UTF8, "text/html")
+            };
+        }
+
+        // Returns "paid", "failed" or null (unknown / still pending / not ours).
+        private string ProcessEasebuzzNotification(string viaLabel)
+        {
+            var raw  = Request.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            var form = System.Web.HttpUtility.ParseQueryString(raw ?? "");
+
+            var txnid = form["txnid"];
+            if (string.IsNullOrWhiteSpace(txnid)
+                || !int.TryParse(form["udf1"], out var groupId)
+                || !int.TryParse(form["udf2"], out var schoolId))
+                return null;
+
+            var dbName = $"ascent_group_{groupId}";
+            var order  = _gatewayRepo.GetOrderByExternalId(dbName, txnid, schoolId);
+            if (order == null || !string.Equals(order.GatewayName, "Easebuzz", StringComparison.OrdinalIgnoreCase))
+                return null;
+            if (order.Status == "Paid")       return "paid";
+            if (order.Status == "Processing") return null;     // another request is creating the receipt
+            if (order.Status != "Pending")    return "failed";
+
+            var creds = _gatewayRepo.GetCredentials(dbName, schoolId);
+            if (creds == null || !SameGateway(order, creds)) return null;
+
+            var check = GatewayServiceFactory.Get("Easebuzz")
+                .VerifyPayment(creds, order.ExternalOrderId, order.Amount, null, null, null);
+
+            if (check.Verified)
+            {
+                ReconcileOrderToReceipt(dbName, schoolId, order, check.PaymentId, viaLabel);
+                return "paid";
+            }
+            if (check.Definitive)
+            {
+                _gatewayRepo.MarkOrderFailed(dbName, order.GatewayOrderId);
+                return "failed";
+            }
+            return null;
         }
 
         // POST school/fees/structure/bulk

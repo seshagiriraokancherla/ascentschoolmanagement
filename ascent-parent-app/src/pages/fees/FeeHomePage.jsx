@@ -6,6 +6,7 @@ import {
 import { CreditCardOutlined, ReloadOutlined, UserOutlined, PrinterOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import api from '../../api/axiosInstance'
+import { openGatewayCheckout } from '../../api/gatewayCheckout'
 import { useAuthStore } from '../../store/authStore'
 
 const { Text } = Typography
@@ -286,38 +287,17 @@ export default function FeeHomePage() {
       })
       const order = orderRes.data?.data
 
-      await loadRazorpayScript()
-
-      await new Promise((resolve, reject) => {
-        const rzp = new window.Razorpay({
-          key:      order.keyId,
-          amount:   order.amountInPaise,
-          currency: order.currency || 'INR',
-          order_id: order.externalOrderId,
-          name:     document.title,
-          description: `Fee — ${year.academicYear}`,
-          handler: async (response) => {
-            try {
-              const vRes = await api.post(
-                `/mobile/fees/payment-orders/${order.gatewayOrderId}/verify`,
-                {
-                  PaymentId: response.razorpay_payment_id,
-                  OrderId:   response.razorpay_order_id,
-                  Signature: response.razorpay_signature,
-                }
-              )
-              clearSelection()
-              navigate('/fees/success', { state: { receipt: vRes.data?.data } })
-              resolve()
-            } catch (e) { reject(e) }
-          },
-          modal: { ondismiss: () => reject(new Error('cancelled')) },
-          theme: { color: '#1677ff' },
-        })
-        rzp.open()
+      // Razorpay or Easebuzz — whichever the school uses (decided server-side).
+      const receipt = await openGatewayCheckout({
+        order,
+        title:       document.title,
+        description: `Fee — ${year.academicYear}`,
       })
+      clearSelection()
+      navigate('/fees/success', { state: { receipt } })
     } catch (e) {
-      if (e.message !== 'cancelled') message.error(e.message || 'Payment failed. Please try again.')
+      if (e.message === 'cancelled') message.warning('Payment cancelled.')
+      else message.error(e.message || 'Payment failed. Please try again.')
     } finally {
       setPaying(false)
     }
@@ -355,15 +335,4 @@ export default function FeeHomePage() {
       <style>{`.paid-row { opacity: 0.55; }`}</style>
     </div>
   )
-}
-
-function loadRazorpayScript() {
-  return new Promise((resolve, reject) => {
-    if (window.Razorpay) { resolve(); return }
-    const s = document.createElement('script')
-    s.src = 'https://checkout.razorpay.com/v1/checkout.js'
-    s.onload  = resolve
-    s.onerror = () => reject(new Error('Failed to load payment gateway. Check your internet connection.'))
-    document.body.appendChild(s)
-  })
 }

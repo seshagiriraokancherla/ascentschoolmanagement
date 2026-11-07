@@ -433,7 +433,7 @@ export default function MarksEntryPage() {
       {grid && !loading && grid.subjects.length === 0 && (
         <Card>
           <Text type="secondary">
-            No subjects mapped to this class. Set them in <Tag>Master Data → Class Subjects</Tag> first.
+            No subjects mapped to this class. Set them in <Tag>Exams → Class Subjects</Tag> first.
           </Text>
         </Card>
       )}

@@ -15,6 +15,8 @@ namespace AscentSchools.Core.DTOs.School.ClassSubjects
         public string   SubjectType    { get; set; }
         public int?     DisplayOrder   { get; set; }
         public bool     IsOptional     { get; set; }
+        public bool     GradeOnly      { get; set; }   // marks card: grade only, excluded from total
+        public byte?    LanguageSlot   { get; set; }   // 1/2/3 = student's first/second/third language (null = not a language subject)
         public string   Status         { get; set; }
     }
 
@@ -43,5 +45,7 @@ namespace AscentSchools.Core.DTOs.School.ClassSubjects
         public int  SubjectId    { get; set; }
         public int? DisplayOrder { get; set; }
         public bool IsOptional   { get; set; }
+        public bool GradeOnly    { get; set; }
+        public byte? LanguageSlot { get; set; }
     }
 }

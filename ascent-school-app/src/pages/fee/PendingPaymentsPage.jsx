@@ -7,12 +7,20 @@ import api, { apiError } from '../../api/axiosInstance'
 
 const { Text } = Typography
 
-// Maps a gateway payment status → an AntD tag colour.
+// Maps a gateway payment status (lower-cased) → an AntD tag colour.
+// Razorpay: captured/authorized/failed/created. Easebuzz: success/pending/initiated/failure/usercancelled/dropped/bounced.
 const STATUS_COLOR = {
-  captured:   'green',
-  authorized: 'orange',
-  failed:     'red',
-  created:    'default',
+  captured:      'green',
+  success:       'green',
+  authorized:    'orange',
+  pending:       'orange',
+  initiated:     'orange',
+  failed:        'red',
+  failure:       'red',
+  usercancelled: 'default',
+  dropped:       'default',
+  bounced:       'default',
+  created:       'default',
 }
 
 export default function PendingPaymentsPage() {
@@ -170,7 +178,7 @@ export default function PendingPaymentsPage() {
     if (!d.found) return <Tooltip title={d.note}><Tag color="default">Not attempted</Tag></Tooltip>
     return (
       <Tooltip title={d.note}>
-        <Tag color={STATUS_COLOR[d.gatewayStatus] || 'default'} style={{ textTransform: 'capitalize' }}>
+        <Tag color={STATUS_COLOR[String(d.gatewayStatus || '').toLowerCase()] || 'default'} style={{ textTransform: 'capitalize' }}>
           {d.gatewayStatus}
         </Tag>
       </Tooltip>
@@ -260,7 +268,7 @@ export default function PendingPaymentsPage() {
       <Text type="secondary">
         Online orders that never completed (the parent left the app before the success screen).
         Most are <b>Not attempted</b> (never paid). Click <b>Scan for captured payments</b> to check
-        them all against Razorpay at once and list only the ones that were actually paid — then
+        them all against the payment gateway at once and list only the ones that were actually paid — then
         reconcile to generate the receipts.
       </Text>
 

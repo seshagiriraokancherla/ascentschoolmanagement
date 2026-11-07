@@ -3,11 +3,13 @@ import {
   Card, Table, Button, Input, Select, DatePicker, Tag, Drawer,
   Descriptions, Row, Col, Divider, Typography, Space, Modal, Form, App as AntApp,
 } from 'antd'
-import { SearchOutlined, EyeOutlined, StopOutlined, DownloadOutlined, PrinterOutlined, FilePdfOutlined } from '@ant-design/icons'
+import { SearchOutlined, EyeOutlined, StopOutlined, DownloadOutlined, PrinterOutlined, FilePdfOutlined, CalendarOutlined } from '@ant-design/icons'
 import Papa from 'papaparse'
 import dayjs from 'dayjs'
 import api, { apiError } from '../../api/axiosInstance'
 import { useBrandingStore } from '../../store/brandingStore'
+import { useAuthStore } from '../../store/authStore'
+import { P } from '../../config/permissions'
 import { exportListingPdf } from '../reports/reportUtils'
 
 const { Text, Title } = Typography
@@ -50,6 +52,13 @@ export default function ReceiptsPage({ category = null, title = 'Fee Receipts' }
   const [cancelling,      setCancelling]      = useState(false)
   const [cancelForm] = Form.useForm()
 
+  // Change-date modal (STUDENT_FEE.EDIT); every change is logged server-side
+  const canEditDate = useAuthStore((s) => s.hasPermission)(P.FEE_EDIT)
+  const [dateReceipt, setDateReceipt] = useState(null)   // receipt being re-dated; null = closed
+  const [savingDate,  setSavingDate]  = useState(false)
+  const [dateChanges, setDateChanges] = useState([])     // history shown in the detail drawer
+  const [dateForm] = Form.useForm()
+
   const load = async () => {
     setLoading(true)
     try {
@@ -89,6 +98,10 @@ export default function ReceiptsPage({ category = null, title = 'Fee Receipts' }
   const viewReceipt = async (receiptId) => {
     setDrawerOpen(true)
     setLoadingDetail(true)
+    setDateChanges([])
+    api.get(`/school/fees/receipts/${receiptId}/date-changes`)
+      .then(r => setDateChanges(r.data?.data || []))
+      .catch(() => {})
     try {
       const res = await api.get(`/school/fees/receipts/${receiptId}`)
       setDetailReceipt(res.data?.data)
@@ -114,6 +127,31 @@ export default function ReceiptsPage({ category = null, title = 'Fee Receipts' }
     setPrintReceipt(rec)
     // Let React paint the print area before invoking print.
     setTimeout(() => window.print(), 150)
+  }
+
+  const openDateModal = (receipt) => {
+    setDateReceipt(receipt)
+    dateForm.setFieldsValue({ paymentDate: dayjs(receipt.paymentDate), reason: '' })
+  }
+
+  const handleSaveDate = async () => {
+    const values = await dateForm.validateFields()
+    setSavingDate(true)
+    try {
+      await api.put(`/school/fees/receipts/${dateReceipt.receiptId}/payment-date`, {
+        PaymentDate: values.paymentDate.format('YYYY-MM-DD'),
+        Reason:      values.reason.trim(),
+      })
+      message.success('Receipt date updated.')
+      const id = dateReceipt.receiptId
+      setDateReceipt(null)
+      load()
+      if (detailReceipt?.receiptId === id) viewReceipt(id)
+    } catch (e) {
+      message.error(apiError(e, 'Failed to update receipt date.'))
+    } finally {
+      setSavingDate(false)
+    }
   }
 
   const openCancelModal = (receiptId) => {
@@ -264,7 +302,7 @@ export default function ReceiptsPage({ category = null, title = 'Fee Receipts' }
     {
       title: 'Actions',
       key: 'actions',
-      width: 140,
+      width: 290,
       render: (_, record) => (
         <Space size="small">
           <Button size="small" icon={<EyeOutlined />} onClick={() => viewReceipt(record.receiptId)}>
@@ -273,6 +311,11 @@ export default function ReceiptsPage({ category = null, title = 'Fee Receipts' }
           <Button size="small" icon={<PrinterOutlined />} onClick={() => handlePrint(record.receiptId)}>
             Print
           </Button>
+          {record.status === 'Active' && canEditDate && (
+            <Button size="small" icon={<CalendarOutlined />} onClick={() => openDateModal(record)}>
+              Date
+            </Button>
+          )}
           {record.status === 'Active' && (
             <Button
               size="small"
@@ -383,6 +426,11 @@ export default function ReceiptsPage({ category = null, title = 'Fee Receipts' }
               >
                 Print
               </Button>
+              {detailReceipt.status === 'Active' && canEditDate && (
+                <Button icon={<CalendarOutlined />} size="small" onClick={() => openDateModal(detailReceipt)}>
+                  Change Date
+                </Button>
+              )}
               {detailReceipt.status === 'Active' && (
                 <Button
                   danger
@@ -456,6 +504,25 @@ export default function ReceiptsPage({ category = null, title = 'Fee Receipts' }
             <div style={{ textAlign: 'right' }}>
               <Title level={4}>Total: ₹{Number(detailReceipt.totalAmount).toFixed(2)}</Title>
             </div>
+
+            {dateChanges.length > 0 && (
+              <>
+                <Divider orientation="left" plain>Date Change History</Divider>
+                <Table
+                  rowKey="changeId"
+                  size="small"
+                  pagination={false}
+                  dataSource={dateChanges}
+                  columns={[
+                    { title: 'From', dataIndex: 'oldPaymentDate', key: 'old', render: (v) => dayjs(v).format('DD-MM-YYYY') },
+                    { title: 'To',   dataIndex: 'newPaymentDate', key: 'new', render: (v) => dayjs(v).format('DD-MM-YYYY') },
+                    { title: 'Reason',     dataIndex: 'reason',        key: 'reason' },
+                    { title: 'Changed By', dataIndex: 'changedByName', key: 'by' },
+                    { title: 'On',         dataIndex: 'changedAt',     key: 'at', render: (v) => dayjs(v).format('DD-MM-YYYY HH:mm') },
+                  ]}
+                />
+              </>
+            )}
           </>
         )}
       </Drawer>
@@ -481,6 +548,41 @@ export default function ReceiptsPage({ category = null, title = 'Fee Receipts' }
         </Form>
       </Modal>
 
+      {/* Change Date Modal */}
+      <Modal
+        title={`Change Date — Receipt ${dateReceipt?.receiptNo || ''}`}
+        open={!!dateReceipt}
+        onOk={handleSaveDate}
+        onCancel={() => setDateReceipt(null)}
+        confirmLoading={savingDate}
+        okText="Update Date"
+        forceRender
+      >
+        <Form form={dateForm} layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item label="Current Date">
+            <Text>{dateReceipt ? dayjs(dateReceipt.paymentDate).format('DD-MM-YYYY') : ''}</Text>
+          </Form.Item>
+          <Form.Item
+            name="paymentDate"
+            label="New Payment Date"
+            rules={[{ required: true, message: 'Please pick a date.' }]}
+          >
+            <DatePicker
+              format="DD-MM-YYYY"
+              style={{ width: '100%' }}
+              disabledDate={(d) => d && d.isAfter(dayjs(), 'day')}
+            />
+          </Form.Item>
+          <Form.Item
+            name="reason"
+            label="Reason"
+            rules={[{ required: true, whitespace: true, message: 'Please enter a reason.' }]}
+          >
+            <Input.TextArea rows={3} maxLength={200} showCount placeholder="Why is the date being changed?" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
       {/* Hidden print area — visible only on print */}
       <ReceiptPrintArea receipt={printReceipt} branding={branding} />
       <style>{`
@@ -499,7 +601,8 @@ export default function ReceiptsPage({ category = null, title = 'Fee Receipts' }
 const printCellHead = { border: '1px solid #000', padding: '5px 8px', textAlign: 'left', background: '#f0f0f0' }
 const printCell     = { border: '1px solid #000', padding: '5px 8px' }
 
-function ReceiptPrintArea({ receipt, branding }) {
+// Also used by Student 360 (pages/students/Student360Page.jsx) for receipt reprints.
+export function ReceiptPrintArea({ receipt, branding }) {
   if (!receipt) return null
   const fmt = (n) => `₹${Number(n || 0).toFixed(2)}`
 

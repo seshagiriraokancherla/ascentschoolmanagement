@@ -194,4 +194,22 @@ namespace AscentSchools.Core.DTOs.School.Fee
     {
         public string CancelReason { get; set; }
     }
+
+    /// <summary>Correct a receipt's payment date (Fees → Receipts → Date). Reason is required.</summary>
+    public class UpdateReceiptDateRequest
+    {
+        public DateTime? PaymentDate { get; set; }
+        public string    Reason      { get; set; }
+    }
+
+    /// <summary>One row of fee_receipt_date_changes (who changed a receipt's date, when, why).</summary>
+    public class ReceiptDateChangeDto
+    {
+        public int      ChangeId        { get; set; }
+        public DateTime OldPaymentDate  { get; set; }
+        public DateTime NewPaymentDate  { get; set; }
+        public string   Reason          { get; set; }
+        public string   ChangedByName   { get; set; }
+        public DateTime ChangedAt       { get; set; }
+    }
 }

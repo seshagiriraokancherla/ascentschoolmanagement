@@ -11,6 +11,12 @@ okhttp          = "4.12.0"
 securityCrypto  = "1.1.0-alpha06"
 coroutines      = "1.8.1"
 gson            = "2.11.0"
+razorpay        = "1.6.40"
+easebuzz        = "1.0.11"
+coil            = "2.6.0"
+playAppUpdate   = "2.1.0"
+firebaseBom     = "33.5.1"
+desugarJdkLibs  = "2.1.4"
 
 [libraries]
 androidx-core-ktx               = { group = "androidx.core",                 name = "core-ktx",                    version.ref = "coreKtx" }
@@ -31,6 +37,14 @@ okhttp-logging                  = { group = "com.squareup.okhttp3",          nam
 security-crypto                 = { group = "androidx.security",             name = "security-crypto",             version.ref = "securityCrypto" }
 coroutines-android              = { group = "org.jetbrains.kotlinx",         name = "kotlinx-coroutines-android",  version.ref = "coroutines" }
 gson                            = { group = "com.google.code.gson",          name = "gson",                        version.ref = "gson" }
+razorpay-checkout               = { group = "com.razorpay",                  name = "checkout",                    version.ref = "razorpay" }
+easebuzz-android                = { group = "in.easebuzz",                   name = "android-v2",                  version.ref = "easebuzz" }
+coil-compose                    = { group = "io.coil-kt",                    name = "coil-compose",                version.ref = "coil" }
+play-app-update                 = { group = "com.google.android.play",       name = "app-update",                  version.ref = "playAppUpdate" }
+play-app-update-ktx             = { group = "com.google.android.play",       name = "app-update-ktx",              version.ref = "playAppUpdate" }
+firebase-bom                    = { group = "com.google.firebase",           name = "firebase-bom",                version.ref = "firebaseBom" }
+firebase-messaging              = { group = "com.google.firebase",           name = "firebase-messaging" }
+desugar-jdk-libs                = { group = "com.android.tools",             name = "desugar_jdk_libs",            version.ref = "desugarJdkLibs" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

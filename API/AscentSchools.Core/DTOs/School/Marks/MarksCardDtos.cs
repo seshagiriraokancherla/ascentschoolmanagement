@@ -44,6 +44,8 @@ namespace AscentSchools.Core.DTOs.School.Marks
         public decimal? ActivityMaxMarks { get; set; }   // internal (null = none)
         public bool     HasActivity      { get; set; }
         public bool     HasGradeType     { get; set; }   // exam_master row has a grade type
+        public bool     GradeOnly        { get; set; }   // class_subjects.grade_only — grade-only table, not in total / rank
+        public byte?    LanguageSlot     { get; set; }   // class_subjects.language_slot — 1/2/3
     }
 
     public class MarksCardStudentDto
@@ -53,7 +55,7 @@ namespace AscentSchools.Core.DTOs.School.Marks
         public string  AdmissionNo { get; set; }
         public string  FatherName  { get; set; }
         public List<MarksCardLineDto> Lines { get; set; }
-        public bool    HasMarks    { get; set; }   // at least one subject entered or absent
+        public bool    HasMarks    { get; set; }   // at least one MARKS subject (not grade-only) entered or absent
         public decimal Total       { get; set; }
         public decimal MaxTotal    { get; set; }
         public string  TotalGrade  { get; set; }
@@ -70,6 +72,7 @@ namespace AscentSchools.Core.DTOs.School.Marks
     public class MarksCardLineDto
     {
         public int      SubjectId     { get; set; }
+        public string   SubjectLabel  { get; set; }   // language subject → "Second Language (Hindi)"; null = use SubjectName
         public decimal? ActivityMarks { get; set; }   // internal
         public decimal? MarksObtained { get; set; }   // written
         public bool     IsAbsent      { get; set; }

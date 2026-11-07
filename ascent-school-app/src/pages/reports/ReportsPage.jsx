@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Layout, Menu, Typography, Card } from 'antd'
-import { BarChartOutlined, TeamOutlined, FieldNumberOutlined, StopOutlined, TableOutlined, CarOutlined, FileDoneOutlined, CalendarOutlined, ScheduleOutlined, BookOutlined, IdcardOutlined, TrophyOutlined, CloseCircleOutlined, ReadOutlined, BankOutlined, AlertOutlined, PauseCircleOutlined, SolutionOutlined, MobileOutlined } from '@ant-design/icons'
+import { BarChartOutlined, TeamOutlined, FieldNumberOutlined, StopOutlined, TableOutlined, CarOutlined, FileDoneOutlined, CalendarOutlined, ScheduleOutlined, BookOutlined, ReadOutlined, BankOutlined, AlertOutlined, PauseCircleOutlined, MobileOutlined } from '@ant-design/icons'
 import ClassStudentsReport          from './ClassStudentsReport'
 import TotalStrengthReport          from './TotalStrengthReport'
 import AbsentsReport                from './AbsentsReport'
@@ -10,12 +10,6 @@ import StudyCertificateReport       from './StudyCertificateReport'
 import DailyAttendanceSummaryReport from './DailyAttendanceSummaryReport'
 import MonthlyAttendanceSheetReport from './MonthlyAttendanceSheetReport'
 import AttendanceRegisterReport     from './AttendanceRegisterReport'
-import ExamHallTicketReport         from './ExamHallTicketReport'
-import ExamToppersReport            from './ExamToppersReport'
-import ClassToppersReport           from './ClassToppersReport'
-import FailedStudentsReport         from './FailedStudentsReport'
-import AcademicYearToppersReport    from './AcademicYearToppersReport'
-import MarksCardReport              from './MarksCardReport'
 import HomeworkStatementReport      from './HomeworkStatementReport'
 import SubjectHomeworkReport        from './SubjectHomeworkReport'
 import StaffSalaryStatementReport   from './StaffSalaryStatementReport'
@@ -89,48 +83,6 @@ const REPORTS = [
     icon:        <BookOutlined />,
     component:   <AttendanceRegisterReport />,
     description: 'Formal date-range attendance register — students × working days with P/A/L',
-  },
-  {
-    key:         'exam-hall-ticket',
-    label:       'Exam Hall Ticket',
-    icon:        <IdcardOutlined />,
-    component:   <ExamHallTicketReport />,
-    description: 'Generate per-student hall tickets with exam schedule — PDF only',
-  },
-  {
-    key:         'marks-card',
-    label:       'Marks Card',
-    icon:        <SolutionOutlined />,
-    component:   <MarksCardReport />,
-    description: 'Per-student progress report for an exam — marks, grades and rank in the section',
-  },
-  {
-    key:         'exam-toppers',
-    label:       'Exam wise Toppers',
-    icon:        <TrophyOutlined />,
-    component:   <ExamToppersReport />,
-    description: 'Class-wise ranked toppers for an examination with subject-wise marks breakdown',
-  },
-  {
-    key:         'class-toppers',
-    label:       'Class wise Toppers',
-    icon:        <TrophyOutlined />,
-    component:   <ClassToppersReport />,
-    description: 'Exam-wise toppers for a selected class — all exams of the year in one view',
-  },
-  {
-    key:         'failed-students',
-    label:       'Failed Students List',
-    icon:        <CloseCircleOutlined />,
-    component:   <FailedStudentsReport />,
-    description: 'Students who scored below pass mark in one or more subjects for an examination',
-  },
-  {
-    key:         'academic-year-toppers',
-    label:       'Academic Year Toppers',
-    icon:        <TrophyOutlined />,
-    component:   <AcademicYearToppersReport />,
-    description: 'Cumulative toppers ranked by grand total across all exams in the academic year',
   },
   {
     key:         'homework-statement',

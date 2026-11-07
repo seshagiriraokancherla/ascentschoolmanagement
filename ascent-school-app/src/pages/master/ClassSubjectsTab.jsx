@@ -13,8 +13,18 @@ const newRow = (over = {}) => ({
   subjectId: null,
   displayOrder: null,
   isOptional: false,
+  gradeOnly: false,
+  languageSlot: null,
   ...over,
 })
+
+// Links a placeholder subject ("Second Language") to the student's own language
+// (Students → Other Info), so the marks card prints "Second Language (Hindi)".
+const LANGUAGE_SLOTS = [
+  { value: 1, label: '1st Language' },
+  { value: 2, label: '2nd Language' },
+  { value: 3, label: '3rd Language' },
+]
 
 export default function ClassSubjectsTab() {
   const [years,    setYears]    = useState([])
@@ -62,6 +72,8 @@ export default function ClassSubjectsTab() {
           subjectId:    m.subjectId,
           displayOrder: m.displayOrder,
           isOptional:   m.isOptional,
+          gradeOnly:    m.gradeOnly,
+          languageSlot: m.languageSlot ?? null,
         })))
       } else {
         // No subjects assigned yet → prefill EVERY subject as a row so the user can
@@ -117,6 +129,11 @@ export default function ClassSubjectsTab() {
       message.error('The same subject is added more than once.')
       return
     }
+    const slots = rows.map((r) => r.languageSlot).filter((s) => s != null)
+    if (new Set(slots).size !== slots.length) {
+      message.error('Each student language (1st / 2nd / 3rd) can be set on one subject only.')
+      return
+    }
     setSaving(true)
     try {
       await api.post('/school/class-subjects', {
@@ -126,6 +143,8 @@ export default function ClassSubjectsTab() {
           subjectId:    r.subjectId,
           displayOrder: r.displayOrder,
           isOptional:   r.isOptional,
+          gradeOnly:    r.gradeOnly,
+          languageSlot: r.languageSlot ?? null,
         })),
       })
       message.success('Class subjects saved.')
@@ -181,6 +200,28 @@ export default function ClassSubjectsTab() {
       ),
     },
     {
+      title: 'Grade only', key: 'gradeOnly', width: 100, align: 'center',
+      render: (_, r) => (
+        <Checkbox
+          checked={r.gradeOnly}
+          onChange={(e) => updateRow(r.key, { gradeOnly: e.target.checked })}
+        />
+      ),
+    },
+    {
+      title: 'Student Language', key: 'languageSlot', width: 150,
+      render: (_, r) => (
+        <Select
+          allowClear
+          placeholder="—"
+          style={{ width: '100%' }}
+          value={r.languageSlot}
+          options={LANGUAGE_SLOTS}
+          onChange={(v) => updateRow(r.key, { languageSlot: v ?? null })}
+        />
+      ),
+    },
+    {
       title: '', key: 'actions', width: 50,
       render: (_, r) => (
         <Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeRow(r.key)} />
@@ -197,7 +238,7 @@ export default function ClassSubjectsTab() {
         showIcon
         style={{ marginBottom: 16 }}
         message="Map the subjects each class studies this year."
-        description="Only the subjects added here appear in that class's marks entry and report cards. A class with none assigned is pre-filled with every subject — just delete the ones it doesn't take, then Save. Saving replaces the whole set for the selected class and year."
+        description="Only the subjects added here appear in that class's marks entry and report cards. A class with none assigned is pre-filled with every subject — just delete the ones it doesn't take, then Save. Saving replaces the whole set for the selected class and year. Tick 'Grade only' for subjects (e.g. GK) that the marks card should show as a grade only, in a separate table — they are left out of the total, rank and toppers / failed reports. Set 'Student Language' on placeholder subjects like 'Second Language' — the marks card then shows each student's own language from their profile, e.g. 'Second Language (Hindi)'."
       />
 
       <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>

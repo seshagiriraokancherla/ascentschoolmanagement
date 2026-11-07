@@ -20,7 +20,7 @@ sealed class FeeUiState {
 sealed class PaymentState {
     object Idle : PaymentState()
     object CreatingOrder : PaymentState()
-    /** Order created — Activity should open Razorpay checkout. */
+    /** Order created — Activity should open the gateway checkout (Razorpay or Easebuzz). */
     data class OrderReady(val order: MobileOrderResponse) : PaymentState()
     object Verifying : PaymentState()
     data class Success(val result: MobilePaymentResultDto) : PaymentState()
@@ -108,6 +108,30 @@ class FeeViewModel(private val repo: FeeRepository) : ViewModel() {
                     loadFees()
                 },
                 onFailure = { _paymentState.value = PaymentState.Failed(it.message ?: "Verification failed") }
+            )
+        }
+    }
+
+    /**
+     * Called by MainActivity when the Easebuzz checkout returns. Always reported to the server:
+     * it re-reads the transaction from Easebuzz, creates the receipt on success and marks an
+     * abandoned order failed. [cancelled] only changes the wording shown when it isn't paid.
+     */
+    fun verifyEasebuzz(gatewayOrderId: Int, gatewayResponse: Map<String, String>, cancelled: Boolean) {
+        _paymentState.value = PaymentState.Verifying
+        viewModelScope.launch {
+            repo.verifyPayment(
+                gatewayOrderId,
+                MobileVerifyRequest(gatewayOrderId = gatewayOrderId, gatewayResponse = gatewayResponse)
+            ).fold(
+                onSuccess = {
+                    _paymentState.value = PaymentState.Success(it)
+                    loadFees()
+                },
+                onFailure = {
+                    _paymentState.value = PaymentState.Failed(
+                        if (cancelled) "Payment cancelled." else it.message ?: "Verification failed")
+                }
             )
         }
     }

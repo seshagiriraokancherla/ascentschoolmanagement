@@ -1,6 +1,7 @@
 package com.ascentschools.mobile
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -43,6 +44,7 @@ import com.ascentschools.mobile.ui.teacher.TeacherMessagesScreen
 import com.ascentschools.mobile.ui.teacher.TeacherNewMessageScreen
 import com.ascentschools.mobile.ui.teacher.TeacherViewModel
 import com.ascentschools.mobile.ui.theme.AscentTheme
+import com.easebuzz.payment.kit.PWECheckoutActivity
 import com.razorpay.Checkout
 import com.razorpay.PaymentResultWithDataListener
 import kotlinx.coroutines.CoroutineScope
@@ -72,6 +74,14 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
     // Play In-App Updates (replaces the old server versionCode gate).
     private lateinit var updater: InAppUpdater
 
+    // Easebuzz checkout (PWECheckoutActivity). The SDK can't carry our order id through, so
+    // the order being paid is remembered here (and across activity recreation).
+    private var easebuzzOrderId: Int = 0
+    private val easebuzzLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
+            onEasebuzzResult(res.data)
+        }
+
     // Android 13+ runtime notification permission (registered before STARTED).
     private val requestNotifPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -93,6 +103,7 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        easebuzzOrderId = savedInstanceState?.getInt(KEY_EASEBUZZ_ORDER) ?: 0
 
         // Pre-load Razorpay resources in background for faster first-open
         Checkout.preload(applicationContext)
@@ -327,11 +338,14 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                             }
                         )
 
-                        // Watch for OrderReady state → open Razorpay checkout
+                        // Watch for OrderReady state → open the school's gateway checkout
                         LaunchedEffect(feeVm) {
                             feeVm.paymentState.collect { state ->
                                 if (state is PaymentState.OrderReady) {
-                                    openRazorpayCheckout(state.order)
+                                    if (state.order.gatewayName.equals("Easebuzz", ignoreCase = true))
+                                        openEasebuzzCheckout(state.order)
+                                    else
+                                        openRazorpayCheckout(state.order)
                                 }
                             }
                         }
@@ -370,6 +384,65 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
     override fun onDestroy() {
         if (::updater.isInitialized) updater.destroy()
         super.onDestroy()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt(KEY_EASEBUZZ_ORDER, easebuzzOrderId)
+    }
+
+    // ── Easebuzz checkout ─────────────────────────────────────────────────────
+
+    private fun openEasebuzzCheckout(order: MobileOrderResponse) {
+        val accessKey = order.accessKey
+        if (accessKey.isNullOrBlank()) {
+            feeViewModel?.onPaymentFailed("The payment gateway did not return an access key.")
+            return
+        }
+        easebuzzOrderId = order.gatewayOrderId
+        val intent = Intent(this, PWECheckoutActivity::class.java).apply {
+            putExtra("access_key", accessKey)
+            putExtra("pay_mode", if (order.environment.equals("test", ignoreCase = true)) "test" else "production")
+        }
+        try {
+            easebuzzLauncher.launch(intent)
+        } catch (e: Exception) {
+            Log.e("Easebuzz", "Error opening checkout", e)
+            easebuzzOrderId = 0
+            feeViewModel?.onPaymentFailed("Could not open payment screen: ${e.message}")
+        }
+    }
+
+    private fun onEasebuzzResult(data: Intent?) {
+        val orderId = easebuzzOrderId
+        easebuzzOrderId = 0
+        val vm = feeViewModel ?: return
+        if (orderId <= 0) { vm.onPaymentFailed("Payment result could not be matched to an order."); return }
+
+        // result = SDK outcome code (payment_successfull, user_cancelled, …);
+        // payment_response = Easebuzz's JSON (txnid, status, easepayid, amount, …).
+        val result   = data?.getStringExtra("result").orEmpty()
+        val response = flattenJson(data?.getStringExtra("payment_response"))
+        if (result.isNotEmpty()) response["sdk_result"] = result
+        val cancelled = result.isEmpty() || result in EASEBUZZ_CANCEL_RESULTS
+        vm.verifyEasebuzz(orderId, response, cancelled)
+    }
+
+    // Top-level scalar fields only — the API takes Dictionary<string,string>.
+    private fun flattenJson(json: String?): MutableMap<String, String> {
+        val out = mutableMapOf<String, String>()
+        if (json.isNullOrBlank()) return out
+        try {
+            val obj = JSONObject(json)
+            obj.keys().forEach { k ->
+                val v = obj.opt(k)
+                if (v != null && v !is JSONObject && v !is org.json.JSONArray)
+                    out[k] = if (v == JSONObject.NULL) "" else v.toString()
+            }
+        } catch (e: Exception) {
+            Log.w("Easebuzz", "Unparseable payment_response", e)
+        }
+        return out
     }
 
     // ── Razorpay checkout ─────────────────────────────────────────────────────
@@ -427,5 +500,11 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
             else                    -> errorDescription ?: "Payment failed (code $errorCode)."
         }
         feeViewModel?.onPaymentFailed(message)
+    }
+
+    private companion object {
+        const val KEY_EASEBUZZ_ORDER = "easebuzz_order_id"
+        // SDK codes (datamodels.PWEStaticDataModel) meaning the parent backed out — no money moved.
+        val EASEBUZZ_CANCEL_RESULTS = setOf("user_cancelled", "bank_back_pressed", "txn_session_timeout")
     }
 }

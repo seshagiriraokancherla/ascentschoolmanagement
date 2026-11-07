@@ -33,6 +33,7 @@ fun TeacherAnnouncementScreen(
     val sections      by viewModel.sections.collectAsState()
     val isLoading     by viewModel.isLoading.collectAsState()
     val uiState       by viewModel.uiState.collectAsState()
+    val canPostSchoolWide by viewModel.canPostSchoolWide.collectAsState()
     val snackbarHost = remember { SnackbarHostState() }
 
     var showCreateSheet by remember { mutableStateOf(false) }
@@ -40,6 +41,7 @@ fun TeacherAnnouncementScreen(
     LaunchedEffect(Unit) {
         viewModel.loadAnnouncements(classId)
         viewModel.loadSections(classId)
+        viewModel.loadAnnouncementOptions()
     }
 
     LaunchedEffect(uiState) {
@@ -112,8 +114,10 @@ fun TeacherAnnouncementScreen(
         CreateAnnouncementSheet(
             sections  = sections,
             onDismiss = { showCreateSheet = false },
-            onSave    = { sectionId, title, desc ->
-                viewModel.createAnnouncement(classId, sectionId, title, desc)
+            className = className,
+            canPostSchoolWide = canPostSchoolWide,
+            onSave    = { wholeSchool, sectionId, title, desc ->
+                viewModel.createAnnouncement(classId, sectionId, title, desc, wholeSchool)
             },
             isLoading = isLoading
         )
@@ -161,12 +165,15 @@ private fun AnnouncementCard(a: TeacherAnnouncementDto) {
 @Composable
 private fun CreateAnnouncementSheet(
     sections  : List<TeacherSectionDto>,
+    className : String,
+    canPostSchoolWide: Boolean,   // Principal only
     onDismiss : () -> Unit,
-    onSave    : (sectionId: Int?, title: String, description: String?) -> Unit,
+    onSave    : (wholeSchool: Boolean, sectionId: Int?, title: String, description: String?) -> Unit,
     isLoading : Boolean
 ) {
     var title       by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
+    var wholeSchool     by remember { mutableStateOf(false) }   // true = every parent in the school
     var selectedSection by remember { mutableStateOf<TeacherSectionDto?>(null) }  // null = All Sections
     var sectionExpanded by remember { mutableStateOf(false) }
 
@@ -180,13 +187,17 @@ private fun CreateAnnouncementSheet(
         ) {
             Text("New Announcement", fontWeight = FontWeight.Bold, fontSize = 18.sp)
 
-            // Section picker — "All Sections" (whole class) or a specific section.
+            // Target picker — the whole school, the whole class, or one section of it.
             ExposedDropdownMenuBox(
                 expanded = sectionExpanded,
                 onExpandedChange = { sectionExpanded = it }
             ) {
                 OutlinedTextField(
-                    value         = selectedSection?.let { "Section ${it.sectionName}" } ?: "All Sections (whole class)",
+                    value         = when {
+                        wholeSchool             -> "Whole school (all classes)"
+                        selectedSection != null -> "$className – Section ${selectedSection?.sectionName}"
+                        else                    -> "$className – all sections"
+                    },
                     onValueChange = {},
                     readOnly      = true,
                     label         = { Text("Send to") },
@@ -197,17 +208,31 @@ private fun CreateAnnouncementSheet(
                     expanded = sectionExpanded,
                     onDismissRequest = { sectionExpanded = false }
                 ) {
+                    if (canPostSchoolWide) {
+                        DropdownMenuItem(
+                            text    = { Text("Whole school (all classes)") },
+                            onClick = { wholeSchool = true; selectedSection = null; sectionExpanded = false }
+                        )
+                    }
                     DropdownMenuItem(
-                        text    = { Text("All Sections (whole class)") },
-                        onClick = { selectedSection = null; sectionExpanded = false }
+                        text    = { Text("$className – all sections") },
+                        onClick = { wholeSchool = false; selectedSection = null; sectionExpanded = false }
                     )
                     sections.forEach { sec ->
                         DropdownMenuItem(
-                            text    = { Text("Section ${sec.sectionName}") },
-                            onClick = { selectedSection = sec; sectionExpanded = false }
+                            text    = { Text("$className – Section ${sec.sectionName}") },
+                            onClick = { wholeSchool = false; selectedSection = sec; sectionExpanded = false }
                         )
                     }
                 }
+            }
+
+            if (wholeSchool) {
+                Text(
+                    "Every parent in the school will see this and get a notification.",
+                    fontSize = 12.sp,
+                    color    = MaterialTheme.colorScheme.error
+                )
             }
 
             OutlinedTextField(
@@ -234,7 +259,7 @@ private fun CreateAnnouncementSheet(
                 ) { Text("Cancel") }
 
                 Button(
-                    onClick  = { onSave(selectedSection?.sectionId, title, description.takeIf { it.isNotBlank() }) },
+                    onClick  = { onSave(wholeSchool, selectedSection?.sectionId, title, description.takeIf { it.isNotBlank() }) },
                     enabled  = title.isNotBlank() && !isLoading,
                     modifier = Modifier.weight(1f)
                 ) {

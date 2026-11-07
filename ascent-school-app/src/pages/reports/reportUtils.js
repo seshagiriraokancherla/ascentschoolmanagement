@@ -693,7 +693,7 @@ export async function exportListingPdf({
  * @param {string}   opts.examTitle        - e.g. 'PROGRESS REPORT - FA 1 (2026-27)'
  * @param {string}   opts.className
  * @param {string}   opts.sectionName
- * @param {object[]} opts.subjects         - { subjectId, subjectName, maxMarks, activityMaxMarks, hasActivity }
+ * @param {object[]} opts.subjects         - { subjectId, subjectName, maxMarks, activityMaxMarks, hasActivity, gradeOnly }
  * @param {object[]} opts.students         - MarksCardStudentDto (lines, total, totalGrade, rank, presentDays, …)
  * @param {object[]} [opts.attendanceMonths] - { label, workingDays } × 10 (Jun → Mar)
  * @param {number}   [opts.totalWorkingDays]
@@ -755,7 +755,7 @@ export async function generateMarksCards({
         l.isAbsent ? 'AB' : v == null ? '-' : uniform ? n(v) : `${n(v)} / ${n(max)}`
       const subMax = Number(sub.maxMarks) + (sub.hasActivity ? Number(sub.activityMaxMarks) : 0)
       return [
-        sub.subjectName,
+        l.subjectLabel || sub.subjectName,
         ...(showInternal ? [sub.hasActivity ? mark(l.activityMarks, sub.activityMaxMarks, actUniform) : '-'] : []),
         mark(l.marksObtained, sub.maxMarks, wUniform),
         mark(l.subjectTotal, subMax, tUniform),
@@ -912,21 +912,47 @@ export async function generateMarksCards({
     // Only the subjects this student has marks for. A student with nothing entered at
     // all keeps the full list, so the card shows the subjects rather than an empty table.
     const withData = subjects.filter((s) => hasData(st, s))
-    const subs     = withData.length ? withData : subjects
-    const lay      = layoutFor(subs)
+    const printed  = withData.length ? withData : subjects
 
-    autoTable(doc, {
-      ...gridStyles,
-      head:   lay.head,
-      body:   bodyFor(st, subs, lay),
-      startY: boxBottom + 8,
-      styles: { ...cellStyles, fontSize: 10, cellPadding: 1.8 },
-      columnStyles: lay.columnStyles,
-    })
+    // Grade-only subjects (Class Subjects → "Grade only") leave the marks table and print
+    // as Subject | Grade underneath; they are already excluded from the total server-side.
+    const marksSubs = printed.filter((s) => !s.gradeOnly)
+    const gradeSubs = printed.filter((s) => s.gradeOnly)
+
+    let y = boxBottom + 8
+    if (marksSubs.length) {
+      const lay = layoutFor(marksSubs)
+      autoTable(doc, {
+        ...gridStyles,
+        head:   lay.head,
+        body:   bodyFor(st, marksSubs, lay),
+        startY: y,
+        styles: { ...cellStyles, fontSize: 10, cellPadding: 1.8 },
+        columnStyles: lay.columnStyles,
+      })
+      y = doc.lastAutoTable.finalY + 6
+    }
+
+    if (gradeSubs.length) {
+      const bySubject = Object.fromEntries((st.lines || []).map((l) => [l.subjectId, l]))
+      autoTable(doc, {
+        ...gridStyles,
+        head:   [['SUBJECT', 'GRADE']],
+        body:   gradeSubs.map((sub) => {
+          const l = bySubject[sub.subjectId] || {}
+          return [l.subjectLabel || sub.subjectName, l.isAbsent ? 'AB' : (l.grade || '-')]
+        }),
+        startY: y,
+        tableWidth: 116,
+        styles: { ...cellStyles, fontSize: 10, cellPadding: 1.8 },
+        columnStyles: { 0: { cellWidth: 80, halign: 'left' }, 1: { cellWidth: 36, halign: 'center' } },
+      })
+      y = doc.lastAutoTable.finalY + 6
+    }
 
     // Attendance (~26 mm) + Remarks label and a minimum box (~24 mm) must fit above the
     // signatures; a card with a very long subject list continues on a second page.
-    let y = doc.lastAutoTable.finalY + 8
+    y += 2
     if (y + 26 + 24 > sigTop) { doc.addPage(); y = 20 }
     y = drawAttendance(st, y) + 9
     drawRemarks(y)

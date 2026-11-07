@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  Card, Select, DatePicker, Button, Input, Typography, App as AntApp,
+  Card, Select, DatePicker, Button, Typography, App as AntApp,
   Row, Col, Space, Spin, Empty, Alert,
 } from 'antd'
 import { SaveOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import api from '../../api/axiosInstance'
+import TransliterateTextArea from '../../components/TransliterateTextArea'
+import { LANGUAGE_OPTIONS } from '../../utils/transliteration'
 
 const { Title, Text } = Typography
-const { TextArea } = Input
 
 // Treat both new ('Active') and legacy ('Y') as active rows.
 const isActive = (s) => ['Active', 'Y', null, undefined, ''].includes(s.status)
@@ -29,6 +30,7 @@ export default function DailyHomeworkPage() {
   const [classId,    setClassId]    = useState(null)
   const [sectionIds, setSectionIds] = useState([ALL_SECTIONS])
   const [texts,      setTexts]      = useState({})   // { [subjectId]: description }
+  const [languages,  setLanguages]  = useState({})   // { [subjectId]: 'english'|'telugu'|'hindi' } — typing aid only, never saved
   const [mixed,      setMixed]      = useState(false)
   const [loading,    setLoading]    = useState(false)
   const [saving,     setSaving]     = useState(false)
@@ -147,6 +149,9 @@ export default function DailyHomeworkPage() {
   const setText = (subjectId, value) =>
     setTexts(prev => ({ ...prev, [subjectId]: value }))
 
+  const setLanguage = (subjectId, value) =>
+    setLanguages(prev => ({ ...prev, [subjectId]: value }))
+
   const handleSave = async () => {
     if (!classId) { message.warning('Select a class.'); return }
     if (!date)    { message.warning('Select a date.');  return }
@@ -233,7 +238,7 @@ export default function DailyHomeworkPage() {
           showIcon
           style={{ marginBottom: 16 }}
           message="This class has no subjects mapped — showing all subjects"
-          description="Map its subjects in Master Data → Class Subjects to show only what this class studies."
+          description="Map its subjects in Exams → Class Subjects to show only what this class studies."
         />
       )}
 
@@ -243,7 +248,7 @@ export default function DailyHomeworkPage() {
           showIcon
           style={{ marginBottom: 16 }}
           message="This date has homework for subjects not mapped to this class"
-          description={`${orphans.join(', ')} — not shown below, and saving will clear it. Map the subject in Master Data → Class Subjects to keep it.`}
+          description={`${orphans.join(', ')} — not shown below, and saving will clear it. Map the subject in Exams → Class Subjects to keep it.`}
         />
       )}
 
@@ -284,12 +289,20 @@ export default function DailyHomeworkPage() {
                 <Row key={s.subjectId} gutter={12} align="middle">
                   <Col xs={24} sm={6} md={5} lg={4}>
                     <Text strong>{s.subjectName}</Text>
+                    <Select
+                      size="small"
+                      value={languages[s.subjectId] || 'english'}
+                      onChange={v => setLanguage(s.subjectId, v)}
+                      options={LANGUAGE_OPTIONS}
+                      style={{ width: '100%', marginTop: 4 }}
+                    />
                   </Col>
                   <Col xs={24} sm={18} md={19} lg={20}>
-                    <TextArea
+                    <TransliterateTextArea
                       autoSize={{ minRows: 1, maxRows: 4 }}
                       value={texts[s.subjectId] || ''}
-                      onChange={e => setText(s.subjectId, e.target.value)}
+                      onChange={v => setText(s.subjectId, v)}
+                      language={languages[s.subjectId] || 'english'}
                       placeholder={`Homework for ${s.subjectName}`}
                     />
                   </Col>

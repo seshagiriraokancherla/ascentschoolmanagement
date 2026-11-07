@@ -94,3 +94,5 @@ keystore.properties
 API/AscentSchools.API/App_Data/firebase-service-account.json
 # google-services.json = client config (not secret, but keep out of the repo).
 **/google-services.json
+razorpay_*.txt
+schools_db_credentials.txt

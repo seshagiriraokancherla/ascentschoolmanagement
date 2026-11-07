@@ -10,19 +10,9 @@ import {
 import dayjs from 'dayjs'
 import api, { apiError } from '../../api/axiosInstance'
 import { useBrandingStore } from '../../store/brandingStore'
+import { openGatewayCheckout } from '../../api/gatewayCheckout'
 
 const { Text, Title } = Typography
-
-function loadRazorpayScript() {
-  return new Promise((resolve) => {
-    if (window.Razorpay) { resolve(true); return }
-    const script   = document.createElement('script')
-    script.src     = 'https://checkout.razorpay.com/v1/checkout.js'
-    script.onload  = () => resolve(true)
-    script.onerror = () => resolve(false)
-    document.body.appendChild(script)
-  })
-}
 
 /**
  * Shared fee collection component.
@@ -339,50 +329,35 @@ export default function FeeCollectionBase({ title, feeTypeCategory, joinTypeFilt
         return
       }
 
-      // Online (Razorpay)
-      const orderRes = await api.post('/school/fees/payment-orders', payload)
+      // Online — the school's active gateway (Razorpay or Easebuzz) is chosen server-side
+      const orderRes  = await api.post('/school/fees/payment-orders', payload)
       const orderData = orderRes.data?.data
-      const scriptLoaded = await loadRazorpayScript()
-      if (!scriptLoaded) { message.error('Could not load Razorpay checkout.'); return }
-
-      await new Promise((resolve, reject) => {
-        const rzp = new window.Razorpay({
-          key:         orderData.keyId,
-          amount:      orderData.amountInPaise,
-          currency:    orderData.currency,
-          order_id:    orderData.externalOrderId,
-          name:        'School Fee Payment',
-          description: `Fee for ${summary.studentName}`,
-          theme:       { color: branding.primaryColor || '#1677ff' },
-          prefill:     { name: summary.studentName },
-          modal: {
-            ondismiss: () => { message.warning('Payment cancelled.'); reject(new Error('dismissed')) },
-          },
-          handler: async (response) => {
-            try {
-              const verifyRes = await api.post(
-                `/school/fees/payment-orders/${orderData.gatewayOrderId}/verify`,
-                { PaymentId: response.razorpay_payment_id, OrderId: response.razorpay_order_id, Signature: response.razorpay_signature }
-              )
-              const receipt = verifyRes.data?.data
-              modal.success({
-                title:   `Receipt ${receipt.receiptNo} generated`,
-                content: `Online payment of ₹${receipt.totalAmount.toFixed(2)} confirmed.`,
-              })
-              await reloadSummary()
-              resetPaymentForm()
-              resolve()
-            } catch (e) {
-              message.error(apiError(e, 'Payment received but receipt creation failed. Contact support.'))
-              reject(new Error('verify_failed'))
-            }
-          },
-        })
-        rzp.open()
+      const receipt   = await openGatewayCheckout({
+        order:       orderData,
+        verifyUrl:   `/school/fees/payment-orders/${orderData.gatewayOrderId}/verify`,
+        title:       'School Fee Payment',
+        description: `Fee for ${summary.studentName}`,
+        payerName:   summary.studentName,
+        themeColor:  branding.primaryColor,
       })
+      modal.success({
+        title:   `Receipt ${receipt.receiptNo} generated`,
+        content: `Online payment of ₹${receipt.totalAmount.toFixed(2)} confirmed.`,
+      })
+      await reloadSummary()
+      resetPaymentForm()
     } catch (err) {
-      if (err?.message !== 'dismissed' && err?.message !== 'verify_failed')
+      if (err?.message === 'dismissed') {
+        message.warning('Payment cancelled.')
+      } else if (err?.message === 'verify_failed') {
+        // Checkout finished but the server couldn't confirm it — the order stays pending,
+        // so it can still be completed from Fees → Pending Online Payments.
+        message.error(apiError(err.cause,
+          'Payment could not be confirmed yet. If money was deducted, check Fees → Pending Online Payments.'))
+        await reloadSummary()
+      } else {
         message.error(apiError(err, 'Failed to process payment.'))
+      }
     } finally {
       setCollecting(false)
     }

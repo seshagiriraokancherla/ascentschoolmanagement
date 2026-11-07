@@ -10,7 +10,9 @@ export function connectAuthStore(getToken, setToken) {
 }
 
 function baseHeaders() {
-  const h = { 'Content-Type': 'application/json' }
+  // X-Client-Gateways: checkouts this build can open (src/api/gatewayCheckout.js). The API
+  // refuses an order for a gateway the client doesn't list (old builds = Razorpay only).
+  const h = { 'Content-Type': 'application/json', 'X-Client-Gateways': 'razorpay,easebuzz' }
   if (SCHOOL_CODE) {
     h['X-School-Code'] = SCHOOL_CODE
     h['X-Subdomain']   = SCHOOL_CODE  // branding endpoint uses X-Subdomain

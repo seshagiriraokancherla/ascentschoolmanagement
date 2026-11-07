@@ -25,6 +25,11 @@ import AttendancePage        from './pages/attendance/AttendancePage'
 import TransportPage         from './pages/transport/TransportPage'
 import HostelPage            from './pages/hostel/HostelPage'
 import MarksEntryPage        from './pages/marks/MarksEntryPage'
+import {
+  ExamTypesPage, ClassSubjectsPage, SubjectGradesPage, TotalGradesPage, ExamMasterPage,
+  HallTicketPage, MarksCardPage, ExamToppersPage, ClassToppersPage, AcademicYearToppersPage,
+  FailedStudentsPage,
+} from './pages/exams/ExamPages'
 import HomeworkPage          from './pages/homework/HomeworkPage'
 import DailyHomeworkPage     from './pages/homework/DailyHomeworkPage'
 import AnnouncementsPage     from './pages/announcements/AnnouncementsPage'
@@ -41,6 +46,7 @@ import StaffAttendanceSummaryPage  from './pages/staff/StaffAttendanceSummaryPag
 import StaffAdvancesPage           from './pages/staff/StaffAdvancesPage'
 import StaffSalariesPage           from './pages/staff/StaffSalariesPage'
 import BloodGroupSearchPage        from './pages/students/BloodGroupSearchPage'
+import Student360Page              from './pages/students/Student360Page'
 import SMSPage                    from './pages/sms/SMSPage'
 import FeeConcessionPage          from './pages/fee/FeeConcessionPage'
 import SchoolSettingsPage         from './pages/settings/SchoolSettingsPage'
@@ -165,6 +171,7 @@ function App() {
               <Route path="students/import"       element={<Protected path="/students/import"><StudentsImportPage /></Protected>} />
               <Route path="students/promote"         element={<Protected path="/students/promote"><PromoteStudentsPage /></Protected>} />
               <Route path="students/blood-group"     element={<Protected path="/students/blood-group"><BloodGroupSearchPage /></Protected>} />
+              <Route path="students/360"             element={<Protected path="/students/360"><Student360Page /></Protected>} />
               <Route path="students/:id"          element={<Protected path="/students/:id"><StudentFormPage /></Protected>} />
               <Route path="fees/structure"             element={<Protected path="/fees/structure"><FeeStructurePage /></Protected>} />
               <Route path="fees/structure/import"      element={<Protected path="/fees/structure/import"><FeeStructureImportPage /></Protected>} />
@@ -182,7 +189,20 @@ function App() {
               <Route path="attendance"               element={<Protected path="/attendance"><AttendancePage /></Protected>} />
               <Route path="transport"                element={<Protected path="/transport"><TransportPage /></Protected>} />
               <Route path="hostel"                  element={<Protected path="/hostel"><HostelPage /></Protected>} />
-              <Route path="marks"                    element={<Protected path="/marks"><MarksEntryPage /></Protected>} />
+              {/* Exams — setup pages moved out of Master Data, exam reports out of Reports */}
+              <Route path="exams/types"                        element={<Protected path="/exams/types"><ExamTypesPage /></Protected>} />
+              <Route path="exams/class-subjects"               element={<Protected path="/exams/class-subjects"><ClassSubjectsPage /></Protected>} />
+              <Route path="exams/subject-grades"               element={<Protected path="/exams/subject-grades"><SubjectGradesPage /></Protected>} />
+              <Route path="exams/total-grades"                 element={<Protected path="/exams/total-grades"><TotalGradesPage /></Protected>} />
+              <Route path="exams/master"                       element={<Protected path="/exams/master"><ExamMasterPage /></Protected>} />
+              <Route path="exams/marks-entry"                  element={<Protected path="/exams/marks-entry"><MarksEntryPage /></Protected>} />
+              <Route path="exams/hall-ticket"                  element={<Protected path="/exams/hall-ticket"><HallTicketPage /></Protected>} />
+              <Route path="exams/marks-card"                   element={<Protected path="/exams/marks-card"><MarksCardPage /></Protected>} />
+              <Route path="exams/toppers/exam"                 element={<Protected path="/exams/toppers/exam"><ExamToppersPage /></Protected>} />
+              <Route path="exams/toppers/class"                element={<Protected path="/exams/toppers/class"><ClassToppersPage /></Protected>} />
+              <Route path="exams/toppers/academic-year"        element={<Protected path="/exams/toppers/academic-year"><AcademicYearToppersPage /></Protected>} />
+              <Route path="exams/failed-students"              element={<Protected path="/exams/failed-students"><FailedStudentsPage /></Protected>} />
+              <Route path="marks"                    element={<Navigate to="/exams/marks-entry" replace />} />
               <Route path="homework/daily"           element={<Protected path="/homework/daily"><DailyHomeworkPage /></Protected>} />
               <Route path="homework"                 element={<Protected path="/homework"><HomeworkPage /></Protected>} />
               <Route path="announcements"            element={<Protected path="/announcements"><AnnouncementsPage /></Protected>} />

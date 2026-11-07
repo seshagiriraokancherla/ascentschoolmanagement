@@ -79,6 +79,7 @@ export const PATH_PERM = {
   '/students/import':           P.STUDENT_CREATE,
   '/students/promote':          P.STUDENT_EDIT,
   '/students/blood-group':      P.STUDENT_VIEW,
+  '/students/360':              P.STUDENT_VIEW,
   '/students/:id':              P.STUDENT_VIEW,
 
   '/fees/structure':            P.FEE_EDIT,
@@ -98,13 +99,26 @@ export const PATH_PERM = {
   '/attendance':                P.ATTENDANCE_VIEW,
   '/transport':                 P.TRANSPORT_VIEW,
   '/hostel':                    P.HOSTEL_VIEW,
-  '/marks':                     P.MARKS_VIEW,
   '/homework':                  P.HOMEWORK_VIEW,
   '/homework/daily':            P.HOMEWORK_MANAGE,
   '/announcements':             P.ANNOUNCEMENT_VIEW,
   '/calendar':                  P.ANNOUNCEMENT_VIEW,   // reuses Announcement view perm — no perm migration/re-login needed
   '/events':                    P.EVENTS_VIEW,
   '/reports':                   P.REPORTS_VIEW,
+
+  // Exams — each page keeps the permission it had in its old home (Master Data / Marks / Reports)
+  '/exams/types':               P.MASTER_VIEW,
+  '/exams/class-subjects':      P.MASTER_VIEW,
+  '/exams/subject-grades':      P.MASTER_VIEW,
+  '/exams/total-grades':        P.MASTER_VIEW,
+  '/exams/master':              P.MASTER_VIEW,
+  '/exams/marks-entry':         P.MARKS_VIEW,
+  '/exams/hall-ticket':         P.REPORTS_VIEW,
+  '/exams/marks-card':          P.REPORTS_VIEW,
+  '/exams/toppers/exam':        P.REPORTS_VIEW,
+  '/exams/toppers/class':       P.REPORTS_VIEW,
+  '/exams/toppers/academic-year': P.REPORTS_VIEW,
+  '/exams/failed-students':     P.REPORTS_VIEW,
 
   '/staff':                     P.STAFF_VIEW,
   '/staff/attendance':          P.STAFF_MANAGE,

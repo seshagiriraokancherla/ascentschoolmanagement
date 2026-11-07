@@ -38,6 +38,8 @@ namespace AscentSyncTool
         public Func<DateTime, DateTime, Task<int>> OnShow { get; set; }
         /// <summary>Called on Show when the tab uses the Month/Year filter: receives month (1-12) and year.</summary>
         public Func<int, int, Task<int>> OnShowPeriod { get; set; }
+        /// <summary>Called on Show when the tab uses AcademicYearOnlyMode: receives the selected academic year.</summary>
+        public Func<string, Task<int>> OnShowAcademicYear { get; set; }
         /// <summary>Called on Save: persists the shown rows.</summary>
         public Func<Task> OnSave { get; set; }
 
@@ -75,6 +77,20 @@ namespace AscentSyncTool
             {
                 _monthLbl.Visible = _month.Visible = _calYearLbl.Visible = _calYear.Visible = value;
                 _fromLbl.Visible  = _from.Visible  = _toLbl.Visible      = _to.Visible      = !value;
+            }
+        }
+
+        /// <summary>
+        /// Hides the From/To date range entirely, leaving only the Academic Year dropdown
+        /// (set <see cref="ShowAcademicYearFilter"/> = true too). Show then calls
+        /// <see cref="OnShowAcademicYear"/> with the selected year, nothing else.
+        /// </summary>
+        public bool AcademicYearOnlyMode
+        {
+            get => !_fromLbl.Visible && !_monthLbl.Visible;
+            set
+            {
+                if (value) _fromLbl.Visible = _from.Visible = _toLbl.Visible = _to.Visible = false;
             }
         }
 
@@ -145,8 +161,19 @@ namespace AscentSyncTool
 
         private async Task RunShow()
         {
-            if (UseMonthYearFilter ? OnShowPeriod == null : OnShow == null) return;
-            if (!UseMonthYearFilter && _to.Value.Date < _from.Value.Date)
+            if (AcademicYearOnlyMode)
+            {
+                if (OnShowAcademicYear == null) return;
+                if (SelectedAcademicYear == null)
+                {
+                    MessageBox.Show("Select an academic year first.", "Academic year required",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+            }
+            else if (UseMonthYearFilter ? OnShowPeriod == null : OnShow == null) return;
+
+            if (!AcademicYearOnlyMode && !UseMonthYearFilter && _to.Value.Date < _from.Value.Date)
             {
                 MessageBox.Show("'To' date cannot be before 'From' date.", "Invalid range",
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -156,9 +183,11 @@ namespace AscentSyncTool
             _status.Text = "Loading…";
             try
             {
-                var count = UseMonthYearFilter
-                    ? await OnShowPeriod(SelectedMonth, SelectedYear)
-                    : await OnShow(_from.Value, _to.Value);
+                var count = AcademicYearOnlyMode
+                    ? await OnShowAcademicYear(SelectedAcademicYear)
+                    : UseMonthYearFilter
+                        ? await OnShowPeriod(SelectedMonth, SelectedYear)
+                        : await OnShow(_from.Value, _to.Value);
                 _status.Text = $"Loaded {count} row(s).";
                 _btnSave.Enabled = count > 0;
                 _btnCancel.Enabled = count > 0;

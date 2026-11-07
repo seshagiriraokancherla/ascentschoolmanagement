@@ -143,7 +143,10 @@ export default function MarksCardReport() {
     },
   ]
 
-  const noGradeSubjects = (data?.subjects || []).filter(s => !s.hasGradeType).map(s => s.subjectName)
+  const noGradeSubjects   = (data?.subjects || []).filter(s => !s.hasGradeType && !s.gradeOnly).map(s => s.subjectName)
+  const gradeOnlySubjects = (data?.subjects || []).filter(s => s.gradeOnly)
+  // A grade-only subject prints ONLY its grade — with no grade bands it would print "-".
+  const gradeOnlyNoBands  = gradeOnlySubjects.filter(s => !s.hasGradeType).map(s => s.subjectName)
 
   return (
     <div>
@@ -177,16 +180,16 @@ export default function MarksCardReport() {
           <Space direction="vertical" style={{ width: '100%', marginBottom: 12 }}>
             {data.subjects.length === 0 && (
               <Alert type="warning" showIcon
-                message="No subjects are mapped to this class for the year — set them in Master Data → Class Subjects." />
+                message="No subjects are mapped to this class for the year — set them in Exams → Class Subjects." />
             )}
             {!data.scaleName ? (
               <Alert type="warning" showIcon
                 message="No Total Grade Master scale is set on this exam, so the total grade will be blank."
-                description="Open Master Data → Exam Master, edit this exam's rows and pick a Total Grade Master." />
+                description="Open Exams → Exam Master, edit this exam's rows and pick a Total Grade Master." />
             ) : !data.scaleHasBands ? (
               <Alert type="warning" showIcon
                 message={`The scale "${data.scaleName}" has no bands, so the total grade will be blank.`}
-                description="Add its bands in Master Data → Total Grade Master." />
+                description="Add its bands in Exams → Total Grade Master." />
             ) : data.scaleConflict && (
               <Alert type="warning" showIcon
                 message={`This exam's subjects point at different grading scales — "${data.scaleName}" (used by most of them) is applied.`}
@@ -197,12 +200,20 @@ export default function MarksCardReport() {
                 message={`Subject grade will be blank for: ${noGradeSubjects.join(', ')}.`}
                 description="These subjects have no Subject Grade Master (with bands) on their Exam Master row for this exam." />
             )}
+            {gradeOnlyNoBands.length > 0 && (
+              <Alert type="warning" showIcon
+                message={`Grade-only subjects with no grade: ${gradeOnlyNoBands.join(', ')}.`}
+                description="These print only a grade, so they will show '-'. Pick a Subject Grade Master (with bands) on their Exam Master row for this exam." />
+            )}
           </Space>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
             <Space wrap>
               <Tag color="blue">{data.students.length} student{data.students.length === 1 ? '' : 's'}</Tag>
               {data.scaleName && <Tag>Total grade scale: {data.scaleName}</Tag>}
+              {gradeOnlySubjects.length > 0 && (
+                <Tag color="purple">Grade only (not in total): {gradeOnlySubjects.map(s => s.subjectName).join(', ')}</Tag>
+              )}
             </Space>
             <Button type="primary" icon={<PrinterOutlined />} loading={printing === 'all'}
                     disabled={data.students.length === 0 || printing !== null} onClick={printAll}>

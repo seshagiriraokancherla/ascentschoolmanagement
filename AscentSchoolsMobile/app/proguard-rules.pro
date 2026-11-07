@@ -35,6 +35,12 @@
 -keepclassmembers class com.razorpay.** { *; }
 -keep class com.razorpay.** { *; }
 -dontwarn com.razorpay.**
+
+# Easebuzz SDK-V2 (ships no consumer rules; its classes live in com.easebuzz.** and datamodels.**)
+-keep class com.easebuzz.** { *; }
+-keep class datamodels.** { *; }
+-dontwarn com.easebuzz.**
+-dontwarn datamodels.**
 -keep class org.json.** { *; }
 
 # Google Play In-App Updates (com.google.android.play:app-update)

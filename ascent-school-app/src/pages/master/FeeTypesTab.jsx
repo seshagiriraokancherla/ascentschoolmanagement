@@ -125,7 +125,7 @@ export default function FeeTypesTab() {
       >
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item name="feeTypeName" label="Fee Type Name" rules={[{ required: true }]}>
-            <Input placeholder="e.g. Tuition Fee" />
+            <Input placeholder="e.g. Tuition Fee" maxLength={100} showCount />
           </Form.Item>
           <Form.Item name="academicYearId" label="Academic Year">
             <Select options={yearOptions} placeholder="All years" allowClear />

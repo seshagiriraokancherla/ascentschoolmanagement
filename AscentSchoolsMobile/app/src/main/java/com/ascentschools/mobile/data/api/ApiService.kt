@@ -66,6 +66,9 @@ interface ApiService {
     @GET("mobile/teacher/announcements")
     suspend fun getTeacherAnnouncements(@Query("classId") classId: Int): Response<ApiResponse<List<TeacherAnnouncementDto>>>
 
+    @GET("mobile/teacher/announcements/options")
+    suspend fun getTeacherAnnouncementOptions(): Response<ApiResponse<TeacherAnnouncementOptionsDto>>
+
     @POST("mobile/teacher/announcements")
     suspend fun createTeacherAnnouncement(@Body request: TeacherCreateAnnouncementRequest): Response<ApiResponse<Any>>
 

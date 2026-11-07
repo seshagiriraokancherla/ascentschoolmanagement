@@ -76,6 +76,68 @@ namespace AscentSyncTool.Data
                     }).AsList();
         }
 
+        // ── Update Date of Births: every legacy student for one academic year ─────
+        // Lightweight — only the columns the DOB-update tab actually needs, with no
+        // CrtDat range (this tab operates on the whole year, not a creation window).
+        public List<LegacyStudent> GetStudentsForDobUpdate(string academicYear)
+        {
+            using (var conn = Open())
+                return conn.Query<LegacyStudent>(
+                    @"SELECT s.StuAmnNo, s.StuName, s.StuDOB, s.StuAcdYear, s.StuUnqID
+                      FROM SAS_StudentMaster s
+                      WHERE s.StuAcdYear = @academicYear
+                      ORDER BY s.StuName",
+                    new { academicYear }).AsList();
+        }
+
+        // ── Export: concessions for one academic year, one row per key ────────
+        // SAS_ConcessionDet stores one row per fee head per term; a key can have several
+        // rows (rare) and deleted ones ('D'). Amount sums only the active rows, so the
+        // new app is set to the legacy total and a fully-deleted key (Amount 0) cancels it.
+        // Bus concessions carry the bus route id in FeeMasterID; every name that route id
+        // has in SAS_BusRoutes is sent ('|' separated — some ids have two names).
+        public List<LegacyConcession> GetConcessions(string academicYear)
+        {
+            using (var conn = Open())
+                return conn.Query<LegacyConcession>(
+                    @"WITH c AS (
+                          SELECT LTRIM(RTRIM(c0.AdmnNo)) AdmnNo, LTRIM(RTRIM(c0.AcdamicYer)) AcdamicYer,
+                                 LTRIM(RTRIM(c0.FeeTypID)) FeeTypID, LTRIM(RTRIM(c0.TermNam)) TermNam,
+                                 CASE WHEN EXISTS (SELECT 1 FROM SAS_BusRoutes r WHERE r.RouteID = c0.FeeMasterID)
+                                      THEN LTRIM(RTRIM(c0.FeeMasterID)) END RouteID,
+                                 c0.ConcessionAmt, LTRIM(RTRIM(c0.TraStatus)) TraStatus, LTRIM(RTRIM(c0.TraID)) TraID,
+                                 LTRIM(RTRIM(c0.RecommandByNam)) RecommandByNam, LTRIM(RTRIM(c0.RemarksDet)) RemarksDet,
+                                 c0.CrtDat
+                          FROM SAS_ConcessionDet c0
+                          WHERE c0.AcdamicYer = @academicYear
+                      )
+                      SELECT g.AdmissionNo, g.AcademicYear,
+                             CASE WHEN g.RouteID IS NULL THEN ft.FeeTyp END AS FeeTypeName,
+                             rn.RouteNames, g.TermName, g.Amount, g.ActiveRows, g.DeletedRows,
+                             lr.TraID AS LegacyNo, lr.RecommandByNam AS ConcessionType, lr.RemarksDet AS Remarks
+                      FROM (
+                          SELECT AdmnNo AdmissionNo, AcdamicYer AcademicYear, FeeTypID, TermNam TermName, RouteID,
+                                 SUM(CASE WHEN TraStatus = 'A' THEN ISNULL(ConcessionAmt, 0) ELSE 0 END) Amount,
+                                 SUM(CASE WHEN TraStatus = 'A' THEN 1 ELSE 0 END) ActiveRows,
+                                 SUM(CASE WHEN TraStatus = 'A' THEN 0 ELSE 1 END) DeletedRows
+                          FROM c
+                          GROUP BY AdmnNo, AcdamicYer, FeeTypID, TermNam, RouteID
+                      ) g
+                      OUTER APPLY (SELECT TOP 1 LTRIM(RTRIM(f.FeeTyp)) FeeTyp
+                                   FROM SAS_FeeTypes f WHERE f.FeeTypID = g.FeeTypID) ft
+                      OUTER APPLY (SELECT STUFF((SELECT DISTINCT '|' + LTRIM(RTRIM(r.RouteNam))
+                                                 FROM SAS_BusRoutes r WHERE r.RouteID = g.RouteID
+                                                 FOR XML PATH(''), TYPE).value('.', 'varchar(max)'), 1, 1, '') RouteNames) rn
+                      OUTER APPLY (SELECT TOP 1 x.TraID, x.RecommandByNam, x.RemarksDet FROM c x
+                                   WHERE x.AdmnNo = g.AdmissionNo
+                                     AND ISNULL(x.FeeTypID, '') = ISNULL(g.FeeTypID, '')
+                                     AND ISNULL(x.TermNam, '')  = ISNULL(g.TermName, '')
+                                     AND ISNULL(x.RouteID, '')  = ISNULL(g.RouteID, '')
+                                   ORDER BY CASE WHEN x.TraStatus = 'A' THEN 0 ELSE 1 END, x.CrtDat DESC) lr
+                      ORDER BY g.AdmissionNo, FeeTypeName, g.TermName",
+                    new { academicYear }).AsList();
+        }
+
         // ── Branch id from the licence table (same value for every inserted row) ──
         public string GetBranchId()
         {

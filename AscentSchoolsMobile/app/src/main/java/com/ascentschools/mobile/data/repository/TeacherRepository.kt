@@ -37,6 +37,10 @@ class TeacherRepository(private val api: ApiService) {
         api.getTeacherAnnouncements(classId).bodyOrError().dataOrError()
     }
 
+    suspend fun getAnnouncementOptions(): Result<TeacherAnnouncementOptionsDto> = runCatching {
+        api.getTeacherAnnouncementOptions().bodyOrError().dataOrError()
+    }
+
     suspend fun createAnnouncement(request: TeacherCreateAnnouncementRequest): Result<Unit> = runCatching {
         val body = api.createTeacherAnnouncement(request).bodyOrError()
         if (!body.success) error(body.message ?: "Create failed")

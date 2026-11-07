@@ -763,6 +763,64 @@ namespace AscentSchools.Data.Repositories.School
                     new { cancelledBy, reason, receiptId, schoolId });
         }
 
+        /// <summary>
+        /// Changes an Active receipt's payment_date and logs the change in fee_receipt_date_changes,
+        /// in one transaction. Returns null on success, else the reason it was refused.
+        /// </summary>
+        public string UpdateReceiptDate(
+            string tenantDbName, int schoolId, int receiptId, DateTime newDate,
+            string reason, int? userId, string changedByName)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+            {
+                conn.Open();
+                using (var tx = conn.BeginTransaction())
+                {
+                    var current = conn.QueryFirstOrDefault<ReceiptDateRow>(
+                        @"SELECT payment_date PaymentDate, status Status FROM fee_receipts WITH (UPDLOCK)
+                          WHERE receipt_id = @receiptId AND school_id = @schoolId",
+                        new { receiptId, schoolId }, tx);
+
+                    if (current == null) return "Receipt not found.";
+                    if (current.Status != "Active") return "Only an active receipt's date can be changed.";
+                    if (current.PaymentDate.Date == newDate.Date) return "The receipt already has this date.";
+
+                    conn.Execute(
+                        @"UPDATE fee_receipts SET payment_date = @newDate
+                          WHERE receipt_id = @receiptId AND school_id = @schoolId",
+                        new { newDate = newDate.Date, receiptId, schoolId }, tx);
+
+                    conn.Execute(
+                        @"INSERT INTO fee_receipt_date_changes
+                              (receipt_id, school_id, old_payment_date, new_payment_date, reason,
+                               changed_by_user_id, changed_by_name, changed_at)
+                          VALUES
+                              (@receiptId, @schoolId, @oldDate, @newDate, @reason,
+                               @userId, @changedByName,
+                               CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'India Standard Time' AS DATETIME))",
+                        new { receiptId, schoolId, oldDate = current.PaymentDate.Date, newDate = newDate.Date,
+                              reason, userId, changedByName }, tx);
+
+                    tx.Commit();
+                    return null;
+                }
+            }
+        }
+
+        private class ReceiptDateRow { public DateTime PaymentDate { get; set; } public string Status { get; set; } }
+
+        public IEnumerable<ReceiptDateChangeDto> GetReceiptDateChanges(string tenantDbName, int schoolId, int receiptId)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.Query<ReceiptDateChangeDto>(
+                    @"SELECT change_id ChangeId, old_payment_date OldPaymentDate, new_payment_date NewPaymentDate,
+                             reason Reason, changed_by_name ChangedByName, changed_at ChangedAt
+                      FROM fee_receipt_date_changes
+                      WHERE receipt_id = @receiptId AND school_id = @schoolId
+                      ORDER BY change_id DESC",
+                    new { receiptId, schoolId });
+        }
+
         // ── Bulk fee structure import ─────────────────────────────────────────
 
         public BulkImportResult BulkSaveFeeStructure(string tenantDbName, int schoolId, BulkFeeStructureImportRequest request)

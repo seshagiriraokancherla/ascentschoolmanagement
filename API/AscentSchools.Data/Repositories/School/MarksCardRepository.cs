@@ -42,12 +42,13 @@ namespace AscentSchools.Data.Repositories.School
                     @"SELECT cs.subject_id SubjectId, sub.subject_name SubjectName,
                              CAST(ISNULL(em.SubMax, 100) AS DECIMAL(6,2)) MaxMarks,
                              CAST(em.ActMax AS DECIMAL(6,2)) ActivityMaxMarks,
-                             em.GradeTypeId
+                             em.GradeTypeId, cs.grade_only GradeOnly, cs.language_slot LanguageSlot,
+                             CAST(CASE WHEN em.ExamRowId IS NULL THEN 0 ELSE 1 END AS BIT) InExam
                       FROM class_subjects cs
                       JOIN subjects sub ON sub.subject_id = cs.subject_id
                       OUTER APPLY (
                           SELECT TOP 1 em.sub_max_marks SubMax, em.activity_max_marks ActMax,
-                                       em.grade_type_id GradeTypeId
+                                       em.grade_type_id GradeTypeId, em.id ExamRowId
                           FROM exam_master em
                           WHERE em.school_id = @schoolId AND em.academic_year_id = @academicYearId
                             AND em.exam_type_id = @examTypeId AND em.class_id = @classId
@@ -63,7 +64,9 @@ namespace AscentSchools.Data.Repositories.School
                 // Active, so filtering by class+section alone would mix years.
                 var students = conn.Query<StudentRow>(
                     @"SELECT student_id StudentId, student_name StudentName,
-                             admission_no AdmissionNo, father_name FatherName
+                             admission_no AdmissionNo, father_name FatherName,
+                             first_language FirstLanguage, second_language SecondLanguage,
+                             third_language ThirdLanguage
                       FROM students
                       WHERE school_id = @schoolId AND academic_year_id = @academicYearId
                         AND class_id = @classId AND section_id = @sectionId
@@ -128,7 +131,14 @@ namespace AscentSchools.Data.Repositories.School
                         .ToList();
                 });
 
-                var maxTotal = subjects.Sum(s => s.MaxMarks + (s.ActivityMaxMarks ?? 0));
+                // Grade-only subjects (class_subjects.grade_only) print a grade in their own table
+                // and are left out of the total, its maximum, the total grade and the rank.
+                var gradeOnlyIds = new HashSet<int>(subjects.Where(s => s.GradeOnly).Select(s => s.SubjectId));
+                // Maximum = the subjects this exam is actually set up for in Exam Master. A subject
+                // mapped to the class but with no exam row (default max 100) isn't part of the exam,
+                // so it mustn't inflate the denominator. No exam rows at all → every mapped subject.
+                var examSubjects = subjects.Any(s => s.InExam) ? subjects.Where(s => s.InExam) : subjects;
+                var maxTotal = examSubjects.Where(s => !s.GradeOnly).Sum(s => s.MaxMarks + (s.ActivityMaxMarks ?? 0));
 
                 var cards = students.Select(st =>
                 {
@@ -144,6 +154,7 @@ namespace AscentSchools.Data.Repositories.School
                         return new MarksCardLineDto
                         {
                             SubjectId     = sub.SubjectId,
+                            SubjectLabel  = LanguageLabel(sub, st),
                             ActivityMarks = absent ? null : m?.ActivityMarks,
                             MarksObtained = absent ? null : m?.MarksObtained,
                             IsAbsent      = absent,
@@ -153,8 +164,9 @@ namespace AscentSchools.Data.Repositories.School
                         };
                     }).ToList();
 
-                    var hasMarks = lines.Any(l => l.Entered || l.IsAbsent);
-                    var total    = lines.Sum(l => l.SubjectTotal ?? 0);
+                    var scored   = lines.Where(l => !gradeOnlyIds.Contains(l.SubjectId)).ToList();
+                    var hasMarks = scored.Any(l => l.Entered || l.IsAbsent);
+                    var total    = scored.Sum(l => l.SubjectTotal ?? 0);
                     return new MarksCardStudentDto
                     {
                         StudentId   = st.StudentId,
@@ -186,11 +198,27 @@ namespace AscentSchools.Data.Repositories.School
                         Label = d.ToString("MMM", System.Globalization.CultureInfo.InvariantCulture),
                     };
                 }).ToList();
+                // Count attendance only up to the end of the month of this exam's LAST exam date
+                // (Exam Master), so a card printed later doesn't include months after the exam.
+                // No exam dates set → the whole June–March window, as before.
+                var attFrom = new DateTime(startYear, 6, 1);
+                var attTo   = new DateTime(startYear + 1, 3, 31);
+                var lastExamDate = conn.ExecuteScalar<DateTime?>(
+                    @"SELECT MAX(exam_date) FROM exam_master
+                      WHERE school_id = @schoolId AND academic_year_id = @academicYearId
+                        AND exam_type_id = @examTypeId AND class_id = @classId
+                        AND exam_status = 'Active'", p);
+                if (lastExamDate.HasValue)
+                {
+                    var monthEnd = new DateTime(lastExamDate.Value.Year, lastExamDate.Value.Month, 1).AddMonths(1).AddDays(-1);
+                    if (monthEnd >= attFrom && monthEnd < attTo) attTo = monthEnd;
+                }
+
                 var ap = new
                 {
                     schoolId, academicYearId, classId, sectionId,
-                    from = new DateTime(startYear, 6, 1),
-                    to   = new DateTime(startYear + 1, 3, 31),
+                    from = attFrom,
+                    to   = attTo,
                 };
 
                 // Working days = distinct days attendance was marked for this class+section
@@ -251,6 +279,8 @@ namespace AscentSchools.Data.Repositories.School
                         ActivityMaxMarks = s.ActivityMaxMarks,
                         HasActivity      = (s.ActivityMaxMarks ?? 0) > 0,
                         HasGradeType     = subjectBands[s.SubjectId].Count > 0,
+                        GradeOnly        = s.GradeOnly,
+                        LanguageSlot     = s.LanguageSlot,
                     }).ToList(),
                     Students      = cards,
                     AttendanceMonths = months,
@@ -270,6 +300,28 @@ namespace AscentSchools.Data.Repositories.School
             if (m.Success) return int.Parse(m.Value);
             var istNow = DateTime.UtcNow.AddHours(5.5);
             return istNow.Month >= 6 ? istNow.Year : istNow.Year - 1;
+        }
+
+        /// <summary>
+        /// A language subject (Class Subjects → Student Language = 1st/2nd/3rd) prints with the
+        /// student's own language from the student record: "Second Language (Hindi)". Null when
+        /// the subject isn't a language subject or the student has no language entered.
+        /// </summary>
+        private static string LanguageLabel(SubjectRow sub, StudentRow st)
+        {
+            string lang;
+            switch (sub.LanguageSlot)
+            {
+                case 1:  lang = st.FirstLanguage;  break;
+                case 2:  lang = st.SecondLanguage; break;
+                case 3:  lang = st.ThirdLanguage;  break;
+                default: return null;
+            }
+            lang = lang?.Trim();
+            if (string.IsNullOrEmpty(lang)
+                || string.Equals(lang, sub.SubjectName?.Trim(), StringComparison.OrdinalIgnoreCase))
+                return null;
+            return $"{sub.SubjectName} ({lang})";
         }
 
         /// <summary>
@@ -302,6 +354,9 @@ namespace AscentSchools.Data.Repositories.School
             public decimal  MaxMarks         { get; set; }
             public decimal? ActivityMaxMarks { get; set; }
             public int?     GradeTypeId      { get; set; }
+            public bool     GradeOnly        { get; set; }
+            public bool     InExam           { get; set; }   // has an Exam Master row for this exam
+            public byte?    LanguageSlot     { get; set; }
         }
 
         private class StudentRow
@@ -310,6 +365,9 @@ namespace AscentSchools.Data.Repositories.School
             public string StudentName { get; set; }
             public string AdmissionNo { get; set; }
             public string FatherName  { get; set; }
+            public string FirstLanguage  { get; set; }
+            public string SecondLanguage { get; set; }
+            public string ThirdLanguage  { get; set; }
         }
 
         private class MarkRow

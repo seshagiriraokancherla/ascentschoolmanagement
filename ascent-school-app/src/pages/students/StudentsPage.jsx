@@ -3,7 +3,7 @@ import {
   Table, Button, Input, Select, Space, Avatar, Tag, Card, Row, Col,
   Modal, Form, Typography, App as AntApp, Tooltip, Popconfirm,
 } from 'antd'
-import { PlusOutlined, SearchOutlined, UserOutlined, EditOutlined, SwapOutlined, StopOutlined, CheckCircleOutlined, PauseCircleOutlined, PlayCircleOutlined } from '@ant-design/icons'
+import { PlusOutlined, EyeOutlined, SearchOutlined, UserOutlined, EditOutlined, SwapOutlined, StopOutlined, CheckCircleOutlined, PauseCircleOutlined, PlayCircleOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import api from '../../api/axiosInstance'
 
@@ -274,9 +274,12 @@ export default function StudentsPage() {
     {
       title:  'Actions',
       key:    'actions',
-      width:  230,
+      width:  290,
       render: (_, record) => (
         <Space size={4} wrap>
+          <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/students/360?id=${record.studentId}`)}>
+            360
+          </Button>
           <Button size="small" icon={<EditOutlined />} onClick={() => navigate(`/students/${record.studentId}`)}>
             Edit
           </Button>

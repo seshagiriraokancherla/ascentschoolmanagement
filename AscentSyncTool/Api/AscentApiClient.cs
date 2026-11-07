@@ -67,6 +67,22 @@ namespace AscentSyncTool.Api
         public Task<BulkImportResult> BulkImportStudentsAsync(List<StudentBulkRow> rows)
             => PostBulkAsync("school/students/bulk", new BulkStudentImportRequest { Rows = rows, Upsert = true });
 
+        // ── Concessions (export, replace-per-key) ─────────────────────────────
+        public Task<BulkImportResult> ImportLegacyConcessionsAsync(List<LegacyConcessionRow> rows)
+            => PostBulkAsync("school/fees/concessions/legacy-import", new LegacyConcessionImportRequest { Rows = rows });
+
+        // ── Date of birth bulk update ──────────────────────────────────────────
+        public async Task<DobUpdateResult> UpdateDatesOfBirthAsync(List<DobUpdateRow> rows)
+        {
+            var json = JsonConvert.SerializeObject(new DobUpdateRequest { Rows = rows });
+            var resp = await _http.PostAsync("school/students/dob-update", new StringContent(json, Encoding.UTF8, "application/json"));
+            var body = await resp.Content.ReadAsStringAsync();
+            var parsed = JsonConvert.DeserializeObject<ApiResponse<DobUpdateResult>>(body);
+            if (parsed == null || !parsed.success)
+                throw new Exception(Fail(parsed, resp, body, "POST school/students/dob-update"));
+            return parsed.data ?? new DobUpdateResult();
+        }
+
         private async Task<BulkImportResult> PostBulkAsync(string url, object request)
         {
             var json = JsonConvert.SerializeObject(request);

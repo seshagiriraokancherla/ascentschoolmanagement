@@ -50,6 +50,17 @@ namespace AscentSchools.API.Controllers.School
             return Ok(student);
         }
 
+        // GET school/students/{id}/overview?academicYearId=   (Student 360)
+        // id = any year's student row; academicYearId selects the year (omit = that row's year).
+        [HttpGet, Route("{id:long}/overview")]
+        public HttpResponseMessage GetStudentOverview(long id, int? academicYearId = null)
+        {
+            var overview = _repo.GetOverview(
+                Tenant.TenantDbName, Tenant.GroupId, Tenant.SchoolId, id, academicYearId);
+            if (overview == null) return NotFound("Student not found.");
+            return Ok(overview);
+        }
+
         // POST school/students
         [HttpPost, Route("")]
         public HttpResponseMessage CreateStudent([FromBody] SaveStudentRequest request)
@@ -161,6 +172,21 @@ namespace AscentSchools.API.Controllers.School
             var createdBy = string.IsNullOrWhiteSpace(request.CreatedBy) ? Tenant.FullName : request.CreatedBy.Trim();
 
             var result = _repo.BulkCreate(Tenant.TenantDbName, Tenant.SchoolId, request, createdBy);
+            return Ok(result);
+        }
+
+        // POST school/students/dob-update — AscentSyncTool "Update Date of Births" tab.
+        // Narrow repair endpoint: overwrites ONLY date_of_birth on an existing student
+        // row, never any other field, and never inserts.
+        [HttpPost, Route("dob-update")]
+        public HttpResponseMessage UpdateDatesOfBirth([FromBody] DobUpdateRequest request)
+        {
+            if (request == null || request.Rows == null || request.Rows.Count == 0)
+                return BadRequest("No rows provided.");
+            if (request.Rows.Count > 2000)
+                return BadRequest("Maximum 2000 rows per request.");
+
+            var result = _repo.BulkUpdateDateOfBirth(Tenant.TenantDbName, Tenant.SchoolId, request);
             return Ok(result);
         }
 

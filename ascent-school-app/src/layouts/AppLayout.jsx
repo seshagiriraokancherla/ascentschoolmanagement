@@ -7,7 +7,7 @@ import {
   DollarOutlined, FormOutlined, BookOutlined, NotificationOutlined,
   CalendarOutlined, CarOutlined, VideoCameraOutlined, BarChartOutlined,
   IdcardOutlined, MessageOutlined, HomeOutlined, CommentOutlined,
-  QuestionCircleOutlined,
+  QuestionCircleOutlined, ProfileOutlined,
 } from '@ant-design/icons'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import api from '../api/axiosInstance'
@@ -22,6 +22,11 @@ const NAV_ITEMS = [
     key:   '/',
     icon:  <HomeOutlined />,
     label: 'Dashboard',
+  },
+  {
+    key:   '/students/360',
+    icon:  <ProfileOutlined />,
+    label: 'Student 360',
   },
   {
     key:      'students',
@@ -59,6 +64,25 @@ const NAV_ITEMS = [
     label: 'Attendance',
   },
   {
+    key:      'exams',
+    icon:     <FormOutlined />,
+    label:    'Exams',
+    children: [
+      { key: '/exams/types',                 label: 'Exam Types' },
+      { key: '/exams/class-subjects',        label: 'Class Subjects' },
+      { key: '/exams/subject-grades',        label: 'Subjects Grade Master' },
+      { key: '/exams/total-grades',          label: 'Total Grade Master' },
+      { key: '/exams/master',                label: 'Exam Master' },
+      { key: '/exams/marks-entry',           label: 'Marks Entry' },
+      { key: '/exams/hall-ticket',           label: 'Exam Hall Ticket' },
+      { key: '/exams/marks-card',            label: 'Marks Card' },
+      { key: '/exams/toppers/exam',          label: 'Exam wise Toppers' },
+      { key: '/exams/toppers/class',         label: 'Class wise Toppers' },
+      { key: '/exams/toppers/academic-year', label: 'Academic Year Toppers' },
+      { key: '/exams/failed-students',       label: 'Failed Students List' },
+    ],
+  },
+  {
     key:   'staff',
     icon:  <IdcardOutlined />,
     label: 'Staff',
@@ -69,11 +93,6 @@ const NAV_ITEMS = [
       { key: '/staff/advances',           label: 'Staff Advances'      },
       { key: '/staff/salaries',           label: 'Salaries'            },
     ],
-  },
-  {
-    key:   '/marks',
-    icon:  <FormOutlined />,
-    label: 'Marks Entry',
   },
   {
     key:   '/transport',

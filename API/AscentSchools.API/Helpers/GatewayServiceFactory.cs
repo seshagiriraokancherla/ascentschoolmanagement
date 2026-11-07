@@ -17,6 +17,7 @@ namespace AscentSchools.API.Helpers
             new Dictionary<string, IGatewayService>(StringComparer.OrdinalIgnoreCase)
             {
                 { "Razorpay", new RazorpayGatewayService() },
+                { "Easebuzz", new EasebuzzGatewayService() },
                 // { "Cashfree", new CashfreeGatewayService() },
                 // { "PayU",     new PayUGatewayService() },
             };

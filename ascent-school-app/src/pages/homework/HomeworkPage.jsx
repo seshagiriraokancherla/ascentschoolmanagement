@@ -7,9 +7,10 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, PaperClipOutlined } from '@
 import dayjs from 'dayjs'
 import api, { apiError } from '../../api/axiosInstance'
 import MediaUploader from '../../components/MediaUploader'
+import TransliterateTextArea from '../../components/TransliterateTextArea'
+import { LANGUAGE_OPTIONS } from '../../utils/transliteration'
 
 const { Title, Text } = Typography
-const { TextArea } = Input
 
 // Treat both new ('Active') and legacy ('Y') as active rows.
 const isActive = (s) => ['Active', 'Y', null, undefined, ''].includes(s.status)
@@ -32,6 +33,7 @@ export default function HomeworkPage() {
   const [page,      setPage]      = useState(1)
   const [pageSize,  setPageSize]  = useState(20)
   const [total,     setTotal]     = useState(0)
+  const [descLanguage, setDescLanguage] = useState('english')   // typing aid only, never saved
 
   const loadHomework = async (classId, p = 1, ps = 20) => {
     setLoading(true)
@@ -128,10 +130,12 @@ export default function HomeworkPage() {
     setSections([])
     loadSubjects(null)
     form.setFieldsValue({ assignedDate: dayjs() })
+    setDescLanguage('english')
     setModal({ open: true, editing: null })
   }
 
   const openEdit = (record) => {
+    setDescLanguage('english')
     form.setFieldsValue({
       title:         record.title,
       description:   record.description,
@@ -278,8 +282,23 @@ export default function HomeworkPage() {
           <Form.Item name="title" label="Title" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="description" label="Description">
-            <TextArea rows={3} />
+          <Form.Item
+            name="description"
+            label={
+              <Space>
+                <span>Description</span>
+                <Select
+                  size="small"
+                  value={descLanguage}
+                  onChange={setDescLanguage}
+                  options={LANGUAGE_OPTIONS}
+                  style={{ width: 100 }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </Space>
+            }
+          >
+            <TransliterateTextArea rows={3} language={descLanguage} />
           </Form.Item>
           <Row gutter={12}>
             <Col span={8}>

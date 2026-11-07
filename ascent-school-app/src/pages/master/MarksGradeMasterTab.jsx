@@ -255,7 +255,7 @@ export default function MarksGradeMasterTab() {
         showIcon
         style={{ marginBottom: 16 }}
         message="Grading scales for a student's TOTAL marks (raw marks, not %)."
-        description="A scale is a reusable set of bands, e.g. 'Out of 300'. It is not tied to a class, section or year — each exam picks its scale under Master Data → Exam Master. Per-subject bands are set under Subjects Grade Master."
+        description="A scale is a reusable set of bands, e.g. 'Out of 300'. It is not tied to a class, section or year — each exam picks its scale under Exams → Exam Master. Per-subject bands are set under Subjects Grade Master."
       />
 
       <Space style={{ marginBottom: 12 }}>

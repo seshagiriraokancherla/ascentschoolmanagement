@@ -10,6 +10,18 @@ namespace AscentSchools.Data.Repositories.School
     public class ReportsRepository
     {
         private readonly IConnectionFactory _db;
+
+        // Grade-only subjects (class_subjects.grade_only) print a grade on the marks card and are
+        // left out of every marks total — so their marks never reach the toppers / failed reports.
+        // Keyed on the student's own class + year: a subject can be grade-only in one class only.
+        private const string ExcludeGradeOnly =
+            @" AND NOT EXISTS (SELECT 1 FROM class_subjects gcs
+                               JOIN students gs ON gs.student_id = sm.student_id
+                               WHERE gcs.school_id = sm.school_id
+                                 AND gcs.academic_year_id = sm.academic_year_id
+                                 AND gcs.class_id = gs.class_id
+                                 AND gcs.subject_id = sm.subject_id
+                                 AND gcs.grade_only = 1 AND gcs.status = 'Active')";
         public ReportsRepository(IConnectionFactory db) { _db = db; }
 
         public IEnumerable<StrengthRowDto> GetStrength(string tenantDbName, int schoolId, int academicYearId)
@@ -226,7 +238,7 @@ namespace AscentSchools.Data.Repositories.School
                           WHERE sm.school_id        = @schoolId
                             AND sm.exam_type_id     = @examTypeId
                             AND sm.academic_year_id = @academicYearId
-                            AND sm.student_id IN @ids",
+                            AND sm.student_id IN @ids" + ExcludeGradeOnly,
                         new { schoolId, examTypeId, academicYearId, ids })
                       .ToLookup(m => m.StudentId)
                     : Enumerable.Empty<TopperMarkRow>().ToLookup(m => m.StudentId);
@@ -350,10 +362,10 @@ namespace AscentSchools.Data.Repositories.School
                         @"SELECT student_id StudentId, subject_id SubjectId, exam_type_id ExamTypeId,
                                  marks_obtained MarksObtained, max_marks MaxMarks, is_absent IsAbsent,
                                  activity_marks ActivityMarks, activity_max_marks ActivityMaxMarks
-                          FROM student_marks
+                          FROM student_marks sm
                           WHERE school_id        = @schoolId
                             AND academic_year_id = @academicYearId
-                            AND student_id IN @ids",
+                            AND student_id IN @ids" + ExcludeGradeOnly,
                         new { schoolId, academicYearId, ids })
                       .ToLookup(m => m.ExamTypeId)
                     : Enumerable.Empty<TopperMarkRowWithExam>().ToLookup(m => m.ExamTypeId);
@@ -472,11 +484,11 @@ namespace AscentSchools.Data.Repositories.School
                         @"SELECT student_id StudentId, subject_id SubjectId,
                                  marks_obtained MarksObtained, max_marks MaxMarks, is_absent IsAbsent,
                                  activity_marks ActivityMarks, activity_max_marks ActivityMaxMarks
-                          FROM student_marks
+                          FROM student_marks sm
                           WHERE school_id        = @schoolId
                             AND exam_type_id     = @examTypeId
                             AND academic_year_id = @academicYearId
-                            AND student_id IN @ids",
+                            AND student_id IN @ids" + ExcludeGradeOnly,
                         new { schoolId, examTypeId, academicYearId, ids })
                       .ToLookup(m => m.StudentId)
                     : Enumerable.Empty<TopperMarkRow>().ToLookup(m => m.StudentId);
@@ -837,10 +849,10 @@ namespace AscentSchools.Data.Repositories.School
                         @"SELECT student_id StudentId, subject_id SubjectId, exam_type_id ExamTypeId,
                                  marks_obtained MarksObtained, max_marks MaxMarks, is_absent IsAbsent,
                                  activity_marks ActivityMarks, activity_max_marks ActivityMaxMarks
-                          FROM student_marks
+                          FROM student_marks sm
                           WHERE school_id        = @schoolId
                             AND academic_year_id = @academicYearId
-                            AND student_id IN @ids",
+                            AND student_id IN @ids" + ExcludeGradeOnly,
                         new { schoolId, academicYearId, ids })
                       .ToLookup(m => m.StudentId)
                     : Enumerable.Empty<TopperMarkRowWithExam>().ToLookup(m => m.StudentId);

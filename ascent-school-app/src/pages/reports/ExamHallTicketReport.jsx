@@ -82,7 +82,7 @@ export default function ExamHallTicketReport() {
         api.get(`/school/students?academicYearId=${yearId}&classId=${classId}&sectionId=${sectionId}&status=Active`),
         api.get('/school/master/subjects'),
         // Pulls the same per-subject exam date + time + max marks staff already entered
-        // in Master Data → Exam Master, instead of the clerk retyping it here by hand.
+        // in Exams → Exam Master, instead of the clerk retyping it here by hand.
         api.get(`/school/exam-master?academicYearId=${yearId}&examTypeId=${examTypeId}&classId=${classId}`),
       ])
       const studentList = sRes.data?.data  || []
@@ -111,7 +111,7 @@ export default function ExamHallTicketReport() {
       setLoaded(true)
       if (!studentList.length) message.warning('No active students found for this selection.')
       else if (!Object.keys(examMasterBySubject).length) {
-        message.info('No exam schedule found in Exam Master for this class/exam — fill in dates manually below, or set them up in Master Data → Exam Master first.')
+        message.info('No exam schedule found in Exam Master for this class/exam — fill in dates manually below, or set them up in Exams → Exam Master first.')
       }
     } catch (e) { message.error(apiError(e, 'Failed to load data.')) }
     finally { setLoading(false) }

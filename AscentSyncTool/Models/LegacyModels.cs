@@ -74,4 +74,21 @@ namespace AscentSyncTool.Models
         public string    RouteName      { get; set; }
         public string    BusName        { get; set; }
     }
+
+    // One SAS_ConcessionDet KEY (admission no + year + fee type/route + term), summed by
+    // the legacy query. Amount counts only active ('A') rows; 0 = every row deleted.
+    public class LegacyConcession
+    {
+        public string  AdmissionNo    { get; set; }
+        public string  AcademicYear   { get; set; }
+        public string  FeeTypeName    { get; set; }   // NULL for bus concessions
+        public string  RouteNames     { get; set; }   // bus: every legacy name of the route, '|' separated
+        public string  TermName       { get; set; }
+        public decimal Amount         { get; set; }
+        public int     ActiveRows     { get; set; }
+        public int     DeletedRows    { get; set; }
+        public string  LegacyNo       { get; set; }   // TraID of the latest active row
+        public string  ConcessionType { get; set; }   // RecommandByNam
+        public string  Remarks        { get; set; }
+    }
 }

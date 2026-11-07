@@ -15,7 +15,7 @@ namespace AscentSyncTool
 {
     public class MainForm : Form
     {
-        public const string Version = "1.3";
+        public const string Version = "1.5";
 
         private readonly LegacyDb _legacy = new LegacyDb();
 
@@ -30,11 +30,16 @@ namespace AscentSyncTool
         private List<ReceiptListItem>    _downloadReceipts = new List<ReceiptListItem>();
         private List<AttendanceExportRow> _attendance      = new List<AttendanceExportRow>();
         private DateTime _attendanceMonth;   // first day of the month shown in the grid
+        private List<LegacyStudent> _dobRows = new List<LegacyStudent>();
+        private string _dobAcademicYear;     // the year _dobRows was loaded for
+        private List<LegacyConcession> _concessions = new List<LegacyConcession>();
 
         private readonly SyncTab _tabReceipts   = new SyncTab();
         private readonly SyncTab _tabStudents   = new SyncTab();
         private readonly SyncTab _tabDownload   = new SyncTab();
         private readonly SyncTab _tabAttendance = new SyncTab();
+        private readonly SyncTab _tabUpdateDob  = new SyncTab();
+        private readonly SyncTab _tabConcessions = new SyncTab();
 
         public MainForm()
         {
@@ -59,6 +64,8 @@ namespace AscentSyncTool
             tabs.TabPages.Add(MakePage("Download Receipts", _tabDownload));
             tabs.TabPages.Add(MakePage("Export Receipts",   _tabReceipts));
             tabs.TabPages.Add(MakePage("Download Attendance", _tabAttendance));
+            tabs.TabPages.Add(MakePage("Update Date of Births", _tabUpdateDob));
+            tabs.TabPages.Add(MakePage("Export Concessions", _tabConcessions));
 
             // The academic-year filter applies only to the legacy-source tabs.
             _tabStudents.ShowAcademicYearFilter = true;
@@ -67,6 +74,15 @@ namespace AscentSyncTool
             // Attendance is summarised per calendar month, not a free date range.
             _tabAttendance.UseMonthYearFilter = true;
 
+            // DOB update operates on one whole legacy academic year — no date range at all.
+            _tabUpdateDob.ShowAcademicYearFilter = true;
+            _tabUpdateDob.AcademicYearOnlyMode   = true;
+
+            // Concessions are sent for one whole legacy year (a deletion doesn't change
+            // CrtDat, so a date range would miss it).
+            _tabConcessions.ShowAcademicYearFilter = true;
+            _tabConcessions.AcademicYearOnlyMode   = true;
+
             Controls.Add(tabs);
             Controls.Add(header);   // added after tabs so Dock=Top sits above the fill
 
@@ -74,6 +90,8 @@ namespace AscentSyncTool
             WireExportStudents();
             WireDownloadReceipts();
             WireAttendanceSummary();
+            WireUpdateDob();
+            WireExportConcessions();
 
             Load += (s, e) => LoadAcademicYears();
         }
@@ -85,16 +103,22 @@ namespace AscentSyncTool
                 var years = _legacy.GetAcademicYears();
                 _tabStudents.SetAcademicYears(years);   // latest selected by default
                 _tabReceipts.SetAcademicYears(years);
+                _tabUpdateDob.SetAcademicYears(years);
+                _tabConcessions.SetAcademicYears(years);
                 if (years.Count == 0)
                 {
                     _tabStudents.SetStatus("No academic years found in SAS_AcdYear.");
                     _tabReceipts.SetStatus("No academic years found in SAS_AcdYear.");
+                    _tabUpdateDob.SetStatus("No academic years found in SAS_AcdYear.");
+                    _tabConcessions.SetStatus("No academic years found in SAS_AcdYear.");
                 }
             }
             catch (Exception ex)
             {
                 _tabStudents.SetStatus("Could not load academic years: " + ex.Message);
                 _tabReceipts.SetStatus("Could not load academic years: " + ex.Message);
+                _tabUpdateDob.SetStatus("Could not load academic years: " + ex.Message);
+                _tabConcessions.SetStatus("Could not load academic years: " + ex.Message);
             }
         }
 
@@ -290,6 +314,104 @@ namespace AscentSyncTool
                 MessageBox.Show(sb.ToString(), "Download Attendance",
                     MessageBoxButtons.OK, errors.Count > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
             };
+        }
+
+        // ── Tab 5: Update Date of Births (legacy → new app, DOB only) ─────────
+        private void WireUpdateDob()
+        {
+            _tabUpdateDob.OnShowAcademicYear = async (acdYear) =>
+            {
+                _dobAcademicYear = acdYear;
+                _dobRows = await Task.Run(() => _legacy.GetStudentsForDobUpdate(acdYear));
+                _tabUpdateDob.Grid.DataSource = _dobRows;
+                return _dobRows.Count;
+            };
+
+            _tabUpdateDob.OnSave = async () =>
+            {
+                var rows = _dobRows.Select(s => Mappers.Mappers.ToDobUpdateRow(s, _dobAcademicYear)).ToList();
+                var total = new DobUpdateResult();
+                foreach (var batch in Chunk(rows, AppSettings.StudentBatchSize))
+                {
+                    _tabUpdateDob.SetStatus($"Updating… ({total.Updated + total.Unchanged + total.NotFound + total.NoLegacyDob + total.Failed}/{rows.Count})");
+                    var r = await Api.UpdateDatesOfBirthAsync(batch);
+                    total.Total       += r.Total;
+                    total.Updated     += r.Updated;
+                    total.Unchanged   += r.Unchanged;
+                    total.NotFound    += r.NotFound;
+                    total.NoLegacyDob += r.NoLegacyDob;
+                    total.Failed      += r.Failed;
+                    if (r.Errors != null) total.Errors.AddRange(r.Errors);
+                }
+                _tabUpdateDob.SetStatus(
+                    $"Done. Updated {total.Updated}, unchanged {total.Unchanged}, not found {total.NotFound}, " +
+                    $"no legacy DOB {total.NoLegacyDob}, failed {total.Failed}.");
+                ShowDobResult(total);
+            };
+        }
+
+        // ── Tab 6: Export Concessions (legacy SAS_ConcessionDet → new app) ────
+        // Each row is one key's legacy TOTAL, so the new app is set to it (not added to):
+        // re-running a year is safe, and a key whose legacy rows are all deleted is cancelled.
+        private void WireExportConcessions()
+        {
+            _tabConcessions.OnShowAcademicYear = async (acdYear) =>
+            {
+                _concessions = await Task.Run(() => _legacy.GetConcessions(acdYear));
+                _tabConcessions.Grid.DataSource = _concessions;
+                return _concessions.Count;
+            };
+
+            _tabConcessions.OnSave = async () =>
+            {
+                var rows = _concessions.Select((c, i) => Mappers.Mappers.ToConcessionRow(c, i + 1)).ToList();
+                var total = new BulkImportResult();
+                foreach (var batch in Chunk(rows, AppSettings.ReceiptBatchSize))
+                {
+                    _tabConcessions.SetStatus($"Uploading… ({total.Imported + total.Updated + total.Skipped + total.Failed}/{rows.Count})");
+                    var r = await Api.ImportLegacyConcessionsAsync(batch);
+                    Accumulate(total, r);
+                }
+                _tabConcessions.SetStatus(
+                    $"Done. Inserted {total.Imported}, updated/cancelled {total.Updated}, unchanged {total.Skipped}, failed {total.Failed}.");
+
+                var sb = new StringBuilder();
+                sb.AppendLine($"Total keys:         {total.Total}");
+                sb.AppendLine($"Inserted:           {total.Imported}");
+                sb.AppendLine($"Updated/cancelled:  {total.Updated}");
+                sb.AppendLine($"Unchanged:          {total.Skipped}");
+                sb.AppendLine($"Failed:             {total.Failed}");
+                if (total.Errors.Count > 0)
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("Errors:");
+                    foreach (var e in total.Errors.Take(20)) sb.AppendLine($"  {e.Identifier}: {e.Reason}");
+                    if (total.Errors.Count > 20) sb.AppendLine($"  …and {total.Errors.Count - 20} more.");
+                }
+                MessageBox.Show(sb.ToString(), "Export Concessions",
+                    MessageBoxButtons.OK, total.Failed > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+            };
+        }
+
+        private static void ShowDobResult(DobUpdateResult r)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine($"Total:          {r.Total}");
+            sb.AppendLine($"Updated:        {r.Updated}");
+            sb.AppendLine($"Unchanged:      {r.Unchanged}  (new-db value already matched)");
+            sb.AppendLine($"Not found:      {r.NotFound}  (no matching student in new app for this year)");
+            sb.AppendLine($"No legacy DOB:  {r.NoLegacyDob}  (legacy row had a blank date of birth)");
+            sb.AppendLine($"Failed:         {r.Failed}");
+            if (r.Errors != null && r.Errors.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("Errors:");
+                foreach (var e in r.Errors.Take(20))
+                    sb.AppendLine($"  {e.AdmissionNo}: {e.Reason}");
+                if (r.Errors.Count > 20) sb.AppendLine($"  …and {r.Errors.Count - 20} more.");
+            }
+            MessageBox.Show(sb.ToString(), "Update Date of Births",
+                MessageBoxButtons.OK, (r.Failed > 0) ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────

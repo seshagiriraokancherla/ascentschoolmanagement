@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react'
 import {
-  Card, Table, Button, Modal, Form, Input, Select,
+  Card, Table, Button, Modal, Form, Select,
   Popconfirm, Tag, Switch, Space, Typography, App as AntApp,
 } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, PushpinOutlined, PaperClipOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import api, { apiError } from '../../api/axiosInstance'
 import MediaUploader from '../../components/MediaUploader'
+import TransliterateInput from '../../components/TransliterateInput'
+import TransliterateTextArea from '../../components/TransliterateTextArea'
+import { LANGUAGE_OPTIONS } from '../../utils/transliteration'
 
 const { Title, Text } = Typography
-const { TextArea } = Input
 
 export default function AnnouncementsPage() {
   const { message } = AntApp.useApp()
@@ -21,6 +23,7 @@ export default function AnnouncementsPage() {
   const [loading,       setLoading]       = useState(false)
   const [modal,         setModal]         = useState({ open: false, editing: null })
   const [saving,        setSaving]        = useState(false)
+  const [textLanguage,  setTextLanguage]  = useState('english')   // typing aid for Title+Description, never saved
   const [scope,         setScope]         = useState('School')
 
   const load = async () => {
@@ -51,10 +54,12 @@ export default function AnnouncementsPage() {
     form.setFieldsValue({ scope: 'School', isPinned: false })
     setScope('School')
     setSections([])
+    setTextLanguage('english')
     setModal({ open: true, editing: null })
   }
 
   const openEdit = (record) => {
+    setTextLanguage('english')
     form.setFieldsValue({
       title:         record.title,
       description:   record.description,
@@ -193,11 +198,20 @@ export default function AnnouncementsPage() {
         width={520}
       >
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item label="Typing language">
+            <Select
+              size="small"
+              value={textLanguage}
+              onChange={setTextLanguage}
+              options={LANGUAGE_OPTIONS}
+              style={{ width: 140 }}
+            />
+          </Form.Item>
           <Form.Item name="title" label="Title" rules={[{ required: true }]}>
-            <Input />
+            <TransliterateInput language={textLanguage} />
           </Form.Item>
           <Form.Item name="description" label="Description">
-            <TextArea rows={4} />
+            <TransliterateTextArea rows={4} language={textLanguage} />
           </Form.Item>
           <Form.Item name="scope" label="Scope" rules={[{ required: true }]}>
             <Select

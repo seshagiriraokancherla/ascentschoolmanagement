@@ -79,6 +79,10 @@ class TeacherViewModel(private val repo: TeacherRepository) : ViewModel() {
     private val _announcements = MutableStateFlow<List<TeacherAnnouncementDto>>(emptyList())
     val announcements = _announcements.asStateFlow()
 
+    // Whole-school posting is Principal-only; false until the server says otherwise.
+    private val _canPostSchoolWide = MutableStateFlow(false)
+    val canPostSchoolWide = _canPostSchoolWide.asStateFlow()
+
     // ── Events (read-only — same gallery parents see, reuses EventsScreen) ─────
 
     private val _eventsState = MutableStateFlow<EventsUiState>(EventsUiState.Loading)
@@ -316,7 +320,15 @@ class TeacherViewModel(private val repo: TeacherRepository) : ViewModel() {
         }
     }
 
-    fun createAnnouncement(classId: Int, sectionId: Int?, title: String, description: String?) {
+    fun loadAnnouncementOptions() {
+        viewModelScope.launch {
+            repo.getAnnouncementOptions()
+                .onSuccess { _canPostSchoolWide.value = it.canPostSchoolWide }
+                .onFailure { _canPostSchoolWide.value = false }
+        }
+    }
+
+    fun createAnnouncement(classId: Int, sectionId: Int?, title: String, description: String?, wholeSchool: Boolean = false) {
         if (title.isBlank()) { _uiState.value = TeacherUiState.Error("Title is required"); return }
 
         viewModelScope.launch {
@@ -325,10 +337,12 @@ class TeacherViewModel(private val repo: TeacherRepository) : ViewModel() {
                 classId     = classId,
                 sectionId   = sectionId,
                 title       = title.trim(),
-                description = description?.takeIf { it.isNotBlank() }
+                description = description?.takeIf { it.isNotBlank() },
+                wholeSchool = wholeSchool
             ))
                 .onSuccess {
-                    _uiState.value = TeacherUiState.Success("Announcement posted.")
+                    _uiState.value = TeacherUiState.Success(
+                        if (wholeSchool) "Announcement posted to the whole school." else "Announcement posted.")
                     loadAnnouncements(classId)
                 }
                 .onFailure { _uiState.value = TeacherUiState.Error(it.message ?: "Post failed") }

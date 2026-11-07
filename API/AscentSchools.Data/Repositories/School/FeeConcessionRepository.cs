@@ -1,4 +1,5 @@
 using AscentSchools.Core.DTOs.School.Fee;
+using AscentSchools.Core.DTOs.School.Students;
 using AscentSchools.Data.ConnectionFactory;
 using Dapper;
 using System;
@@ -204,6 +205,221 @@ namespace AscentSchools.Data.Repositories.School
                 }
             }
             return saved;
+        }
+
+        // ── Legacy import (sync tool — SAS_ConcessionDet) ────────────────────
+        // Each row is one legacy key already summed by the sync tool, so the import
+        // REPLACES the new-app amount rather than adding to it — re-running a year is
+        // idempotent. Amount 0 (every legacy row deleted) cancels the active concession.
+        // Transport rows carry the legacy route name(s); the student's own assigned
+        // route wins when it is one of them (outstanding only uses that route).
+        public BulkImportResult ImportLegacyConcessions(
+            string tenantDbName, int schoolId, string createdBy, List<LegacyConcessionRow> rows)
+        {
+            var result = new BulkImportResult { Total = rows.Count };
+
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+            {
+                var years = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                foreach (var y in conn.Query<ConcessionLookup>(
+                    "SELECT academic_year_id Id, academic_year Name FROM academic_years WHERE school_id = @schoolId",
+                    new { schoolId }))
+                    if (!string.IsNullOrWhiteSpace(y.Name) && !years.ContainsKey(y.Name.Trim())) years[y.Name.Trim()] = y.Id;
+
+                // Fee types are per academic year: prefer the same year, else any year (latest first).
+                var feeTypes = conn.Query<ConcessionLookup>(
+                    @"SELECT fee_type_id Id, fee_type_name Name, academic_year_id YearId FROM fee_types
+                      WHERE school_id = @schoolId ORDER BY academic_year_id DESC, fee_type_id", new { schoolId }).AsList();
+                var feeTypeByYear = ByYear(feeTypes);
+                var feeTypeAny    = ByName(feeTypes);
+
+                var termByYear   = ByYear(conn.Query<ConcessionLookup>(
+                    "SELECT term_id Id, term_name Name, academic_year_id YearId FROM terms WHERE school_id = @schoolId",
+                    new { schoolId }));
+                var periodByYear = ByYear(conn.Query<ConcessionLookup>(
+                    "SELECT fee_period_id Id, period_label Name, academic_year_id YearId FROM fee_periods WHERE school_id = @schoolId",
+                    new { schoolId }));
+
+                // Active routes win on a duplicate name.
+                var routes = conn.Query<ConcessionLookup>(
+                    @"SELECT route_id Id, route_name Name FROM bus_routes WHERE school_id = @schoolId
+                      ORDER BY CASE WHEN status IN ('Active','Y') THEN 0 ELSE 1 END, route_id", new { schoolId }).AsList();
+                var routeByName = ByName(routes);
+                var routeName   = routes.ToDictionary(r => r.Id, r => (r.Name ?? "").Trim());
+
+                foreach (var r in rows)
+                {
+                    var id = $"{r.AdmissionNo} / {r.AcademicYear} / {(string.IsNullOrWhiteSpace(r.RouteNames) ? r.FeeTypeName : "Bus: " + r.RouteNames)} / {r.TermName}";
+                    void Fail(string reason)
+                    {
+                        result.Failed++;
+                        result.Errors.Add(new BulkRowError { Row = r.RowNumber, AdmissionNo = r.AdmissionNo, Identifier = id, Reason = reason });
+                    }
+
+                    try
+                    {
+                        if (!years.TryGetValue((r.AcademicYear ?? "").Trim(), out int yearId))
+                        { Fail($"Academic year not found: {r.AcademicYear}"); continue; }
+
+                        var student = conn.QueryFirstOrDefault<ConcessionStudent>(
+                            @"SELECT TOP 1 student_id StudentId, student_unique_id StudentUniqueId, bus_route_id BusRouteId
+                              FROM students
+                              WHERE admission_no = @adm AND academic_year_id = @yearId AND school_id = @schoolId
+                              ORDER BY student_id DESC",
+                            new { adm = (r.AdmissionNo ?? "").Trim(), yearId, schoolId });
+                        if (student == null)
+                        { Fail("Student not found for this academic year"); continue; }
+
+                        int? feeTypeId = null, busRouteId = null, termId = null, feePeriodId = null;
+
+                        if (!string.IsNullOrWhiteSpace(r.RouteNames))
+                        {
+                            var names = r.RouteNames.Split('|').Select(n => n.Trim()).Where(n => n.Length > 0).ToList();
+                            if (student.BusRouteId.HasValue
+                                && routeName.TryGetValue(student.BusRouteId.Value, out var assigned)
+                                && names.Any(n => string.Equals(n, assigned, StringComparison.OrdinalIgnoreCase)))
+                                busRouteId = student.BusRouteId;
+                            else
+                                foreach (var n in names)
+                                    if (routeByName.TryGetValue(n, out int rid)) { busRouteId = rid; break; }
+                            if (busRouteId == null) { Fail($"Bus route not found: {r.RouteNames}"); continue; }
+                        }
+                        else
+                        {
+                            var fn = (r.FeeTypeName ?? "").Trim();
+                            if (feeTypeByYear.TryGetValue($"{fn}|{yearId}", out int ft)) feeTypeId = ft;
+                            else if (feeTypeAny.TryGetValue(fn, out int ft2)) feeTypeId = ft2;
+                            else { Fail($"Fee type not found: {r.FeeTypeName}"); continue; }
+                        }
+
+                        var tn = (r.TermName ?? "").Trim();
+                        if (termByYear.TryGetValue($"{tn}|{yearId}", out int tid)) termId = tid;
+                        else if (periodByYear.TryGetValue($"{tn}|{yearId}", out int pid)) feePeriodId = pid;
+                        else { Fail($"Term / month not found for this year: {r.TermName}"); continue; }
+
+                        var existing = conn.QueryFirstOrDefault<ConcessionExisting>(
+                            @"SELECT TOP 1 concession_id ConcessionId, amount Amount, concession_type ConcessionType
+                              FROM fee_concessions
+                              WHERE student_id = @sid AND school_id = @schoolId AND status = 'Active'
+                                AND ISNULL(fee_type_id,   0) = ISNULL(@feeTypeId,   0)
+                                AND ISNULL(bus_route_id,  0) = ISNULL(@busRouteId,  0)
+                                AND hostel_id IS NULL
+                                AND ISNULL(term_id,       0) = ISNULL(@termId,      0)
+                                AND ISNULL(fee_period_id, 0) = ISNULL(@feePeriodId, 0)",
+                            new { sid = student.StudentId, schoolId, feeTypeId, busRouteId, termId, feePeriodId });
+
+                        var type    = Trunc(string.IsNullOrWhiteSpace(r.ConcessionType) ? "Concession" : r.ConcessionType.Trim(), 30);
+                        var remarks = Trunc(r.Remarks, 500);
+
+                        if (r.Amount <= 0)
+                        {
+                            // Every legacy row for this key is deleted → cancel ours too.
+                            if (existing == null) { result.Skipped++; continue; }
+                            conn.Execute("UPDATE fee_concessions SET status = 'Cancelled' WHERE concession_id = @id",
+                                new { id = existing.ConcessionId });
+                            result.Updated++;
+                            continue;
+                        }
+
+                        if (existing != null)
+                        {
+                            if (existing.Amount == r.Amount && existing.ConcessionType == type)
+                            { result.Skipped++; continue; }
+
+                            conn.Execute(
+                                $@"UPDATE fee_concessions
+                                   SET amount = @Amount, concession_type = @type, remarks = @remarks,
+                                       created_by = @createdBy, created_at = {IstNow}
+                                   WHERE concession_id = @id",
+                                new { r.Amount, type, remarks, createdBy, id = existing.ConcessionId });
+                            result.Updated++;
+                            continue;
+                        }
+
+                        // Keep the legacy receipt number when it fits and isn't taken; it is
+                        // shorter than the generated CFR{yr8}{D5}, so it never collides with
+                        // the generator's MAX(suffix) scan (that filters on exact length).
+                        var receiptNo = (r.LegacyNo ?? "").Trim();
+                        if (receiptNo.Length == 0 || receiptNo.Length > 25
+                            || conn.ExecuteScalar<int>(
+                                "SELECT COUNT(1) FROM fee_concessions WHERE receipt_no = @receiptNo AND school_id = @schoolId",
+                                new { receiptNo, schoolId }) > 0)
+                            receiptNo = GenerateReceiptNo(conn, schoolId, yearId);
+
+                        conn.Execute(
+                            $@"INSERT INTO fee_concessions
+                                (school_id, academic_year_id, student_id, student_unique_id,
+                                 fee_type_id, bus_route_id, hostel_id, term_id, fee_period_id,
+                                 concession_type, amount, remarks, receipt_no, status, created_by, created_at)
+                               VALUES
+                                (@schoolId, @yearId, @sid, @uid,
+                                 @feeTypeId, @busRouteId, NULL, @termId, @feePeriodId,
+                                 @type, @Amount, @remarks, @receiptNo, 'Active', @createdBy, {IstNow})",
+                            new
+                            {
+                                schoolId, yearId, sid = student.StudentId, uid = student.StudentUniqueId,
+                                feeTypeId, busRouteId, termId, feePeriodId,
+                                type, r.Amount, remarks, receiptNo, createdBy
+                            });
+                        result.Imported++;
+                    }
+                    catch (Exception ex)
+                    {
+                        Fail(ex.Message);
+                    }
+                }
+            }
+            return result;
+        }
+
+        private const string IstNow = "CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'India Standard Time' AS DATETIME)";
+
+        private static string Trunc(string s, int max)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return null;
+            s = s.Trim();
+            return s.Length > max ? s.Substring(0, max) : s;
+        }
+
+        private static Dictionary<string, int> ByName(IEnumerable<ConcessionLookup> src)
+        {
+            var d = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var i in src)
+                if (!string.IsNullOrWhiteSpace(i.Name) && !d.ContainsKey(i.Name.Trim())) d[i.Name.Trim()] = i.Id;
+            return d;
+        }
+
+        private static Dictionary<string, int> ByYear(IEnumerable<ConcessionLookup> src)
+        {
+            var d = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var i in src)
+            {
+                if (string.IsNullOrWhiteSpace(i.Name)) continue;
+                var key = $"{i.Name.Trim()}|{i.YearId ?? 0}";
+                if (!d.ContainsKey(key)) d[key] = i.Id;
+            }
+            return d;
+        }
+
+        private class ConcessionLookup
+        {
+            public int    Id     { get; set; }
+            public string Name   { get; set; }
+            public int?   YearId { get; set; }
+        }
+
+        private class ConcessionStudent
+        {
+            public long StudentId       { get; set; }
+            public int? StudentUniqueId { get; set; }
+            public int? BusRouteId      { get; set; }
+        }
+
+        private class ConcessionExisting
+        {
+            public int     ConcessionId   { get; set; }
+            public decimal Amount         { get; set; }
+            public string  ConcessionType { get; set; }
         }
 
         // ── Delete (soft) ─────────────────────────────────────────────────────

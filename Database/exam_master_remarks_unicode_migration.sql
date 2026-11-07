@@ -31,7 +31,7 @@ ELSE IF EXISTS (
     SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_NAME = 'exam_master' AND COLUMN_NAME = 'exam_remarks' AND DATA_TYPE = 'nvarchar' AND CHARACTER_MAXIMUM_LENGTH < 1000
 )
-BEGIN
+BEGIN   
     ALTER TABLE exam_master ALTER COLUMN exam_remarks NVARCHAR(1000) NULL;
     PRINT 'exam_master.exam_remarks widened to NVARCHAR(1000).';
 END

@@ -210,6 +210,167 @@ namespace AscentSchools.Data.Repositories.School
                     new { studentId, schoolId });
         }
 
+        // ── Student 360 overview ──────────────────────────────────────────
+        // studentId = any year's row; academicYearId picks the year (null = that row's year).
+        // Years / Receipts / Sms span every year via student_unique_id. Returns null if not found.
+        public StudentOverviewDto GetOverview(
+            string tenantDbName, int groupId, int schoolId, long studentId, int? academicYearId)
+        {
+            StudentOverviewDto o;
+            List<long> allIds;
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+            {
+                var uniqueId = conn.QueryFirstOrDefault<int?>(
+                    "SELECT student_unique_id FROM students WHERE student_id = @studentId AND school_id = @schoolId",
+                    new { studentId, schoolId });
+
+                // Resolve the selected year's row (falls back to the requested row itself)
+                long rowId = studentId;
+                if (uniqueId.HasValue && academicYearId.HasValue)
+                {
+                    var yearRow = conn.QueryFirstOrDefault<long?>(
+                        @"SELECT TOP 1 student_id FROM students
+                          WHERE student_unique_id = @uniqueId AND academic_year_id = @academicYearId
+                            AND school_id = @schoolId",
+                        new { uniqueId, academicYearId, schoolId });
+                    if (yearRow.HasValue) rowId = yearRow.Value;
+                }
+
+                o = conn.QueryFirstOrDefault<StudentOverviewDto>(
+                    @"SELECT s.student_id StudentId, s.student_unique_id StudentUniqueId,
+                             s.academic_year_id AcademicYearId, ay.academic_year AcademicYear,
+                             s.is_detained IsDetained, s.detained_reason DetainedReason,
+                             s.blocked_reason BlockedReason,
+                             br.route_name RouteName, b.bus_name BusName
+                      FROM students s
+                      LEFT JOIN academic_years ay ON ay.academic_year_id = s.academic_year_id
+                      LEFT JOIN bus_routes     br ON br.route_id         = s.bus_route_id
+                      LEFT JOIN buses          b  ON b.bus_id            = s.bus_id
+                      WHERE s.student_id = @rowId AND s.school_id = @schoolId",
+                    new { rowId, schoolId });
+                if (o == null) return null;
+
+                // Every enrolled year (one row per academic year)
+                o.Years = conn.Query<StudentEnrollmentDto>(
+                    @"SELECT s.student_id StudentId, s.academic_year_id AcademicYearId,
+                             ay.academic_year AcademicYear, c.class_name ClassName,
+                             sec.section_name SectionName, s.roll_no RollNo,
+                             s.status Status, s.is_detained IsDetained
+                      FROM students s
+                      LEFT JOIN academic_years ay  ON ay.academic_year_id = s.academic_year_id
+                      LEFT JOIN classes        c   ON c.class_id          = s.class_id
+                      LEFT JOIN sections       sec ON sec.section_id      = s.section_id
+                      WHERE s.school_id = @schoolId
+                        AND (s.student_id = @rowId OR (@uniqueId IS NOT NULL AND s.student_unique_id = @uniqueId))
+                      ORDER BY s.academic_year_id DESC",
+                    new { rowId, uniqueId, schoolId }).AsList();
+                allIds = o.Years.ConvertAll(y => y.StudentId);
+                if (!allIds.Contains(rowId)) allIds.Add(rowId);
+
+                // Attendance per month for the selected year's row
+                o.Attendance = conn.Query<StudentAttendanceMonthDto>(
+                    @"SELECT YEAR(attendance_date) [Year], MONTH(attendance_date) [Month],
+                             SUM(CASE WHEN status <> 'Holiday' THEN 1 ELSE 0 END) WorkingDays,
+                             SUM(CASE WHEN status = 'Present' THEN 1 ELSE 0 END) Present,
+                             SUM(CASE WHEN status = 'Absent'  THEN 1 ELSE 0 END) Absent,
+                             SUM(CASE WHEN status = 'Late'    THEN 1 ELSE 0 END) Late,
+                             SUM(CASE WHEN status = 'HalfDay' THEN 1 ELSE 0 END) HalfDay
+                      FROM student_attendance
+                      WHERE student_id = @rowId AND school_id = @schoolId
+                      GROUP BY YEAR(attendance_date), MONTH(attendance_date)
+                      ORDER BY [Year], [Month]",
+                    new { rowId, schoolId }).AsList();
+
+                o.RecentAbsences = conn.Query<StudentAbsenceDto>(
+                    @"SELECT TOP 15 attendance_date AttendanceDate, status Status, remarks Remarks
+                      FROM student_attendance
+                      WHERE student_id = @rowId AND school_id = @schoolId
+                        AND status IN ('Absent', 'HalfDay')
+                      ORDER BY attendance_date DESC",
+                    new { rowId, schoolId }).AsList();
+
+                // Exam totals + competition rank within the selected year's class + section.
+                // Grade-only subjects (class_subjects.grade_only) are left out, as on the marks card.
+                o.Exams = conn.Query<StudentExamSummaryDto>(
+                    @";WITH me AS (
+                          SELECT class_id, section_id, academic_year_id
+                          FROM students WHERE student_id = @rowId AND school_id = @schoolId
+                      ), t AS (
+                          SELECT sm.student_id, sm.exam_type_id,
+                                 SUM(CASE WHEN sm.is_absent = 1 THEN 0
+                                          ELSE sm.marks_obtained + ISNULL(sm.activity_marks, 0) END) Total,
+                                 SUM(sm.max_marks + ISNULL(sm.activity_max_marks, 0))            MaxTotal,
+                                 COUNT(1)                                                          SubjectCount,
+                                 SUM(CASE WHEN sm.is_absent = 1 THEN 1 ELSE 0 END)                AbsentSubjects
+                          FROM student_marks sm
+                          JOIN students s ON s.student_id = sm.student_id
+                          JOIN me ON s.class_id = me.class_id
+                                 AND ISNULL(s.section_id, 0) = ISNULL(me.section_id, 0)
+                                 AND s.academic_year_id = me.academic_year_id
+                          WHERE sm.school_id = @schoolId
+                            AND sm.academic_year_id = me.academic_year_id" + ExcludeGradeOnly + @"
+                          GROUP BY sm.student_id, sm.exam_type_id
+                      ), r AS (
+                          SELECT t.*,
+                                 RANK()   OVER (PARTITION BY exam_type_id ORDER BY Total DESC) [Rank],
+                                 COUNT(1) OVER (PARTITION BY exam_type_id)                     RankOutOf
+                          FROM t
+                      )
+                      SELECT r.exam_type_id ExamTypeId, et.exam_type_name ExamTypeName,
+                             r.Total, r.MaxTotal, r.SubjectCount, r.AbsentSubjects, r.[Rank], r.RankOutOf
+                      FROM r
+                      JOIN exam_types et ON et.exam_type_id = r.exam_type_id
+                      WHERE r.student_id = @rowId
+                      ORDER BY ISNULL(et.display_order, 9999), et.exam_type_id",
+                    new { rowId, schoolId }).AsList();
+
+                o.Receipts = conn.Query<StudentReceiptSummaryDto>(
+                    @"SELECT fr.receipt_id ReceiptId, fr.receipt_no ReceiptNo,
+                             fr.payment_date PaymentDate, fr.total_amount TotalAmount,
+                             pm.mode_name PaymentMode, fr.status Status,
+                             ay.academic_year AcademicYear, fr.created_by CreatedBy
+                      FROM fee_receipts fr
+                      LEFT JOIN payment_modes  pm ON pm.payment_mode_id  = fr.payment_mode_id
+                      LEFT JOIN academic_years ay ON ay.academic_year_id = fr.academic_year_id
+                      WHERE fr.school_id = @schoolId
+                        AND (fr.student_id IN @allIds
+                             OR (@uniqueId IS NOT NULL AND fr.student_unique_id = @uniqueId))
+                      ORDER BY fr.payment_date DESC, fr.receipt_id DESC",
+                    new { allIds, uniqueId, schoolId }).AsList();
+
+                o.Sms = conn.Query<StudentSmsDto>(
+                    @"SELECT TOP 50 sent_at SentAt, sms_type SmsType, mobile Mobile,
+                             message Message, status Status, sent_by SentBy
+                      FROM sms_logs
+                      WHERE school_id = @schoolId AND student_id IN @allIds
+                      ORDER BY sent_at DESC",
+                    new { allIds, schoolId }).AsList();
+            }
+
+            // Mobile app: a parent_children link (master DB) for any of this student's rows
+            using (var conn = _db.GetMasterConnection())
+            {
+                var uid = o.StudentUniqueId;
+                o.AppLinkedOn = conn.QueryFirstOrDefault<System.DateTime?>(
+                    @"SELECT MIN(linked_at) FROM parent_children
+                      WHERE group_id = @groupId AND school_id = @schoolId AND is_active = 1
+                        AND (student_id IN @allIds OR (@uid IS NOT NULL AND student_unique_id = @uid))",
+                    new { groupId, schoolId, allIds, uid });
+                o.HasMobileApp = o.AppLinkedOn.HasValue;
+            }
+            return o;
+        }
+
+        // Same filter as ReportsRepository: drop marks of a class's grade-only subjects.
+        private const string ExcludeGradeOnly =
+            @" AND NOT EXISTS (SELECT 1 FROM class_subjects gcs
+                               JOIN students gs ON gs.student_id = sm.student_id
+                               WHERE gcs.school_id = sm.school_id
+                                 AND gcs.academic_year_id = sm.academic_year_id
+                                 AND gcs.class_id = gs.class_id
+                                 AND gcs.subject_id = sm.subject_id
+                                 AND gcs.grade_only = 1 AND gcs.status = 'Active')";
+
         // ── Create ────────────────────────────────────────────────────────
 
         public long Create(string tenantDbName, int schoolId, SaveStudentRequest r, string createdBy = null)
@@ -882,6 +1043,88 @@ namespace AscentSchools.Data.Repositories.School
 
             result.Failed = result.Total - result.Imported - result.Updated;
             return result;
+        }
+
+        // ── Date of birth bulk update (AscentSyncTool) ─────────────────────
+        // Narrow repair tool — touches ONLY date_of_birth, nothing else on the row.
+        // Matches student_unique_id + academic year first (stable across
+        // promotions), falling back to admission_no + academic year.
+        public DobUpdateResult BulkUpdateDateOfBirth(string tenantDbName, int schoolId, DobUpdateRequest request)
+        {
+            var result = new DobUpdateResult { Total = request.Rows.Count };
+
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+            {
+                var years = conn.Query<BulkLookup>(
+                    "SELECT academic_year_id AS Id, academic_year AS Name FROM academic_years WHERE school_id = @schoolId",
+                    new { schoolId });
+                var yearMap = new System.Collections.Generic.Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
+                foreach (var y in years) yearMap[y.Name] = y.Id;
+
+                var rowNum = 0;
+                foreach (var row in request.Rows)
+                {
+                    rowNum++;
+                    try
+                    {
+                        // A blank legacy DOB means there's nothing to copy — never null out an
+                        // existing value just because the source row happens to be empty.
+                        if (!row.DateOfBirth.HasValue)
+                        { result.NoLegacyDob++; continue; }
+
+                        if (string.IsNullOrWhiteSpace(row.AcademicYear) || !yearMap.TryGetValue(row.AcademicYear.Trim(), out var academicYearId))
+                        {
+                            AddDobError(result, rowNum, row.AdmissionNo, $"Academic year '{row.AcademicYear}' not found");
+                            result.Failed++;
+                            continue;
+                        }
+
+                        long? existingId = null;
+                        if (row.StudentUniqueId.HasValue)
+                            existingId = conn.ExecuteScalar<long?>(
+                                @"SELECT TOP 1 student_id FROM students
+                                  WHERE student_unique_id = @uniqueId AND academic_year_id = @academicYearId AND school_id = @schoolId
+                                  ORDER BY student_id",
+                                new { uniqueId = row.StudentUniqueId.Value, academicYearId, schoolId });
+
+                        if (!existingId.HasValue && !string.IsNullOrWhiteSpace(row.AdmissionNo))
+                            existingId = conn.ExecuteScalar<long?>(
+                                @"SELECT TOP 1 student_id FROM students
+                                  WHERE admission_no = @admNo AND academic_year_id = @academicYearId AND school_id = @schoolId
+                                  ORDER BY student_id",
+                                new { admNo = row.AdmissionNo.Trim(), academicYearId, schoolId });
+
+                        if (!existingId.HasValue)
+                        { result.NotFound++; continue; }
+
+                        var currentDob = conn.ExecuteScalar<System.DateTime?>(
+                            "SELECT date_of_birth FROM students WHERE student_id = @existingId AND school_id = @schoolId",
+                            new { existingId = existingId.Value, schoolId });
+
+                        if (currentDob.HasValue && currentDob.Value.Date == row.DateOfBirth.Value.Date)
+                        { result.Unchanged++; continue; }
+
+                        conn.Execute(
+                            "UPDATE students SET date_of_birth = @dob WHERE student_id = @existingId AND school_id = @schoolId",
+                            new { dob = row.DateOfBirth.Value, existingId = existingId.Value, schoolId });
+                        result.Updated++;
+                    }
+                    catch (System.Exception ex)
+                    {
+                        var reason = ex;
+                        while (reason.InnerException != null) reason = reason.InnerException;
+                        AddDobError(result, rowNum, row.AdmissionNo, reason.Message);
+                        result.Failed++;
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        private static void AddDobError(DobUpdateResult result, int row, string admNo, string reason)
+        {
+            result.Errors.Add(new BulkRowError { Row = row, AdmissionNo = admNo, Reason = reason });
         }
 
         // ── Block / Unblock ───────────────────────────────────────────────

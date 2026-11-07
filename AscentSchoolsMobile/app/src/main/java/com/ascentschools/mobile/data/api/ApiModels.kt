@@ -121,7 +121,12 @@ data class TeacherCreateAnnouncementRequest(
     val classId     : Int,
     val sectionId   : Int?,   // null = whole class
     val title       : String,
-    val description : String?
+    val description : String?,
+    val wholeSchool : Boolean = false   // true = whole school (classId/sectionId ignored)
+)
+
+data class TeacherAnnouncementOptionsDto(
+    val canPostSchoolWide: Boolean = false   // Principal only (server re-checks on post)
 )
 
 // ── Marks (teacher, one subject at a time) ──────────────────────────────────
@@ -472,14 +477,20 @@ data class MobileOrderResponse(
     val keyId           : String,
     val amountInPaise   : Long,
     val currency        : String,
-    val gatewayName     : String = "Razorpay"
+    val gatewayName     : String = "Razorpay",
+    val amount          : Double = 0.0,     // rupees
+    val accessKey       : String? = null,   // Easebuzz only — passed to PWECheckoutActivity
+    val environment     : String? = null    // Easebuzz only — "test" | "prod"
 )
 
+// Razorpay fills paymentId/orderId/signature; Easebuzz sends gatewayResponse (the SDK's
+// payment_response, flattened). The server re-checks Easebuzz itself, so the map is a trigger.
 data class MobileVerifyRequest(
-    val gatewayOrderId : Int,
-    val paymentId      : String,
-    val orderId        : String,
-    val signature      : String
+    val gatewayOrderId  : Int,
+    val paymentId       : String? = null,
+    val orderId         : String? = null,
+    val signature       : String? = null,
+    val gatewayResponse : Map<String, String>? = null
 )
 
 data class MobilePaymentResultDto(

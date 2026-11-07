@@ -55,6 +55,22 @@ namespace AscentSchools.API.Controllers.School
             return Ok<object>(null, "Concession cancelled.");
         }
 
+        // POST school/fees/concessions/legacy-import  (sync tool — SAS_ConcessionDet)
+        [HttpPost, Route("legacy-import")]
+        public System.Net.Http.HttpResponseMessage ImportLegacyConcessions(
+            [FromBody] LegacyConcessionImportRequest request)
+        {
+            if (request?.Rows == null || request.Rows.Count == 0)
+                return BadRequest("No rows provided.");
+            if (request.Rows.Count > 2000)
+                return BadRequest("Maximum 2000 rows per call.");
+
+            var result = _repo.ImportLegacyConcessions(
+                Tenant.TenantDbName, Tenant.SchoolId, "synctool", request.Rows);
+            return Ok(result,
+                $"Inserted {result.Imported}, updated {result.Updated}, unchanged {result.Skipped}, failed {result.Failed}.");
+        }
+
         // POST school/fees/concessions/bulk
         [HttpPost, Route("bulk")]
         public System.Net.Http.HttpResponseMessage BulkSaveConcessions(

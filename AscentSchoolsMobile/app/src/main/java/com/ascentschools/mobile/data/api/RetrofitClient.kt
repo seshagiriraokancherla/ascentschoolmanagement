@@ -253,6 +253,9 @@ object RetrofitClient {
                 // Identifies the Android app to the server (e.g. receipt "Collected by").
                 // The parent web portal sends no such header and defaults to "Parent Portal".
                 builder.header("X-Client-App", "mobile")
+                // Checkouts this build can open (MainActivity). The server refuses an order for
+                // a gateway the app doesn't list — older APKs (Razorpay-only) get "please update".
+                builder.header("X-Client-Gateways", "razorpay,easebuzz")
                 chain.proceed(builder.build())
             }
             .addInterceptor(loggingInterceptor)

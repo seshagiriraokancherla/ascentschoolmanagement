@@ -23,16 +23,22 @@ export default function PaymentSuccessPage() {
     )
   }
 
+  // One row per term / month instead of one per fee head: "Term 1 Fee — 100", showing
+  // only the amount paid (net of concession). Transport / hostel lines keep their own
+  // row per term. A line with no term or month keeps its fee head name.
+  const rows = []
+  for (const it of receipt.items || []) {
+    const kind  = it.routeName ? ' Transport' : it.hostelName ? ' Hostel' : ''
+    const term  = (it.termName || '').trim()
+    const label = term ? `${term}${kind} Fee` : (it.feeTypeName || it.routeName || it.hostelName || 'Fee')
+    const row   = rows.find(r => r.label === label)
+    if (row) row.amount += Number(it.netAmount || 0)
+    else rows.push({ label, amount: Number(it.netAmount || 0) })
+  }
+
   const itemCols = [
-    {
-      title: 'Description',
-      key: 'desc',
-      render: (_, r) => r.feeTypeName || r.routeName || r.hostelName || '—',
-    },
-    { title: 'Term / Period', dataIndex: 'termName', key: 'term', render: (v) => v || '—' },
-    { title: 'Amount',        dataIndex: 'amount',   key: 'amt',  align: 'right', render: fmt },
-    { title: 'Concession',    dataIndex: 'concessionAmount', key: 'conc', align: 'right', render: (v) => v > 0 ? fmt(v) : '—' },
-    { title: 'Net',           dataIndex: 'netAmount', key: 'net', align: 'right', render: (v) => <Text strong>{fmt(v)}</Text> },
+    { title: 'Description', dataIndex: 'label',  key: 'desc' },
+    { title: 'Amount',      dataIndex: 'amount', key: 'amt', align: 'right', render: (v) => <Text strong>{fmt(v)}</Text> },
   ]
 
   return (
@@ -72,14 +78,14 @@ export default function PaymentSuccessPage() {
         <Divider />
 
         <Table
-          dataSource={receipt.items || []}
+          dataSource={rows}
           columns={itemCols}
-          rowKey="itemId"
+          rowKey="label"
           size="small"
           pagination={false}
           summary={() => (
             <Table.Summary.Row>
-              <Table.Summary.Cell colSpan={4} align="right">
+              <Table.Summary.Cell align="right">
                 <Text strong>Total Paid</Text>
               </Table.Summary.Cell>
               <Table.Summary.Cell align="right">

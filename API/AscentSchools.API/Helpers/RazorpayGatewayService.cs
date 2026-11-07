@@ -1,3 +1,4 @@
+using AscentSchools.Core.DTOs.School.Fee;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
@@ -24,30 +25,25 @@ namespace AscentSchools.API.Helpers
 
         public string GatewayName => "Razorpay";
 
-        public ExternalOrderResult CreateExternalOrder(
-            string keyId,
-            string keySecret,
-            decimal amount,
-            string receiptRef,
-            Dictionary<string, string> notes = null)
+        public ExternalOrderResult CreateExternalOrder(GatewayCredentials creds, GatewayOrderContext ctx)
         {
             try
             {
-                var amountInPaise = (long)(amount * 100);
+                var amountInPaise = (long)(ctx.Amount * 100);
 
                 var payload = new
                 {
                     amount          = amountInPaise,
                     currency        = "INR",
-                    receipt         = receiptRef,
+                    receipt         = ctx.ReceiptRef,
                     payment_capture = 1,
-                    notes           = notes ?? new Dictionary<string, string>()
+                    notes           = ctx.Notes ?? new Dictionary<string, string>()
                 };
 
                 var json    = JsonConvert.SerializeObject(payload);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{keyId}:{keySecret}"));
+                var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{creds.KeyId}:{creds.KeySecret}"));
                 var httpRequest = new HttpRequestMessage(HttpMethod.Post, "orders")
                 {
                     Content = content
@@ -75,11 +71,11 @@ namespace AscentSchools.API.Helpers
             }
         }
 
-        public OrderPaymentStatus FetchOrderPayment(string keyId, string keySecret, string externalOrderId)
+        public OrderPaymentStatus FetchOrderPayment(GatewayCredentials creds, string externalOrderId)
         {
             try
             {
-                var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{keyId}:{keySecret}"));
+                var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{creds.KeyId}:{creds.KeySecret}"));
                 var httpRequest = new HttpRequestMessage(HttpMethod.Get, $"orders/{externalOrderId}/payments");
                 httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", credentials);
 
@@ -107,6 +103,7 @@ namespace AscentSchools.API.Helpers
                 {
                     Success        = true,
                     Found          = true,
+                    Captured       = (string)chosen["status"] == "captured",
                     PaymentId      = chosen["id"]?.ToString(),
                     Status         = chosen["status"]?.ToString(),
                     AmountInRupees = amountPaise / 100m,
@@ -119,12 +116,23 @@ namespace AscentSchools.API.Helpers
             }
         }
 
-        public bool VerifyPaymentSignature(string orderId, string paymentId, string signature, string keySecret)
+        public PaymentVerification VerifyPayment(
+            GatewayCredentials creds, string externalOrderId, decimal expectedAmount,
+            string paymentId, string signature, IDictionary<string, string> gatewayResponse)
         {
+            if (string.IsNullOrWhiteSpace(paymentId) || string.IsNullOrWhiteSpace(signature))
+                return new PaymentVerification { Verified = false, Definitive = false, Error = "PaymentId and Signature are required." };
+
             // Razorpay signature: HMAC-SHA256("{orderId}|{paymentId}", keySecret)
-            var message  = $"{orderId}|{paymentId}";
-            var expected = ComputeHmacSha256(message, keySecret);
-            return string.Equals(expected, signature, StringComparison.OrdinalIgnoreCase);
+            var expected = ComputeHmacSha256($"{externalOrderId}|{paymentId}", creds.KeySecret);
+            var ok       = string.Equals(expected, signature, StringComparison.OrdinalIgnoreCase);
+            return new PaymentVerification
+            {
+                Verified   = ok,
+                Definitive = !ok,
+                PaymentId  = paymentId,
+                Error      = ok ? null : "Payment signature verification failed.",
+            };
         }
 
         public bool VerifyWebhookSignature(string payload, string signature, string webhookSecret)

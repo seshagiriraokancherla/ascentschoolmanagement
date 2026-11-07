@@ -340,7 +340,7 @@ GO
 -- ============================================================
 CREATE TABLE fee_types (
     fee_type_id         INT             NOT NULL IDENTITY(1,1),
-    fee_type_name       VARCHAR(25)     NOT NULL,
+    fee_type_name       VARCHAR(100)    NOT NULL,
     academic_year_id    INT             NULL,
     term_name           VARCHAR(25)     NULL,
     sequence_no         INT             NULL,
@@ -454,7 +454,7 @@ CREATE TABLE fee_structures (
     fee_category_id     INT             NULL,
     class_id            INT             NULL,
     fee_type_id         INT             NULL,
-    fee_type_name       VARCHAR(25)     NULL,   -- Nullable; UI sends null
+    fee_type_name       VARCHAR(100)    NULL,   -- Nullable; UI sends null
     term_id             INT             NULL,   -- set when payment_type = 'Term'
     fee_period_id       INT             NULL,   -- set when payment_type = 'Monthly'
     payment_type        VARCHAR(10)     NULL,   -- Term / Monthly
@@ -685,7 +685,7 @@ CREATE TABLE students (
     biometric_id                VARCHAR(5)      NULL,   -- Biometric device enrollment ID
     mother_tongue               VARCHAR(25)     NULL,
     first_language              VARCHAR(25)     NULL,
-    second_language             VARCHAR(10)     NULL,
+    second_language             VARCHAR(25)     NULL,  -- was VARCHAR(10) — too narrow for a subject name, caused a save error
     third_language              VARCHAR(25)     NULL,
     udise_no                    VARCHAR(35)     NULL,   -- Govt UDISE number
     spare_field_1               VARCHAR(50)     NULL,   -- Reserved for future use
@@ -797,14 +797,15 @@ GO
 -- ============================================================
 CREATE TABLE gateway_configs (
     gateway_config_id  INT             NOT NULL IDENTITY(1,1),
-    gateway_name       VARCHAR(50)     NOT NULL,    -- 'Razorpay' | 'Cashfree' | 'PayU'
+    gateway_name       VARCHAR(50)     NOT NULL,    -- 'Razorpay' | 'Easebuzz'
     display_name       VARCHAR(100)    NOT NULL,
-    key_id             VARCHAR(200)    NOT NULL,
-    key_secret         VARCHAR(500)    NOT NULL,    -- never expose in API responses
-    webhook_secret     VARCHAR(500)    NULL,
+    key_id             VARCHAR(200)    NOT NULL,    -- Razorpay key_id / Easebuzz merchant Key
+    key_secret         VARCHAR(500)    NOT NULL,    -- Razorpay key_secret / Easebuzz Salt — never expose in API responses
+    webhook_secret     VARCHAR(500)    NULL,        -- Razorpay only
     is_active          BIT             NOT NULL DEFAULT 1,
     school_id          INT             NULL,        -- NULL = group-wide
     created_at         DATETIME        NOT NULL DEFAULT GETUTCDATE(),
+    environment        VARCHAR(10)     NULL,        -- 'test' = sandbox, NULL = live (Easebuzz; Phase 146)
     CONSTRAINT PK_gateway_configs PRIMARY KEY (gateway_config_id)
 );
 GO
@@ -996,7 +997,7 @@ GO
 -- ============================================================
 CREATE TABLE announcements (
     announcement_id INT             NOT NULL IDENTITY(1,1),
-    title           VARCHAR(200)    NOT NULL,
+    title           NVARCHAR(200)   NOT NULL,     -- Unicode — supports local-language (Telugu/Hindi) titles
     description     NVARCHAR(MAX)   NULL,
     scope           VARCHAR(10)     NOT NULL DEFAULT 'School',
     class_id        INT             NULL,
@@ -1622,6 +1623,8 @@ CREATE TABLE class_subjects (
     subject_id        INT          NOT NULL,
     display_order     INT          NULL,        -- order on the marks grid / report card
     is_optional       BIT          NOT NULL DEFAULT 0,   -- elective vs core
+    grade_only        BIT          NOT NULL DEFAULT 0,   -- marks card: grade only (separate table), excluded from total / rank / toppers / failed
+    language_slot     TINYINT      NULL,        -- 1/2/3 = student's first/second/third language; marks card prints "Second Language (Hindi)"
     status            VARCHAR(10)  NOT NULL DEFAULT 'Active',
     school_id         INT          NOT NULL,
     created_by        VARCHAR(100) NULL,
@@ -1688,4 +1691,26 @@ CREATE TABLE marks_grade_master_bands (
     CONSTRAINT CK_mgm_bands_range CHECK (min_marks >= 0 AND min_marks <= max_marks)
 );
 CREATE INDEX IX_mgm_bands_scale ON marks_grade_master_bands (scale_id);
+GO
+
+
+-- ============================================================
+-- 56. fee_receipt_date_changes
+--     Audit log of receipt payment-date corrections (Fees → Receipts → Date).
+--     One row per change: old/new date, reason, who, when (IST).
+-- ============================================================
+CREATE TABLE fee_receipt_date_changes (
+    change_id           INT           NOT NULL IDENTITY(1,1),
+    receipt_id          INT           NOT NULL,
+    school_id           INT           NOT NULL,
+    old_payment_date    DATE          NOT NULL,
+    new_payment_date    DATE          NOT NULL,
+    reason              VARCHAR(200)  NOT NULL,
+    changed_by_user_id  INT           NULL,          -- users.user_id (NULL for the VB6 API-key integration)
+    changed_by_name     VARCHAR(100)  NOT NULL,      -- display snapshot, survives a user leaving
+    changed_at          DATETIME      NOT NULL DEFAULT CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'India Standard Time' AS DATETIME),  -- IST
+    CONSTRAINT PK_fee_receipt_date_changes PRIMARY KEY (change_id),
+    CONSTRAINT FK_frdc_receipts            FOREIGN KEY (receipt_id) REFERENCES fee_receipts(receipt_id)
+);
+CREATE INDEX IX_frdc_receipt ON fee_receipt_date_changes (receipt_id);
 GO

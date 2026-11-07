@@ -97,6 +97,26 @@ namespace AscentSyncTool.Models
         public string Reason      { get; set; }
     }
 
+    // ── Legacy concession import (POST /school/fees/concessions/legacy-import) ──
+    public class LegacyConcessionRow
+    {
+        public int     RowNumber      { get; set; }
+        public string  AdmissionNo    { get; set; }
+        public string  AcademicYear   { get; set; }
+        public string  FeeTypeName    { get; set; }
+        public string  RouteNames     { get; set; }
+        public string  TermName       { get; set; }
+        public decimal Amount         { get; set; }
+        public string  ConcessionType { get; set; }
+        public string  LegacyNo       { get; set; }
+        public string  Remarks        { get; set; }
+    }
+
+    public class LegacyConcessionImportRequest
+    {
+        public List<LegacyConcessionRow> Rows { get; set; }
+    }
+
     public class BulkImportResult
     {
         public int                Total    { get; set; }
@@ -105,6 +125,31 @@ namespace AscentSyncTool.Models
         public int                Skipped  { get; set; }
         public int                Failed   { get; set; }
         public List<BulkRowError> Errors   { get; set; } = new List<BulkRowError>();
+    }
+
+    // ── Date of birth bulk update (POST /school/students/dob-update) ───────────
+    public class DobUpdateRow
+    {
+        public int?      StudentUniqueId { get; set; }
+        public string    AdmissionNo     { get; set; }
+        public string    AcademicYear    { get; set; }
+        public DateTime? DateOfBirth     { get; set; }
+    }
+
+    public class DobUpdateRequest
+    {
+        public List<DobUpdateRow> Rows { get; set; } = new List<DobUpdateRow>();
+    }
+
+    public class DobUpdateResult
+    {
+        public int                Total       { get; set; }
+        public int                Updated     { get; set; }
+        public int                Unchanged   { get; set; }
+        public int                NotFound    { get; set; }
+        public int                NoLegacyDob { get; set; }
+        public int                Failed      { get; set; }
+        public List<BulkRowError> Errors      { get; set; } = new List<BulkRowError>();
     }
 
     // ── Receipts list (GET /school/fees/receipts) ──────────────────────────────

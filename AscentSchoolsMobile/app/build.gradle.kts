@@ -27,8 +27,8 @@ android {
         applicationId = "in.educare.mobile"   // overridden by each flavor
         minSdk        = 24
         targetSdk     = 36
-        versionCode   = 50
-        versionName   = "5.0"
+        versionCode   = 52
+        versionName   = "5.2"
     }
 
     // ── White-label school flavors ────────────────────────────────────────────
@@ -118,6 +118,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // java.time (calendar, exam timetable, birthdays) needs API 26; desugaring makes it work on minSdk 24.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -131,6 +133,8 @@ android {
 }
 
 dependencies {
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime)
     implementation(libs.androidx.lifecycle.viewmodel)
@@ -155,17 +159,21 @@ dependencies {
     implementation(libs.gson)
 
     // Razorpay checkout SDK
-    implementation("com.razorpay:checkout:1.6.40")
+    implementation(libs.razorpay.checkout)
+
+    // Easebuzz checkout SDK-V2 (PWECheckoutActivity) — used when the school's gateway is Easebuzz.
+    // Pure JVM (no .so); declares its own UPI-app <queries>. NOT the old GitHub V1 .aar.
+    implementation(libs.easebuzz.android)
 
     // Coil — image loading for Compose (AsyncImage)
-    implementation("io.coil-kt:coil-compose:2.6.0")
+    implementation(libs.coil.compose)
 
     // Google Play In-App Updates — replaces the old app_config versionCode gate.
     // Asks Play directly whether a newer build is available to this device.
-    implementation("com.google.android.play:app-update:2.1.0")
-    implementation("com.google.android.play:app-update-ktx:2.1.0")
+    implementation(libs.play.app.update)
+    implementation(libs.play.app.update.ktx)
 
     // Firebase Cloud Messaging — push notifications (Feature 3).
-    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
-    implementation("com.google.firebase:firebase-messaging")
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 }

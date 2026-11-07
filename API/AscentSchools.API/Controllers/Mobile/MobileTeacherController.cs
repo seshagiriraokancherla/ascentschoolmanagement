@@ -201,24 +201,35 @@ namespace AscentSchools.API.Controllers.Mobile
             return Ok(list);
         }
 
+        // ── GET /mobile/teacher/announcements/options ───────────────────────
+        // What the Add Announcement sheet may offer this login. Read live from the
+        // role assignment (not the token), so a role change applies without re-login.
+
+        [HttpGet, Route("announcements/options")]
+        public HttpResponseMessage GetAnnouncementOptions() =>
+            Ok(new { canPostSchoolWide = IsPrincipal() });
+
         // ── POST /mobile/teacher/announcements ───────────────────────────────
-        // Teacher posts to their class (optionally a single section).
+        // Teacher posts to their class (optionally a single section), or — with
+        // WholeSchool — to the entire school. Whole school is Principal-only.
 
         [HttpPost, Route("announcements")]
         public HttpResponseMessage CreateAnnouncement([FromBody] TeacherCreateAnnouncementRequest request)
         {
             if (request == null || string.IsNullOrWhiteSpace(request.Title))
                 return Fail(HttpStatusCode.BadRequest, "Title is required.");
-            if (request.ClassId <= 0)
+            if (!request.WholeSchool && request.ClassId <= 0)
                 return Fail(HttpStatusCode.BadRequest, "classId is required.");
+            if (request.WholeSchool && !IsPrincipal())
+                return Fail(HttpStatusCode.Forbidden, "Only the principal can post to the whole school.");
 
             var saveReq = new SaveAnnouncementRequest
             {
                 Title       = request.Title.Trim(),
                 Description = request.Description?.Trim(),
-                Scope       = "Class",
-                ClassId     = request.ClassId,
-                SectionId   = request.SectionId > 0 ? request.SectionId : (int?)null,
+                Scope       = request.WholeSchool ? "School" : "Class",
+                ClassId     = request.WholeSchool ? (int?)null : request.ClassId,
+                SectionId   = !request.WholeSchool && request.SectionId > 0 ? request.SectionId : (int?)null,
                 IsPinned    = false,
             };
 
@@ -345,6 +356,19 @@ namespace AscentSchools.API.Controllers.Mobile
 
         // ── Helpers ───────────────────────────────────────────────────────────
 
+        // True when this login holds an Active role named "Principal" at its branch.
+        private bool IsPrincipal()
+        {
+            using (var conn = _db.GetTenantConnection(Teacher.DbName))
+                return conn.ExecuteScalar<int>(
+                    @"SELECT COUNT(1)
+                      FROM user_roles ur
+                      JOIN roles r ON r.role_id = ur.role_id
+                      WHERE ur.user_id = @userId AND ur.school_id = @schoolId
+                        AND r.role_name = 'Principal' AND r.status = 'Active'",
+                    new { userId = Teacher.UserId, schoolId = Teacher.SchoolId }) > 0;
+        }
+
         private HttpResponseMessage Ok<T>(T data, string message = null) =>
             Request.CreateResponse(HttpStatusCode.OK, ApiResponse<T>.Ok(data, message));
 
@@ -394,6 +418,7 @@ namespace AscentSchools.API.Controllers.Mobile
     {
         public int    ClassId     { get; set; }
         public int?   SectionId   { get; set; }   // optional; NULL/0 = whole class
+        public bool   WholeSchool { get; set; }   // true = scope 'School' (ClassId/SectionId ignored)
         public string Title       { get; set; }
         public string Description { get; set; }
     }

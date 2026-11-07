@@ -158,6 +158,36 @@ namespace AscentSchools.Core.DTOs.School.Students
         public List<BulkReceiptRow> Rows { get; set; } = new List<BulkReceiptRow>();
     }
 
+    // ── Date of birth bulk update (AscentSyncTool) ────────────────────────────
+    // Narrow, single-column repair tool — matches an existing student and
+    // overwrites ONLY date_of_birth, never any other field. Matches
+    // student_unique_id + academic year first (stable across promotions),
+    // falling back to admission_no + academic year when no unique id is given.
+
+    public class DobUpdateRow
+    {
+        public int?             StudentUniqueId { get; set; }
+        public string           AdmissionNo     { get; set; }
+        public string           AcademicYear    { get; set; }  // e.g. "2026-2027"
+        public System.DateTime? DateOfBirth     { get; set; }
+    }
+
+    public class DobUpdateRequest
+    {
+        public List<DobUpdateRow> Rows { get; set; } = new List<DobUpdateRow>();
+    }
+
+    public class DobUpdateResult
+    {
+        public int                Total       { get; set; }
+        public int                Updated     { get; set; }  // written (new or differing value)
+        public int                Unchanged   { get; set; }  // new-db value already matches — not written
+        public int                NotFound    { get; set; }  // no matching student for that year
+        public int                NoLegacyDob { get; set; }  // legacy row had a blank DOB — nothing to copy
+        public int                Failed      { get; set; }
+        public List<BulkRowError> Errors      { get; set; } = new List<BulkRowError>();
+    }
+
     // ── Shared result types ───────────────────────────────────────────────────
 
     public class BulkRowError

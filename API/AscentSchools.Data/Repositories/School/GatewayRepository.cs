@@ -23,12 +23,48 @@ namespace AscentSchools.Data.Repositories.School
                              gateway_name      GatewayName,
                              display_name      DisplayName,
                              key_id            KeyId,
-                             is_active         IsActive
+                             is_active         IsActive,
+                             environment       Environment
                       FROM   gateway_configs
                       WHERE  is_active = 1
                         AND  (school_id = @schoolId OR school_id IS NULL)
-                      ORDER BY school_id DESC",    
+                      ORDER BY school_id DESC",
                     new { schoolId });
+        }
+
+        /// <summary>
+        /// Active gateway credentials incl. key_secret — for server-side gateway calls only.
+        /// Never send to a client.
+        /// </summary>
+        public GatewayCredentials GetCredentials(string tenantDbName, int schoolId)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.QueryFirstOrDefault<GatewayCredentials>(
+                    @"SELECT TOP 1
+                             gateway_name GatewayName,
+                             key_id       KeyId,
+                             key_secret   KeySecret,
+                             environment  Environment
+                      FROM   gateway_configs
+                      WHERE  is_active = 1
+                        AND  (school_id = @schoolId OR school_id IS NULL)
+                      ORDER BY school_id DESC",
+                    new { schoolId });
+        }
+
+        /// <summary>Parent contact details for gateways that require a customer (Easebuzz).</summary>
+        public PaymentCustomerDto GetPaymentCustomer(string tenantDbName, int schoolId, long studentId)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.QueryFirstOrDefault<PaymentCustomerDto>(
+                    @"SELECT student_name  StudentName,
+                             father_name   FatherName,
+                             father_mobile FatherMobile,
+                             mother_mobile MotherMobile,
+                             email         Email
+                      FROM   students
+                      WHERE  student_id = @studentId AND school_id = @schoolId",
+                    new { studentId, schoolId });
         }
 
         /// <summary>Returns config for the settings page (no key_secret; hasWebhookSecret flag only).</summary>
@@ -42,6 +78,7 @@ namespace AscentSchools.Data.Repositories.School
                              display_name      DisplayName,
                              key_id            KeyId,
                              is_active         IsActive,
+                             environment       Environment,
                              CASE WHEN webhook_secret IS NOT NULL AND LEN(webhook_secret) > 0
                                   THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END HasWebhookSecret
                       FROM   gateway_configs
@@ -108,31 +145,38 @@ namespace AscentSchools.Data.Repositories.School
                                                   THEN @KeySecret ELSE key_secret END,
                             webhook_secret = CASE WHEN @WebhookSecret IS NOT NULL AND LEN(@WebhookSecret) > 0
                                                   THEN @WebhookSecret ELSE webhook_secret END,
-                            is_active      = @IsActive
+                            is_active      = @IsActive,
+                            environment    = @Environment
                           WHERE gateway_config_id = @Id",
                         new
                         {
                             r.GatewayName, r.DisplayName, r.KeyId, r.KeySecret, r.WebhookSecret,
-                            IsActive = r.IsActive ?? true,
-                            Id       = existingId.Value
+                            IsActive    = r.IsActive ?? true,
+                            Environment = NormalizeEnvironment(r.Environment),
+                            Id          = existingId.Value
                         });
                 }
                 else
                 {
                     conn.Execute(
                         @"INSERT INTO gateway_configs
-                            (gateway_name, display_name, key_id, key_secret, webhook_secret, is_active, school_id)
+                            (gateway_name, display_name, key_id, key_secret, webhook_secret, is_active, school_id, environment)
                           VALUES
-                            (@GatewayName, @DisplayName, @KeyId, @KeySecret, @WebhookSecret, @IsActive, @SchoolId)",
+                            (@GatewayName, @DisplayName, @KeyId, @KeySecret, @WebhookSecret, @IsActive, @SchoolId, @Environment)",
                         new
                         {
                             r.GatewayName, r.DisplayName, r.KeyId, r.KeySecret, r.WebhookSecret,
-                            IsActive = r.IsActive ?? true,
-                            SchoolId = (int?)schoolId
+                            IsActive    = r.IsActive ?? true,
+                            SchoolId    = (int?)schoolId,
+                            Environment = NormalizeEnvironment(r.Environment)
                         });
                 }
             }
         }
+
+        // Only "test" is stored as-is; anything else means live (NULL).
+        private static string NormalizeEnvironment(string env) =>
+            string.Equals(env?.Trim(), "test", StringComparison.OrdinalIgnoreCase) ? "test" : null;
 
         // ── Order lifecycle ───────────────────────────────────────────────────
 
@@ -200,11 +244,36 @@ namespace AscentSchools.Data.Repositories.School
                     new { paymentId, receiptId, gatewayOrderId });
         }
 
-        public void MarkOrderFailed(string tenantDbName, int gatewayOrderId)
+        /// <summary>
+        /// Atomically claims a Pending order for receipt creation (Pending → Processing).
+        /// The client callback, the webhook and the return URL can all arrive within the same
+        /// second — only the caller that gets true may create the receipt.
+        /// </summary>
+        public bool TryClaimOrder(string tenantDbName, int gatewayOrderId)
+        {
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                return conn.Execute(
+                    @"UPDATE payment_gateway_orders SET status = 'Processing'
+                      WHERE  gateway_order_id = @gatewayOrderId AND status = 'Pending'",
+                    new { gatewayOrderId }) == 1;
+        }
+
+        /// <summary>Returns a claimed order to Pending when receipt creation failed.</summary>
+        public void ReleaseClaim(string tenantDbName, int gatewayOrderId)
         {
             using (var conn = _db.GetTenantConnection(tenantDbName))
                 conn.Execute(
-                    "UPDATE payment_gateway_orders SET status = 'Failed' WHERE gateway_order_id = @gatewayOrderId",
+                    @"UPDATE payment_gateway_orders SET status = 'Pending'
+                      WHERE  gateway_order_id = @gatewayOrderId AND status = 'Processing'",
+                    new { gatewayOrderId });
+        }
+
+        public void MarkOrderFailed(string tenantDbName, int gatewayOrderId)
+        {
+            // Never overwrite an order that is Paid or being processed.
+            using (var conn = _db.GetTenantConnection(tenantDbName))
+                conn.Execute(
+                    "UPDATE payment_gateway_orders SET status = 'Failed' WHERE gateway_order_id = @gatewayOrderId AND status = 'Pending'",
                     new { gatewayOrderId });
         }
 
@@ -230,7 +299,7 @@ namespace AscentSchools.Data.Repositories.School
                              s.admission_no      AdmissionNo
                       FROM   payment_gateway_orders o
                       LEFT  JOIN students s ON s.student_id = o.student_id
-                      WHERE  o.status = 'Pending'
+                      WHERE  o.status IN ('Pending', 'Processing')
                         AND  o.school_id = @schoolId
                         AND  (@createdAfter  IS NULL OR o.created_at >= @createdAfter)
                         AND  (@createdBefore IS NULL OR o.created_at <= @createdBefore)

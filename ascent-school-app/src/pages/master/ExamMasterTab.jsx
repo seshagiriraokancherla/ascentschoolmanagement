@@ -68,9 +68,31 @@ export default function ExamMasterTab() {
 
   const classOptions     = classes.map((c)   => ({ value: c.classId, label: c.className }))
   const examTypeOptions  = examTypes.map((e)  => ({ value: e.examTypeId, label: e.examTypeName }))
-  const gradeTypeOptions = gradeTypes.map((g) => ({
-    value: g.id,
-    label: g.grade ? `${g.gradeName} (${g.grade})` : g.gradeName,
+  // grade_types holds one row per BAND; rows sharing a grade_name form one scheme, and the
+  // marks card resolves an exam's grade_type_id by that name. So the dropdown lists each
+  // scheme once, valued by a representative row id (lowest Active id, else lowest id).
+  const isActive = (g) => !g.status || g.status === 'Active' || g.status === 'Y'
+  const gradeSchemes = Object.values(gradeTypes.reduce((acc, g) => {
+    const name = (g.gradeName || '').trim()
+    if (!name) return acc
+    const key = name.toLowerCase()
+    const s = acc[key] || (acc[key] = { name, rows: [] })
+    s.rows.push(g)
+    return acc
+  }, {})).map((s) => {
+    const active = s.rows.filter(isActive)
+    const pool = active.length ? active : s.rows
+    return {
+      name: s.name,
+      repId: Math.min(...pool.map((g) => g.id)),
+      ids: s.rows.map((g) => g.id),
+      bandCount: active.length,
+    }
+  }).sort((a, b) => a.name.localeCompare(b.name))
+  const gradeRepIdById = Object.fromEntries(gradeSchemes.flatMap((s) => s.ids.map((id) => [id, s.repId])))
+  const gradeTypeOptions = gradeSchemes.map((s) => ({
+    value: s.repId,
+    label: `${s.name} (${s.bandCount ? `${s.bandCount} band${s.bandCount === 1 ? '' : 's'}` : 'no active bands'})`,
   }))
   const scaleOptions = scales.map((s) => ({
     value: s.id,
@@ -165,7 +187,8 @@ export default function ExamMasterTab() {
       subMaxMarks:     record.subMaxMarks,
       subjectMinMarks: record.subjectMinMarks,
       activityMaxMarks: record.activityMaxMarks,
-      gradeTypeId:     record.gradeTypeId,
+      // A stored id may be any band of its scheme — map it to the scheme's dropdown entry
+      gradeTypeId:     record.gradeTypeId != null ? (gradeRepIdById[record.gradeTypeId] ?? record.gradeTypeId) : null,
       marksGradeMasterId: record.marksGradeMasterId,
       examRemarks:     record.examRemarks,
       status:          record.examStatus || 'Active',
@@ -297,7 +320,6 @@ export default function ExamMasterTab() {
       render: (v) => (v ? dayjs(v).format('DD-MM-YYYY') : '—') },
     { title: 'Time', dataIndex: 'examTime', key: 'examTime', width: 80,
       render: (v) => (v ? dayjs(v, 'HH:mm').format('h:mm A') : '—') },
-    { title: 'Total', dataIndex: 'examTotalMarks', key: 'examTotalMarks', width: 70, render: (v) => v ?? '—' },
     { title: 'Sub Max', dataIndex: 'subMaxMarks', key: 'subMaxMarks', width: 80, render: (v) => v ?? '—' },
     { title: 'Act Max', dataIndex: 'activityMaxMarks', key: 'activityMaxMarks', width: 80, render: (v) => v ?? '—' },
     { title: 'Grade', dataIndex: 'gradeName', key: 'gradeName', render: (v) => v || '—' },
@@ -418,23 +440,18 @@ export default function ExamMasterTab() {
             </Col>
           </Row>
 
+          {/* Exam total / exam min are unused by the app (reference-only legacy fields) — hidden,
+              but kept as hidden items so editing a row preserves any stored value. */}
+          <Form.Item name="examTotalMarks" hidden><InputNumber /></Form.Item>
+          <Form.Item name="examMinMarks" hidden><InputNumber /></Form.Item>
+
           <Row gutter={16}>
-            <Col span={6}>
-              <Form.Item name="examTotalMarks" label="Total Marks">
-                <InputNumber min={0} style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-            <Col span={6}>
-              <Form.Item name="examMinMarks" label="Exam Min Marks">
-                <InputNumber min={0} style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-            <Col span={6}>
+            <Col span={12}>
               <Form.Item name="subMaxMarks" label="Subject Max">
                 <InputNumber min={0} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
-            <Col span={6}>
+            <Col span={12}>
               <Form.Item name="subjectMinMarks" label="Subject Pass">
                 <InputNumber min={0} style={{ width: '100%' }} />
               </Form.Item>
@@ -456,7 +473,7 @@ export default function ExamMasterTab() {
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item name="activityMaxMarks" label="Activity Max"
+              <Form.Item name="activityMaxMarks" label="Internal Marks"
                 extra="Set to enable an activity-marks column for this subject.">
                 <InputNumber min={0} style={{ width: '100%' }} />
               </Form.Item>

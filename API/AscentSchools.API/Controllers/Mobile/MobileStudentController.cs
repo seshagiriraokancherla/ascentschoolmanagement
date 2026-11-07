@@ -247,12 +247,16 @@ namespace AscentSchools.API.Controllers.Mobile
             if (request == null || request.Items == null || request.Items.Count == 0)
                 return Request.CreateResponse(HttpStatusCode.BadRequest, ApiResponse.Fail("At least one fee item is required."));
 
-            var config = _gwRepo.GetActiveConfig(Mobile.DbName, Mobile.SchoolId);
-            if (config == null)
+            var creds = _gwRepo.GetCredentials(Mobile.DbName, Mobile.SchoolId);
+            if (creds == null)
                 return Request.CreateResponse(HttpStatusCode.BadRequest,
                     ApiResponse.Fail("Online payment is not configured for this school."));
 
-            var keySecret = _gwRepo.GetKeySecret(Mobile.DbName, Mobile.SchoolId);
+            // Legacy endpoint (superseded by /mobile/fees, Phase 33) — Razorpay only.
+            if (!string.Equals(creds.GatewayName, "Razorpay", StringComparison.OrdinalIgnoreCase))
+                return Request.CreateResponse(HttpStatusCode.BadRequest,
+                    ApiResponse.Fail("Please update the app to the latest version to pay fees."));
+
             decimal total = request.Items.Sum(i => Math.Max(0, i.Amount - i.ConcessionAmount));
 
             if (total <= 0)
@@ -263,9 +267,13 @@ namespace AscentSchools.API.Controllers.Mobile
                 { "group_id",  Mobile.GroupId.ToString() },
                 { "school_id", Mobile.SchoolId.ToString() },
             };
-            var receiptRef  = $"MOB{Mobile.SchoolId}-{DateTime.UtcNow:yyyyMMddHHmmss}";
-            var gateway     = GatewayServiceFactory.Get(config.GatewayName);
-            var orderResult = gateway.CreateExternalOrder(config.KeyId, keySecret, total, receiptRef, notes);
+            var gateway     = GatewayServiceFactory.Get(creds.GatewayName);
+            var orderResult = gateway.CreateExternalOrder(creds, new GatewayOrderContext
+            {
+                Amount     = total,
+                ReceiptRef = GatewayOrderRefs.NewReceiptRef("MOB", Mobile.SchoolId),
+                Notes      = notes,
+            });
 
             if (!orderResult.Success)
                 return Request.CreateResponse(HttpStatusCode.InternalServerError,
@@ -289,7 +297,7 @@ namespace AscentSchools.API.Controllers.Mobile
 
             var gatewayOrderId = _gwRepo.CreateOrder(
                 Mobile.DbName, Mobile.SchoolId,
-                config.GatewayName, orderResult.ExternalOrderId,
+                creds.GatewayName, orderResult.ExternalOrderId,
                 total, Mobile.StudentId, request.AcademicYearId,
                 request.PaymentModeId, payloadJson, Mobile.DisplayName ?? "Mobile");
 
@@ -297,7 +305,7 @@ namespace AscentSchools.API.Controllers.Mobile
             {
                 GatewayOrderId  = gatewayOrderId,
                 ExternalOrderId = orderResult.ExternalOrderId,
-                KeyId           = config.KeyId,
+                KeyId           = creds.KeyId,
                 AmountInPaise   = (long)(total * 100),
                 Currency        = "INR"
             };
@@ -333,10 +341,11 @@ namespace AscentSchools.API.Controllers.Mobile
             if (order.Status == "Failed")
                 return Request.CreateResponse(HttpStatusCode.BadRequest, ApiResponse.Fail("This payment order was marked as failed."));
 
-            var keySecret = _gwRepo.GetKeySecret(Mobile.DbName, Mobile.SchoolId);
-            var gateway   = GatewayServiceFactory.Get(order.GatewayName);
+            var creds   = _gwRepo.GetCredentials(Mobile.DbName, Mobile.SchoolId);
+            var gateway = GatewayServiceFactory.Get(order.GatewayName);
 
-            if (!gateway.VerifyPaymentSignature(order.ExternalOrderId, request.PaymentId, request.Signature, keySecret))
+            if (creds == null || !gateway.VerifyPayment(creds, order.ExternalOrderId, order.Amount,
+                                     request.PaymentId, request.Signature, null).Verified)
             {
                 _gwRepo.MarkOrderFailed(Mobile.DbName, request.GatewayOrderId);
                 return Request.CreateResponse(HttpStatusCode.BadRequest,

@@ -95,6 +95,42 @@ namespace AscentSyncTool.Mappers
             };
         }
 
+        // ── Update Date of Births: legacy → dob-update row ────────────────────
+        // Legacy concession key → API row. RecommandByNam values are Concession /
+        // Not Applicable / StaffChild; the new app spells the last one "Staff Child".
+        public static LegacyConcessionRow ToConcessionRow(LegacyConcession c, int rowNumber)
+        {
+            var type = (c.ConcessionType ?? "").Trim();
+            if (string.Equals(type, "StaffChild", StringComparison.OrdinalIgnoreCase)) type = "Staff Child";
+            return new LegacyConcessionRow
+            {
+                RowNumber      = rowNumber,
+                AdmissionNo    = c.AdmissionNo,
+                AcademicYear   = c.AcademicYear,
+                FeeTypeName    = c.FeeTypeName,
+                RouteNames     = c.RouteNames,
+                TermName       = c.TermName,
+                Amount         = c.Amount,
+                ConcessionType = type.Length == 0 ? "Concession" : type,
+                LegacyNo       = c.LegacyNo,
+                Remarks        = c.Remarks,
+            };
+        }
+
+        // Native DateTime, not a formatted string — Dapper reads StuDOB with
+        // Kind=Unspecified and Newtonsoft round-trips it with no zone marker, so the
+        // calendar date can't shift in transit (unlike a browser's toISOString()).
+        public static DobUpdateRow ToDobUpdateRow(LegacyStudent s, string academicYear)
+        {
+            return new DobUpdateRow
+            {
+                StudentUniqueId = s.StuUnqID.HasValue ? (int?)(int)s.StuUnqID.Value : null,
+                AdmissionNo     = Trim(s.StuAmnNo),
+                AcademicYear    = academicYear,
+                DateOfBirth     = s.StuDOB,
+            };
+        }
+
         private static string MapStudentStatus(string legacy)
         {
             switch (legacy?.Trim())

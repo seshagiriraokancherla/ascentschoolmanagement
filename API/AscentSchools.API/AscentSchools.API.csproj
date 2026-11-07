@@ -236,6 +236,8 @@
     <Compile Include="Helpers\IGatewayService.cs" />
     <Compile Include="Helpers\RazorpayGatewayService.cs" />
     <Compile Include="Helpers\GatewayServiceFactory.cs" />
+    <Compile Include="Helpers\EasebuzzGatewayService.cs" />
+    <Compile Include="Helpers\GatewayReceiptHelper.cs" />
     <Compile Include="Helpers\SmsHelper.cs" />
     <Compile Include="Helpers\R2Service.cs" />
     <Compile Include="Helpers\FcmPushService.cs" />

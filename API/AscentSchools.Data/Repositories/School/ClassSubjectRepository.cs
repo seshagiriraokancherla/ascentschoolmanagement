@@ -25,7 +25,8 @@ namespace AscentSchools.Data.Repositories.School
                              cs.class_id ClassId, c.class_name ClassName,
                              cs.subject_id SubjectId, sub.subject_name SubjectName,
                              sub.short_name ShortName, sub.subject_type SubjectType,
-                             cs.display_order DisplayOrder, cs.is_optional IsOptional, cs.status Status
+                             cs.display_order DisplayOrder, cs.is_optional IsOptional, cs.grade_only GradeOnly,
+                             cs.language_slot LanguageSlot, cs.status Status
                       FROM class_subjects cs
                       JOIN classes  c   ON c.class_id     = cs.class_id
                       JOIN subjects sub ON sub.subject_id = cs.subject_id
@@ -110,9 +111,9 @@ namespace AscentSchools.Data.Repositories.School
                             conn.Execute(
                                 @"INSERT INTO class_subjects
                                     (academic_year_id, class_id, subject_id, display_order,
-                                     is_optional, school_id, created_by)
+                                     is_optional, grade_only, language_slot, school_id, created_by)
                                   VALUES (@AcademicYearId, @ClassId, @SubjectId, @DisplayOrder,
-                                          @IsOptional, @schoolId, @createdBy)",
+                                          @IsOptional, @GradeOnly, @LanguageSlot, @schoolId, @createdBy)",
                                 new
                                 {
                                     req.AcademicYearId,
@@ -120,6 +121,8 @@ namespace AscentSchools.Data.Repositories.School
                                     s.SubjectId,
                                     s.DisplayOrder,
                                     s.IsOptional,
+                                    s.GradeOnly,
+                                    LanguageSlot = s.LanguageSlot >= 1 && s.LanguageSlot <= 3 ? s.LanguageSlot : null,
                                     schoolId,
                                     createdBy,
                                 }, tx);
