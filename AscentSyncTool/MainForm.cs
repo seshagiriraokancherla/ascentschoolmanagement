@@ -15,7 +15,7 @@ namespace AscentSyncTool
 {
     public class MainForm : Form
     {
-        public const string Version = "1.5";
+        public const string Version = "1.6";
 
         private readonly LegacyDb _legacy = new LegacyDb();
 

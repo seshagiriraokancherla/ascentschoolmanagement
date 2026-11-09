@@ -219,7 +219,7 @@ namespace AscentSyncTool.Data
                          (SELECT TOP 1 FeeTypID FROM SAS_FeeTypes
                             WHERE FeeTyp = @FeeTyp AND FeeTypStatus = 'A'),
                          (SELECT TOP 1 BranchID FROM SAS_LicenceDet),
-                         'websync', GETDATE(), @PymntTyp,'','','',getdate())",
+                         'websync', CAST(GETDATE() AS DATE), @PymntTyp,'','','',getdate())",   // CrtDat: date only, no time part
                     r);
             }
         }
